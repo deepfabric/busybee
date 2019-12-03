@@ -1,0 +1,124 @@
+syntax = "proto3";
+package metapb;
+
+import "github.com/gogo/protobuf/gogoproto/gogo.proto";
+
+option (gogoproto.marshaler_all) = true;
+option (gogoproto.sizer_all) = true;
+option (gogoproto.unmarshaler_all) = true;
+option (gogoproto.goproto_enum_prefix_all) = false;
+
+// Workflow is process definition
+message Workflow {
+    uint64         id        = 1 [(gogoproto.customname) = "ID"];
+    uint64         tenantID  = 2;
+    string         name      = 3;
+    repeated Step  steps     = 4;
+}
+
+// WorkflowInstance workflow instance
+message WorkflowInstance {
+    uint64   id       = 1 [(gogoproto.customname) = "ID"];
+    Workflow snapshot = 2 [(gogoproto.nullable) = false];
+    bytes    crowd    = 3;
+}
+
+// WorkflowInstanceState workflow instance state, uid in [start,end). instance : instanceState = 1 : N
+message WorkflowInstanceState {
+    uint64             instanceID = 1;
+    uint64             start      = 2;
+    uint64             end        = 3;
+    repeated StepState states     = 4 [(gogoproto.nullable) = false];
+}
+
+// StepState workflow step state.
+message StepState {
+    string  name   = 1;
+    bytes   crowd  = 2;
+}
+
+// Step is a step of the work flow
+message Step {
+    string    name       = 1;
+    Execution execution  = 2 [(gogoproto.nullable) = false];
+}
+
+// ExectuionType is is the type of a execution operation
+enum ExectuionType {
+    // Direct is an executable operation that contains the name of the service, input and output parameters.
+    Direct    = 0;
+    // Timer is an timer executable.
+    Timer     = 1;
+    // Condition contains several of the operations that will be performed if certain conditions are met.
+    Condition = 2;
+    // Parallel contains multiple sets of operations that can be executed concurrently.
+    Parallel  = 3;
+}
+
+// Execution is node operation in a seqence of executions.
+// A node may have the following roles:
+// 1. DirectExecution
+// 2. ConditionExecution
+// 3. ParallelExecution 
+message Execution {
+    ExectuionType               type       = 1;
+    TimerExecution              timer      = 2;
+    DirectExecution             direct     = 3;
+    repeated ConditionExecution conditions = 4;
+    repeated Execution          parallels  = 5;
+}
+
+// TimerExecution is a timer performable operation
+message TimerExecution {
+    string service    = 1;
+    Expr   condition  = 2;
+    uint64 interval   = 3;
+    string nextStep   = 4;
+}
+
+// DirectExecution is a directly performable operation
+message DirectExecution {
+    string service  = 1;
+    string nextStep = 2;
+}
+
+// ConditionExecution is selecting multiple operations to satisfy the operation of the conditional operation
+message ConditionExecution {
+    Expr      condition = 1 [(gogoproto.nullable) = false];
+    Execution execution = 2 [(gogoproto.nullable) = false];
+}
+
+// ExprParmeterType
+enum ExprParmeterType {
+    String = 0;
+    Number = 1;
+    Bitmap = 2;
+}
+
+// ExprCMP expr cmp operation
+enum ExprCMP {
+    Equal     = 0;
+    LT        = 1;
+    LE        = 2;
+    GT        = 3;
+    GE        = 4;
+    Match     = 5;
+}
+
+// ExprOp operation with sources
+enum ExprOp {
+    Empty    = 0;
+    BMAnd    = 1;
+    BMOr     = 2;
+    BMXor    = 3;
+    BMAndNot = 4;
+}
+
+// Expr expr
+message Expr {
+    repeated string  sources = 1;
+    ExprOp           op      = 2;
+    ExprCMP          cmp     = 3;
+    string           expect  = 4;
+    ExprParmeterType type    = 5;
+}

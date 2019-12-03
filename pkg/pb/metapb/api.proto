@@ -1,0 +1,24 @@
+syntax = "proto3";
+package metapb;
+
+import "github.com/gogo/protobuf/gogoproto/gogo.proto";
+
+option (gogoproto.marshaler_all) = true;
+option (gogoproto.sizer_all) = true;
+option (gogoproto.unmarshaler_all) = true;
+option (gogoproto.goproto_enum_prefix_all) = false;
+
+// Event is process definition
+message Event {
+    string userID     = 1;
+    uint64 tenantID   = 2;
+    uint64 workflowID = 3;
+    uint64 instanceID = 4;
+    repeated KV data  = 5 [(gogoproto.nullable) = false];
+}
+
+// KV custom KV data
+message KV {
+    bytes key   = 1;
+    bytes value = 2;
+}
