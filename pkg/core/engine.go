@@ -56,6 +56,10 @@ func (eng *engine) Start() error {
 	return nil
 }
 
+func (eng *engine) Step(metapb.Event) error {
+	return nil
+}
+
 func (eng *engine) handleEvent(ctx context.Context) {
 	for {
 		select {
