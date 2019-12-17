@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/deepfabric/beehive/pb"
@@ -86,19 +87,26 @@ func (s *Application) Stop() {
 
 // Exec exec the request command
 func (s *Application) Exec(cmd interface{}, timeout time.Duration) ([]byte, error) {
-	completeC := make(chan interface{}, 1)
+	return s.ExecWithGroup(cmd, 0, timeout)
+}
 
+// ExecWithGroup exec the request command
+func (s *Application) ExecWithGroup(cmd interface{}, group uint64, timeout time.Duration) ([]byte, error) {
+	completeC := make(chan interface{}, 1)
+	closed := uint32(0)
 	cb := func(resp []byte, err error) {
-		if err != nil {
-			completeC <- err
-		} else {
-			completeC <- resp
+		if atomic.CompareAndSwapUint32(&closed, 0, 1) {
+			if err != nil {
+				completeC <- err
+			} else {
+				completeC <- resp
+			}
+			close(completeC)
 		}
 	}
 
-	s.AsyncExecWithTimeout(cmd, cb, timeout)
+	s.AsyncExecWithGroupAndTimeout(cmd, group, cb, timeout)
 	value := <-completeC
-	close(completeC)
 	switch value.(type) {
 	case error:
 		return nil, value.(error)
@@ -114,8 +122,14 @@ func (s *Application) AsyncExec(cmd interface{}, cb func([]byte, error)) {
 
 // AsyncExecWithTimeout async exec the request, if the err is ErrTimeout means the request is timeout
 func (s *Application) AsyncExecWithTimeout(cmd interface{}, cb func([]byte, error), timeout time.Duration) {
+	s.AsyncExecWithGroupAndTimeout(cmd, 0, cb, timeout)
+}
+
+// AsyncExecWithGroupAndTimeout async exec the request, if the err is ErrTimeout means the request is timeout
+func (s *Application) AsyncExecWithGroupAndTimeout(cmd interface{}, group uint64, cb func([]byte, error), timeout time.Duration) {
 	req := pb.AcquireRequest()
 	req.ID = uuid.NewV4().Bytes()
+	req.Group = group
 
 	err := s.cfg.Handler.BuildRequest(req, cmd)
 	if err != nil {

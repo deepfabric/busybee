@@ -8,7 +8,7 @@ import (
 
 func TestCompareString(t *testing.T) {
 	expr := metapb.Expr{}
-	rt, err := NewRuntime(expr)
+	rt, err := NewRuntime(expr, nil)
 	assert.Nil(t, err, "test compare string value failed")
 
 	src := rt.(*runtime)
@@ -58,7 +58,7 @@ func TestCompareString(t *testing.T) {
 	expr = metapb.Expr{}
 	expr.Cmp = metapb.Match
 	expr.Expect = `^\d+$`
-	rt, err = NewRuntime(expr)
+	rt, err = NewRuntime(expr, nil)
 	assert.Nil(t, err, "test compare string value failed")
 
 	src = rt.(*runtime)
@@ -77,7 +77,7 @@ func TestCompareUint64(t *testing.T) {
 	expr := metapb.Expr{}
 	expr.Expect = "10"
 	expr.Type = metapb.Number
-	rt, err := NewRuntime(expr)
+	rt, err := NewRuntime(expr, nil)
 	assert.Nil(t, err, "test compare uint64 value failed")
 
 	src := rt.(*runtime)
@@ -123,7 +123,7 @@ func TestCompareUint64(t *testing.T) {
 	expr = metapb.Expr{}
 	expr.Cmp = metapb.Match
 	expr.Expect = `^\d+$`
-	rt, err = NewRuntime(expr)
+	rt, err = NewRuntime(expr, nil)
 	assert.Nil(t, err, "test compare uint64 value failed")
 
 	src = rt.(*runtime)

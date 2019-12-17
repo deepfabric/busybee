@@ -10,7 +10,7 @@ option (gogoproto.goproto_enum_prefix_all) = false;
 
 // Event is process definition
 message Event {
-    string userID     = 1;
+    uint64 userID     = 1;
     uint64 tenantID   = 2;
     uint64 workflowID = 3;
     uint64 instanceID = 4;
@@ -21,4 +21,14 @@ message Event {
 message KV {
     bytes key   = 1;
     bytes value = 2;
+}
+
+// Notify notify message
+message Notify {
+    uint64 userID     = 1;
+    bytes  crowd      = 2;
+    uint64 tenantID   = 3;
+    uint64 workflowID = 4;
+    uint64 instanceID = 5;
+    string step       = 6;
 }

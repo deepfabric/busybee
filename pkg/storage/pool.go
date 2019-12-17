@@ -4,28 +4,12 @@ import (
 	"sync"
 
 	"github.com/fagongzi/goetty"
-	"github.com/pilosa/pilosa/roaring"
 )
 
 var (
-	batchPool  sync.Pool
-	bitmapPool sync.Pool
-	bufPool    sync.Pool
+	batchPool sync.Pool
+	bufPool   sync.Pool
 )
-
-func acquireBitmap() *roaring.Bitmap {
-	v := bitmapPool.Get()
-	if v == nil {
-		return roaring.NewBTreeBitmap()
-	}
-
-	return v.(*roaring.Bitmap)
-}
-
-func releaseBitmap(value *roaring.Bitmap) {
-	value.Containers.Reset()
-	bitmapPool.Put(value)
-}
 
 func acquireBatch() *batch {
 	v := batchPool.Get()

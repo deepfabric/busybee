@@ -32,16 +32,20 @@ func (h *beeStorage) Destory(shard beehivemetapb.Shard) {
 }
 
 func (h *beeStorage) BecomeLeader(shard beehivemetapb.Shard) {
-	h.shardC <- shardCycle{
-		shard:  shard,
-		action: becomeLeader,
+	if shard.Group == 0 {
+		h.shardC <- shardCycle{
+			shard:  shard,
+			action: becomeLeader,
+		}
 	}
 }
 
 func (h *beeStorage) BecomeFollower(shard beehivemetapb.Shard) {
-	h.shardC <- shardCycle{
-		shard:  shard,
-		action: becomeFollower,
+	if shard.Group == 0 {
+		h.shardC <- shardCycle{
+			shard:  shard,
+			action: becomeFollower,
+		}
 	}
 }
 

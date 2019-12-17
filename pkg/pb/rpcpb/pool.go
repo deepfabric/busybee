@@ -19,7 +19,10 @@ var (
 	startwfRequestPool     sync.Pool
 	removewfRequestPool    sync.Pool
 	createstateRequestPool sync.Pool
+	updatestateRequestPool sync.Pool
 	removestateRequestPool sync.Pool
+	queueAddRequestPool    sync.Pool
+	queueFetchRequestPool  sync.Pool
 
 	setResponsePool         sync.Pool
 	getResponsePool         sync.Pool
@@ -35,7 +38,10 @@ var (
 	startwfResponsePool     sync.Pool
 	removewfResponsePool    sync.Pool
 	createstateResponsePool sync.Pool
+	updatestateResponsePool sync.Pool
 	removestateResponsePool sync.Pool
+	queueAddResponsePool    sync.Pool
+	queueFetchResponsePool  sync.Pool
 )
 
 // AcquireSetRequest returns value from pool
@@ -201,6 +207,36 @@ func AcquireBMRangeRequest() *BMRangeRequest {
 func ReleaseBMRangeRequest(value *BMRangeRequest) {
 	value.Reset()
 	bmcountRequestPool.Put(value)
+}
+
+// AcquireQueueAddRequest returns value from pool
+func AcquireQueueAddRequest() *QueueAddRequest {
+	value := queueAddRequestPool.Get()
+	if value == nil {
+		return &QueueAddRequest{}
+	}
+	return value.(*QueueAddRequest)
+}
+
+// ReleaseQueueAddRequest returns the value to pool
+func ReleaseQueueAddRequest(value *QueueAddRequest) {
+	value.Reset()
+	queueAddRequestPool.Put(value)
+}
+
+// AcquireQueueFetchRequest returns value from pool
+func AcquireQueueFetchRequest() *QueueFetchRequest {
+	value := queueFetchRequestPool.Get()
+	if value == nil {
+		return &QueueFetchRequest{}
+	}
+	return value.(*QueueFetchRequest)
+}
+
+// ReleaseQueueFetchRequest returns the value to pool
+func ReleaseQueueFetchRequest(value *QueueFetchRequest) {
+	value.Reset()
+	queueFetchRequestPool.Put(value)
 }
 
 // AcquireSetResponse returns value from pool
@@ -443,6 +479,21 @@ func ReleaseCreateStateRequest(value *CreateStateRequest) {
 	createstateRequestPool.Put(value)
 }
 
+// AcquireUpdateStateRequest returns value from pool
+func AcquireUpdateStateRequest() *UpdateStateRequest {
+	value := updatestateRequestPool.Get()
+	if value == nil {
+		return &UpdateStateRequest{}
+	}
+	return value.(*UpdateStateRequest)
+}
+
+// ReleaseUpdateStateRequest returns the value to pool
+func ReleaseUpdateStateRequest(value *UpdateStateRequest) {
+	value.Reset()
+	updatestateRequestPool.Put(value)
+}
+
 // AcquireRemoveStateRequest returns value from pool
 func AcquireRemoveStateRequest() *RemoveStateRequest {
 	value := removestateRequestPool.Get()
@@ -473,6 +524,21 @@ func ReleaseCreateStateResponse(value *CreateStateResponse) {
 	createstateResponsePool.Put(value)
 }
 
+// AcquireUpdateStateResponse returns value from pool
+func AcquireUpdateStateResponse() *UpdateStateResponse {
+	value := updatestateResponsePool.Get()
+	if value == nil {
+		return &UpdateStateResponse{}
+	}
+	return value.(*UpdateStateResponse)
+}
+
+// ReleaseUpdateStateResponse returns the value to pool
+func ReleaseUpdateStateResponse(value *UpdateStateResponse) {
+	value.Reset()
+	updatestateResponsePool.Put(value)
+}
+
 // AcquireRemoveStateResponse returns value from pool
 func AcquireRemoveStateResponse() *RemoveStateResponse {
 	value := removestateResponsePool.Get()
@@ -486,4 +552,34 @@ func AcquireRemoveStateResponse() *RemoveStateResponse {
 func ReleaseRemoveStateResponse(value *RemoveStateResponse) {
 	value.Reset()
 	removestateResponsePool.Put(value)
+}
+
+// AcquireQueueAddResponse returns value from pool
+func AcquireQueueAddResponse() *QueueAddResponse {
+	value := queueAddResponsePool.Get()
+	if value == nil {
+		return &QueueAddResponse{}
+	}
+	return value.(*QueueAddResponse)
+}
+
+// ReleaseQueueAddResponse returns the value to pool
+func ReleaseQueueAddResponse(value *QueueAddResponse) {
+	value.Reset()
+	queueAddResponsePool.Put(value)
+}
+
+// AcquireQueueFetchResponse returns value from pool
+func AcquireQueueFetchResponse() *QueueFetchResponse {
+	value := queueFetchResponsePool.Get()
+	if value == nil {
+		return &QueueFetchResponse{}
+	}
+	return value.(*QueueFetchResponse)
+}
+
+// ReleaseQueueFetchResponse returns the value to pool
+func ReleaseQueueFetchResponse(value *QueueFetchResponse) {
+	value.Reset()
+	queueFetchResponsePool.Put(value)
 }

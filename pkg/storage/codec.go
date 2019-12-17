@@ -55,8 +55,14 @@ func (c *codec) Decode(in *goetty.ByteBuf) (bool, interface{}, error) {
 		msg = rpcpb.AcquireRemoveWFRequest()
 	case rpcpb.CreateState:
 		msg = rpcpb.AcquireCreateStateRequest()
+	case rpcpb.UpdateState:
+		msg = rpcpb.AcquireUpdateStateRequest()
 	case rpcpb.RemoveState:
 		msg = rpcpb.AcquireRemoveStateRequest()
+	case rpcpb.QueueAdd:
+		msg = rpcpb.AcquireQueueAddRequest()
+	case rpcpb.QueueFetch:
+		msg = rpcpb.AcquireQueueFetchRequest()
 	default:
 		log.Fatalf("BUG: not support msg type %d", v)
 	}
@@ -97,8 +103,14 @@ func (c *codec) Encode(data interface{}, out *goetty.ByteBuf) error {
 		t = rpcpb.RemoveWF
 	case *rpcpb.CreateStateResponse:
 		t = rpcpb.CreateState
+	case *rpcpb.UpdateStateResponse:
+		t = rpcpb.UpdateState
 	case *rpcpb.RemoveStateResponse:
 		t = rpcpb.RemoveState
+	case *rpcpb.QueueAddResponse:
+		t = rpcpb.QueueAdd
+	case *rpcpb.QueueFetchResponse:
+		t = rpcpb.QueueFetch
 	default:
 		log.Fatalf("BUG: not support msg type %T", data)
 	}

@@ -3,7 +3,7 @@ module github.com/deepfabric/busybee
 go 1.13
 
 require (
-	github.com/deepfabric/beehive v0.0.0-20191202081639-e2d7e19fc483
+	github.com/deepfabric/beehive v0.0.0-20191217070621-042029d57ba1
 	github.com/deepfabric/prophet v0.0.0-20191202055442-cec7351ee5cf
 	github.com/fagongzi/goetty v1.3.2
 	github.com/fagongzi/log v0.0.0-20191122063922-293b75312445

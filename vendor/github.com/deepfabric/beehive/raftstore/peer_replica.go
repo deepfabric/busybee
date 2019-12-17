@@ -195,7 +195,7 @@ func (pr *peerReplica) mustDestroy() {
 		pr.store.runner.StopCancelableTask(id)
 	}
 
-	if pr.ps.isInitialized() && !pr.store.keyRanges.Remove(pr.ps.shard) {
+	if pr.ps.isInitialized() && !pr.store.removeShardKeyRange(pr.ps.shard) {
 		logger.Fatalf("shard %d remove key range  failed",
 			pr.shardID)
 	}
@@ -217,16 +217,6 @@ func (pr *peerReplica) onReq(req *raftcmdpb.Request, cb func(*raftcmdpb.RaftCMDR
 
 func (pr *peerReplica) stopEventLoop() {
 	pr.events.Dispose()
-	pr.closeAllQueues()
-}
-
-func (pr *peerReplica) closeAllQueues() {
-	pr.ticks.Dispose()
-	pr.steps.Dispose()
-	pr.reports.Dispose()
-	pr.applyResults.Dispose()
-	pr.requests.Dispose()
-	pr.actions.Dispose()
 }
 
 func (pr *peerReplica) doExecReadCmd(c *cmd) {
@@ -239,6 +229,10 @@ func (pr *peerReplica) doExecReadCmd(c *cmd) {
 	}
 
 	c.resp(resp)
+}
+
+func (pr *peerReplica) supportSplit() bool {
+	return !pr.ps.shard.DisableSplit
 }
 
 func (pr *peerReplica) isLeader() bool {

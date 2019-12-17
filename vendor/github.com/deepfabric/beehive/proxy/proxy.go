@@ -69,7 +69,7 @@ type shardsProxy struct {
 }
 
 func (p *shardsProxy) Dispatch(req *raftcmdpb.Request) error {
-	shard, leader := p.router.SelectShard(req.Key)
+	shard, leader := p.router.SelectShard(req.Group, req.Key)
 	// No leader, retry after a leader tick
 	if leader == "" {
 		p.retryWithRaftError(req)
@@ -127,12 +127,13 @@ func (p *shardsProxy) errorDone(req *raftcmdpb.Request, err error) {
 
 func (p *shardsProxy) retryWithRaftError(req *raftcmdpb.Request) {
 	if req != nil {
-		util.DefaultTimeoutWheel().Schedule(time.Millisecond*50, p.doRetry, req)
+		util.DefaultTimeoutWheel().Schedule(time.Millisecond*50, p.doRetry, *req)
 	}
 }
 
 func (p *shardsProxy) doRetry(arg interface{}) {
-	p.Dispatch(arg.(*raftcmdpb.Request))
+	req := arg.(raftcmdpb.Request)
+	p.Dispatch(&req)
 }
 
 func (p *shardsProxy) getConn(addr string) (*backend, error) {

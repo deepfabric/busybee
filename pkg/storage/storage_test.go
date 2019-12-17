@@ -12,6 +12,8 @@ import (
 	"github.com/deepfabric/beehive/storage/nemo"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
+	"github.com/deepfabric/busybee/pkg/util"
+	"github.com/fagongzi/log"
 	"github.com/fagongzi/util/protoc"
 	"github.com/stretchr/testify/assert"
 )
@@ -60,6 +62,7 @@ func TestSetAndGet(t *testing.T) {
 
 	store, err := NewStorage("127.0.0.1:12345", tmp, []storage.MetadataStorage{s}, []storage.DataStorage{s})
 	assert.NoError(t, err, "TestSetAndGet failed")
+	assert.NoError(t, store.Start(), "TestSetAndGet failed")
 	defer store.Close()
 
 	key := []byte("key1")
@@ -94,6 +97,7 @@ func TestDelete(t *testing.T) {
 
 	store, err := NewStorage("127.0.0.1:12345", tmp, []storage.MetadataStorage{s}, []storage.DataStorage{s})
 	assert.NoError(t, err, "TestDelete failed")
+	assert.NoError(t, store.Start(), "TestDelete failed")
 	defer store.Close()
 
 	key := []byte("key1")
@@ -133,6 +137,7 @@ func TestBMCreate(t *testing.T) {
 
 	store, err := NewStorage("127.0.0.1:12345", tmp, []storage.MetadataStorage{s}, []storage.DataStorage{s})
 	assert.NoError(t, err, "TestBMCreate failed")
+	assert.NoError(t, store.Start(), "TestBMCreate failed")
 	defer store.Close()
 
 	key := []byte("key1")
@@ -154,7 +159,7 @@ func TestBMCreate(t *testing.T) {
 	protoc.MustUnmarshal(resp, data)
 	assert.NotEmpty(t, resp.Value, "TestBMCreate failed")
 
-	bm := mustParseBitmap(resp.Value)
+	bm := util.MustParseBM(resp.Value)
 	assert.Equal(t, uint64(len(value)), bm.Count(), "TestBMCreate failed")
 }
 
@@ -170,6 +175,7 @@ func TestBMAdd(t *testing.T) {
 
 	store, err := NewStorage("127.0.0.1:12345", tmp, []storage.MetadataStorage{s}, []storage.DataStorage{s})
 	assert.NoError(t, err, "TestBMAdd failed")
+	assert.NoError(t, store.Start(), "TestBMAdd failed")
 	defer store.Close()
 
 	key := []byte("key1")
@@ -198,7 +204,7 @@ func TestBMAdd(t *testing.T) {
 	protoc.MustUnmarshal(resp, data)
 	assert.NotEmpty(t, resp.Value, "TestBMAdd failed")
 
-	bm := mustParseBitmap(resp.Value)
+	bm := util.MustParseBM(resp.Value)
 	assert.Equal(t, uint64(len(value)+len(value2)), bm.Count(), "TestBMAdd failed")
 }
 
@@ -214,6 +220,7 @@ func TestBMRemove(t *testing.T) {
 
 	store, err := NewStorage("127.0.0.1:12345", tmp, []storage.MetadataStorage{s}, []storage.DataStorage{s})
 	assert.NoError(t, err, "TestBMRemove failed")
+	assert.NoError(t, store.Start(), "TestBMRemove failed")
 	defer store.Close()
 
 	key := []byte("key1")
@@ -241,7 +248,7 @@ func TestBMRemove(t *testing.T) {
 	protoc.MustUnmarshal(resp, data)
 	assert.NotEmpty(t, resp.Value, "TestBMRemove failed")
 
-	bm := mustParseBitmap(resp.Value)
+	bm := util.MustParseBM(resp.Value)
 	assert.Equal(t, uint64(2), bm.Count(), "TestBMRemove failed")
 }
 
@@ -257,6 +264,7 @@ func TestBMClear(t *testing.T) {
 
 	store, err := NewStorage("127.0.0.1:12345", tmp, []storage.MetadataStorage{s}, []storage.DataStorage{s})
 	assert.NoError(t, err, "TestBMClear failed")
+	assert.NoError(t, store.Start(), "TestBMClear failed")
 	defer store.Close()
 
 	key := []byte("key1")
@@ -296,6 +304,7 @@ func TestBMContains(t *testing.T) {
 
 	store, err := NewStorage("127.0.0.1:12345", tmp, []storage.MetadataStorage{s}, []storage.DataStorage{s})
 	assert.NoError(t, err, "TestBMContains failed")
+	assert.NoError(t, store.Start(), "TestBMContains failed")
 	defer store.Close()
 
 	key := []byte("key1")
@@ -330,6 +339,7 @@ func TestBMDel(t *testing.T) {
 
 	store, err := NewStorage("127.0.0.1:12345", tmp, []storage.MetadataStorage{s}, []storage.DataStorage{s})
 	assert.NoError(t, err, "TestBMDel failed")
+	assert.NoError(t, store.Start(), "TestBMDel failed")
 	defer store.Close()
 
 	key := []byte("key1")
@@ -368,9 +378,10 @@ func TestBMCount(t *testing.T) {
 
 	store, err := NewStorage("127.0.0.1:12345", tmp, []storage.MetadataStorage{s}, []storage.DataStorage{s})
 	assert.NoError(t, err, "TestBMCount failed")
+	assert.NoError(t, store.Start(), "TestBMCount failed")
 	defer store.Close()
 
-	key := []byte("key1")
+	key := []byte("key1111")
 	value := []uint64{1, 2, 3, 4, 5}
 
 	data, err := store.ExecCommand(&rpcpb.BMCreateRequest{
@@ -401,6 +412,7 @@ func TestBMRange(t *testing.T) {
 
 	store, err := NewStorage("127.0.0.1:12345", tmp, []storage.MetadataStorage{s}, []storage.DataStorage{s})
 	assert.NoError(t, err, "TestBMRange failed")
+	assert.NoError(t, store.Start(), "TestBMRange failed")
 	defer store.Close()
 
 	key := []byte("key1")
@@ -448,6 +460,7 @@ func TestStartWF(t *testing.T) {
 
 	store, err := NewStorage("127.0.0.1:12345", tmp, []storage.MetadataStorage{s}, []storage.DataStorage{s})
 	assert.NoError(t, err, "TestStartWF failed")
+	assert.NoError(t, store.Start(), "TestStartWF failed")
 	_, err = store.ExecCommand(&rpcpb.StartWFRequest{
 		Instance: metapb.WorkflowInstance{
 			ID:       1,
@@ -466,9 +479,70 @@ func TestStartWF(t *testing.T) {
 
 	store, err = NewStorage("127.0.0.1:12345", tmp, []storage.MetadataStorage{s}, []storage.DataStorage{s})
 	assert.NoError(t, err, "TestStartWF failed")
+	assert.NoError(t, store.Start(), "TestStartWF failed")
 	defer store.Close()
 
 	c := store.WatchEvent()
 	time.Sleep(time.Second * 1)
 	assert.True(t, len(c) > 0, "TestStartWF failed")
+}
+
+func TestQueue(t *testing.T) {
+	log.SetHighlighting(false)
+
+	os.RemoveAll(tmp)
+	s, err := nemo.NewStorage(filepath.Join(tmp, "nemo"))
+	assert.NoError(t, err, "TestQueue failed")
+
+	err = ioutil.WriteFile(filepath.Join(tmp, "cfg.toml"), []byte(beehiveCfg), os.ModeAppend)
+	assert.NoError(t, err, "TestQueue failed")
+	flag.Set("beehive-cfg", filepath.Join(tmp, "cfg.toml"))
+
+	store, err := NewStorage("127.0.0.1:12345", tmp, []storage.MetadataStorage{s}, []storage.DataStorage{s})
+	assert.NoError(t, err, "TestQueue failed")
+	assert.NoError(t, store.Start(), "TestQueue failed")
+	defer store.Close()
+
+	instanceID := uint64(101)
+	err = store.CreateEventQueue(instanceID)
+	assert.NoError(t, err, "TestQueue failed")
+
+	err = store.CreateNotifyQueue(instanceID)
+	assert.NoError(t, err, "TestQueue failed")
+
+	time.Sleep(time.Second)
+	offset, items, err := store.QueueFetch(instanceID, EventQueueGroup, 0, 1)
+	assert.NoError(t, err, "TestQueue failed")
+	assert.Equal(t, uint64(0), offset, "TestQueue failed")
+	assert.Equal(t, 0, len(items), "TestQueue failed")
+
+	offset, err = store.QueueAdd(instanceID, EventQueueGroup, []byte("item0"))
+	assert.NoError(t, err, "TestQueue failed")
+	assert.Equal(t, uint64(1), offset, "TestQueue failed")
+
+	offset, items, err = store.QueueFetch(instanceID, NotifyQueueGroup, 0, 1)
+	assert.NoError(t, err, "TestQueue failed")
+	assert.Equal(t, uint64(0), offset, "TestQueue failed")
+	assert.Equal(t, 0, len(items), "TestQueue failed")
+
+	offset, items, err = store.QueueFetch(instanceID, EventQueueGroup, 0, 1)
+	assert.NoError(t, err, "TestQueue failed")
+	assert.Equal(t, uint64(1), offset, "TestQueue failed")
+	assert.Equal(t, 1, len(items), "TestQueue failed")
+	assert.Equal(t, "item0", string(items[0]), "TestQueue failed")
+
+	offset, items, err = store.QueueFetch(instanceID, EventQueueGroup, offset, 1)
+	assert.NoError(t, err, "TestQueue failed")
+	assert.Equal(t, uint64(1), offset, "TestQueue failed")
+	assert.Equal(t, 0, len(items), "TestQueue failed")
+
+	offset, err = store.QueueAdd(instanceID, EventQueueGroup, []byte("item1"))
+	assert.NoError(t, err, "TestQueue failed")
+	assert.Equal(t, uint64(2), offset, "TestQueue failed")
+
+	offset, items, err = store.QueueFetch(instanceID, EventQueueGroup, 1, 1)
+	assert.NoError(t, err, "TestQueue failed")
+	assert.Equal(t, uint64(2), offset, "TestQueue failed")
+	assert.Equal(t, 1, len(items), "TestQueue failed")
+	assert.Equal(t, "item1", string(items[0]), "TestQueue failed")
 }

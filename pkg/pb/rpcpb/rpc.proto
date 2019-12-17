@@ -26,7 +26,11 @@ enum Type {
     StartWF       = 200;
     RemoveWF      = 201;
     CreateState   = 202;
-    RemoveState   = 203;
+    UpdateState   = 203;
+    RemoveState   = 204;
+
+    QueueAdd      = 300;
+    QueueFetch    = 301;
 }
 
 // SetRequest set a key value pair
@@ -196,13 +200,55 @@ message CreateStateResponse {
     bytes id = 1 [(gogoproto.customname) = "ID"];
 }
 
+// UpdateStateRequest update a instance state
+message UpdateStateRequest {
+    bytes                        id    = 1 [(gogoproto.customname) = "ID"];
+    metapb.WorkflowInstanceState state = 2 [(gogoproto.nullable) = false];
+}
+
+// UpdateStateResponse response
+message UpdateStateResponse {
+    bytes id = 1 [(gogoproto.customname) = "ID"];
+}
+
 // RemoveStateRequest remove a instance state
 message RemoveStateRequest {
-    bytes id  = 1 [(gogoproto.customname) = "ID"];
-    bytes key = 2 ;
+    bytes id          = 1 [(gogoproto.customname) = "ID"];
+    uint64 instanceID = 2;
+    uint64 start      = 3;
+    uint64 end        = 4;
 }
 
 // RemoveStateResponse response
 message RemoveStateResponse {
     bytes id = 1 [(gogoproto.customname) = "ID"];
+}
+
+// QueueAddRequest add items into a queue
+message QueueAddRequest {
+    bytes          id    = 1 [(gogoproto.customname) = "ID"];
+    bytes          key   = 2;
+    repeated bytes items = 3;
+}
+
+// QueueAddResponse response
+message QueueAddResponse {
+    bytes  id         = 1 [(gogoproto.customname) = "ID"];
+    uint64 lastOffset = 2;
+}
+
+
+// QueueFetchResponse add items into a queue
+message QueueFetchRequest {
+    bytes  id          = 1 [(gogoproto.customname) = "ID"];
+    bytes  key         = 2;
+    uint64 afterOffset = 3;
+    uint64 count       = 4;
+}
+
+// QueueAddResponse response
+message QueueFetchResponse {
+    bytes          id         = 1 [(gogoproto.customname) = "ID"];
+    repeated bytes items      = 2;
+    uint64         lastOffset = 3;
 }

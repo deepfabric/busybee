@@ -13,7 +13,7 @@ message Workflow {
     uint64         id        = 1 [(gogoproto.customname) = "ID"];
     uint64         tenantID  = 2;
     string         name      = 3;
-    repeated Step  steps     = 4;
+    repeated Step  steps     = 4 [(gogoproto.nullable) = false];
 }
 
 // WorkflowInstance workflow instance
@@ -25,16 +25,19 @@ message WorkflowInstance {
 
 // WorkflowInstanceState workflow instance state, uid in [start,end). instance : instanceState = 1 : N
 message WorkflowInstanceState {
-    uint64             instanceID = 1;
-    uint64             start      = 2;
-    uint64             end        = 3;
-    repeated StepState states     = 4 [(gogoproto.nullable) = false];
+    uint64             tenantID   = 1;
+    uint64             workflowID = 2;
+    uint64             instanceID = 3;
+    uint64             start      = 4;
+    uint64             end        = 5;
+    repeated StepState states     = 6 [(gogoproto.nullable) = false];
+    uint64             version    = 7;
 }
 
 // StepState workflow step state.
 message StepState {
-    string  name   = 1;
-    bytes   crowd  = 2;
+    Step  step   = 1 [(gogoproto.nullable) = false];
+    bytes crowd  = 2;
 }
 
 // Step is a step of the work flow
@@ -45,12 +48,12 @@ message Step {
 
 // ExectuionType is is the type of a execution operation
 enum ExectuionType {
-    // Direct is an executable operation that contains the name of the service, input and output parameters.
+    // Direct is an executable operation.
     Direct    = 0;
     // Timer is an timer executable.
     Timer     = 1;
-    // Condition contains several of the operations that will be performed if certain conditions are met.
-    Condition = 2;
+    // Branch contains several of the operations that will be performed if certain conditions are met.
+    Branch    = 2;
     // Parallel contains multiple sets of operations that can be executed concurrently.
     Parallel  = 3;
 }
@@ -58,34 +61,39 @@ enum ExectuionType {
 // Execution is node operation in a seqence of executions.
 // A node may have the following roles:
 // 1. DirectExecution
-// 2. ConditionExecution
+// 2. BranchExecution
 // 3. ParallelExecution 
 message Execution {
-    ExectuionType               type       = 1;
-    TimerExecution              timer      = 2;
-    DirectExecution             direct     = 3;
-    repeated ConditionExecution conditions = 4;
-    repeated Execution          parallels  = 5;
+    ExectuionType               type      = 1;
+    TimerExecution              timer     = 2;
+    DirectExecution             direct    = 3;
+    repeated ConditionExecution branches  = 4 [(gogoproto.nullable) = false];
+    ParallelExecution           parallel  = 5 [(gogoproto.nullable) = false];
 }
 
 // TimerExecution is a timer performable operation
 message TimerExecution {
-    string service    = 1;
-    Expr   condition  = 2;
-    uint64 interval   = 3;
-    string nextStep   = 4;
+    Expr   condition  = 1;
+    uint64 interval   = 2;
+    string nextStep   = 3;
+}
+
+// ParallelExecution is a parallel execution
+message ParallelExecution {
+    string             nextStep  = 1;
+    repeated Execution parallels = 2 [(gogoproto.nullable) = false];
 }
 
 // DirectExecution is a directly performable operation
 message DirectExecution {
-    string service  = 1;
-    string nextStep = 2;
+    string nextStep = 1;
 }
 
 // ConditionExecution is selecting multiple operations to satisfy the operation of the conditional operation
 message ConditionExecution {
     Expr      condition = 1 [(gogoproto.nullable) = false];
     Execution execution = 2 [(gogoproto.nullable) = false];
+    string    nextStep  = 3;
 }
 
 // ExprParmeterType
@@ -114,11 +122,21 @@ enum ExprOp {
     BMAndNot = 4;
 }
 
+// ExprFunc operation func
+enum ExprFunc {
+    First = 0;
+    Max   = 1;
+    Min   = 2;
+    Count = 3;
+    Avg   = 4;
+}
+
 // Expr expr
 message Expr {
     repeated string  sources = 1;
     ExprOp           op      = 2;
-    ExprCMP          cmp     = 3;
-    string           expect  = 4;
-    ExprParmeterType type    = 5;
+    ExprFunc         func    = 3;
+    ExprCMP          cmp     = 4;
+    string           expect  = 5;
+    ExprParmeterType type    = 6;
 }

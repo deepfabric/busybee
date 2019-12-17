@@ -4,11 +4,12 @@ import (
 	"github.com/deepfabric/beehive/pb"
 	"github.com/deepfabric/beehive/pb/raftcmdpb"
 	"github.com/deepfabric/beehive/raftstore"
+	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
+	"github.com/deepfabric/busybee/pkg/util"
 	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/log"
 	"github.com/fagongzi/util/protoc"
-	"github.com/pilosa/pilosa/roaring"
 )
 
 func (h *beeStorage) init() {
@@ -20,7 +21,10 @@ func (h *beeStorage) init() {
 	h.AddWriteFunc("startwf", uint64(rpcpb.StartWF), h.startWF)
 	h.AddWriteFunc("removewf", uint64(rpcpb.RemoveWF), h.removeWF)
 	h.AddWriteFunc("createstate", uint64(rpcpb.CreateState), h.createState)
+	h.AddWriteFunc("updatestate", uint64(rpcpb.UpdateState), h.updateState)
 	h.AddWriteFunc("removestate", uint64(rpcpb.RemoveState), h.removeState)
+	h.AddWriteFunc("queueadd", uint64(rpcpb.QueueAdd), h.queueAdd)
+	h.AddWriteFunc("queuefetch", uint64(rpcpb.QueueFetch), h.queueFetch)
 
 	h.runner.RunCancelableTask(h.handleShardCycle)
 }
@@ -118,7 +122,7 @@ func (h *beeStorage) BuildRequest(req *raftcmdpb.Request, cmd interface{}) error
 	case *rpcpb.StartWFRequest:
 		msg := cmd.(*rpcpb.StartWFRequest)
 		msg.ID = req.ID
-		req.Key = goetty.Uint64ToBytes(msg.Instance.ID)
+		req.Key = InstanceKey(msg.Instance.ID)
 		req.CustemType = uint64(rpcpb.StartWF)
 		req.Type = raftcmdpb.Write
 		req.Cmd = protoc.MustMarshal(msg)
@@ -126,11 +130,53 @@ func (h *beeStorage) BuildRequest(req *raftcmdpb.Request, cmd interface{}) error
 	case *rpcpb.RemoveWFRequest:
 		msg := cmd.(*rpcpb.RemoveWFRequest)
 		msg.ID = req.ID
-		req.Key = goetty.Uint64ToBytes(msg.InstanceID)
+		req.Key = InstanceKey(msg.InstanceID)
 		req.CustemType = uint64(rpcpb.StartWF)
 		req.Type = raftcmdpb.Write
 		req.Cmd = protoc.MustMarshal(msg)
 		rpcpb.ReleaseRemoveWFRequest(msg)
+	case *rpcpb.CreateStateRequest:
+		msg := cmd.(*rpcpb.CreateStateRequest)
+		msg.ID = req.ID
+		req.Key = InstanceStateKey(msg.State.InstanceID, msg.State.Start, msg.State.End)
+		req.CustemType = uint64(rpcpb.CreateState)
+		req.Type = raftcmdpb.Write
+		req.Cmd = protoc.MustMarshal(msg)
+		rpcpb.ReleaseCreateStateRequest(msg)
+	case *rpcpb.UpdateStateRequest:
+		msg := cmd.(*rpcpb.UpdateStateRequest)
+		msg.ID = req.ID
+		req.Key = InstanceStateKey(msg.State.InstanceID, msg.State.Start, msg.State.End)
+		req.CustemType = uint64(rpcpb.CreateState)
+		req.Type = raftcmdpb.Write
+		req.Cmd = protoc.MustMarshal(msg)
+		rpcpb.ReleaseUpdateStateRequest(msg)
+	case *rpcpb.RemoveStateRequest:
+		msg := cmd.(*rpcpb.RemoveStateRequest)
+		msg.ID = req.ID
+		req.Key = InstanceStateKey(msg.InstanceID, msg.Start, msg.End)
+		req.CustemType = uint64(rpcpb.CreateState)
+		req.Type = raftcmdpb.Write
+		req.Cmd = protoc.MustMarshal(msg)
+		rpcpb.ReleaseRemoveStateRequest(msg)
+	case *rpcpb.QueueAddRequest:
+		msg := cmd.(*rpcpb.QueueAddRequest)
+		msg.ID = req.ID
+		req.Key = msg.Key
+		req.CustemType = uint64(rpcpb.QueueAdd)
+		req.Type = raftcmdpb.Write
+		req.Cmd = protoc.MustMarshal(msg)
+		rpcpb.ReleaseQueueAddRequest(msg)
+	case *rpcpb.QueueFetchRequest:
+		msg := cmd.(*rpcpb.QueueFetchRequest)
+		msg.ID = req.ID
+		req.Key = msg.Key
+		req.CustemType = uint64(rpcpb.QueueFetch)
+		req.Type = raftcmdpb.Write
+		req.Cmd = protoc.MustMarshal(msg)
+		rpcpb.ReleaseQueueFetchRequest(msg)
+	default:
+		log.Fatalf("not support request %+v(%+T)", cmd, cmd)
 	}
 
 	return nil
@@ -185,15 +231,10 @@ func (h *beeStorage) bmcontains(shard uint64, req *raftcmdpb.Request) *raftcmdpb
 
 	contains := false
 	if len(value) > 0 {
-		contains = true
-		bm := mustParseBitmap(value)
-		for _, id := range customReq.Value {
-			if !bm.Contains(id) {
-				contains = false
-				break
-			}
-		}
-		releaseBitmap(bm)
+		bm := util.MustParseBM(value)
+		bm2 := util.AcquireBitmap()
+		bm2.Add(customReq.Value...)
+		contains = bm.Intersect(bm2).Count() == uint64(len(customReq.Value))
 	}
 
 	customResp := rpcpb.AcquireBMContainsResponse()
@@ -216,9 +257,7 @@ func (h *beeStorage) bmcount(shard uint64, req *raftcmdpb.Request) *raftcmdpb.Re
 
 	count := uint64(0)
 	if len(value) > 0 {
-		bm := mustParseBitmap(value)
-		count = bm.Count()
-		releaseBitmap(bm)
+		count = util.MustParseBM(value).Count()
 	}
 
 	customResp := rpcpb.AcquireBMCountResponse()
@@ -241,7 +280,7 @@ func (h *beeStorage) bmrange(shard uint64, req *raftcmdpb.Request) *raftcmdpb.Re
 
 	var values []uint64
 	if len(value) > 0 {
-		bm := mustParseBitmap(value)
+		bm := util.MustParseBM(value)
 		count := uint64(0)
 		itr := bm.Iterator()
 		itr.Seek(customReq.Start)
@@ -258,7 +297,6 @@ func (h *beeStorage) bmrange(shard uint64, req *raftcmdpb.Request) *raftcmdpb.Re
 				break
 			}
 		}
-		releaseBitmap(bm)
 	}
 
 	customResp := rpcpb.AcquireBMRangeResponse()
@@ -342,7 +380,7 @@ func (h *beeStorage) createState(shard uint64, req *raftcmdpb.Request) (uint64, 
 	}
 
 	value = protoc.MustMarshal(&createState.State)
-	err = h.getStore(shard).Set(req.Key, appendPrefix(req.Cmd, stateType))
+	err = h.getStore(shard).Set(req.Key, appendPrefix(value, stateType))
 	if err != nil {
 		log.Fatalf("save workflow instance %+v failed with %+v", createState, err)
 	}
@@ -351,6 +389,48 @@ func (h *beeStorage) createState(shard uint64, req *raftcmdpb.Request) (uint64, 
 		h.eventC <- Event{
 			EventType: InstanceStateLoadedEvent,
 			Data:      createState.State,
+		}
+	}
+
+	writtenBytes := uint64(len(req.Key) + len(req.Cmd))
+	changedBytes := int64(writtenBytes)
+	return writtenBytes, changedBytes, resp
+}
+
+func (h *beeStorage) updateState(shard uint64, req *raftcmdpb.Request) (uint64, int64, *raftcmdpb.Response) {
+	resp := pb.AcquireResponse()
+	updateState := rpcpb.UpdateStateRequest{}
+	protoc.MustUnmarshal(&updateState, req.Cmd)
+
+	customResp := rpcpb.AcquireUpdateStateResponse()
+	customResp.ID = updateState.ID
+	resp.Value = protoc.MustMarshal(customResp)
+	rpcpb.ReleaseUpdateStateResponse(customResp)
+
+	value, err := h.getValue(shard, req.Key)
+	if err != nil {
+		log.Fatalf("update workflow instance state %+v failed with %+v", updateState, err)
+	}
+	if len(value) == 0 {
+		return 0, 0, resp
+	}
+
+	oldState := metapb.WorkflowInstanceState{}
+	protoc.MustUnmarshal(&oldState, value)
+	if oldState.Version >= updateState.State.Version {
+		return 0, 0, resp
+	}
+
+	value = protoc.MustMarshal(&updateState.State)
+	err = h.getStore(shard).Set(req.Key, appendPrefix(value, stateType))
+	if err != nil {
+		log.Fatalf("update workflow instance state %+v failed with %+v", updateState, err)
+	}
+
+	if h.store.MaybeLeader(shard) {
+		h.eventC <- Event{
+			EventType: InstanceStateUpdatedEvent,
+			Data:      updateState.State,
 		}
 	}
 
@@ -377,6 +457,78 @@ func (h *beeStorage) removeState(shard uint64, req *raftcmdpb.Request) (uint64, 
 	return uint64(len(req.Key)), -int64(len(req.Key)), resp
 }
 
+func (h *beeStorage) queueAdd(shard uint64, req *raftcmdpb.Request) (uint64, int64, *raftcmdpb.Response) {
+	resp := pb.AcquireResponse()
+	queueAdd := rpcpb.QueueAddRequest{}
+	protoc.MustUnmarshal(&queueAdd, req.Cmd)
+
+	customResp := rpcpb.AcquireQueueAddResponse()
+	customResp.ID = queueAdd.ID
+
+	var lastOffset uint64
+	offsetKey := queueLastOffsetKey(req.Key)
+	data, err := h.getStore(shard).Get(offsetKey)
+	if err != nil {
+		log.Fatalf("loading last offset failed with %+v", err)
+	}
+	if len(data) > 0 {
+		lastOffset = goetty.Byte2UInt64(data)
+	}
+
+	var writtenBytes uint64
+	driver := h.getStore(shard)
+	wb := driver.NewWriteBatch()
+	for _, item := range queueAdd.Items {
+		lastOffset++
+		key := queueItemKey(req.Key, lastOffset)
+		wb.Set(key, item)
+		writtenBytes += uint64(len(key) + len(item))
+	}
+	wb.Set(offsetKey, goetty.Uint64ToBytes(lastOffset))
+
+	err = driver.Write(wb, false)
+	if err != nil {
+		log.Fatalf("queue add failed with %+v", err)
+	}
+
+	customResp.LastOffset = lastOffset
+	resp.Value = protoc.MustMarshal(customResp)
+	rpcpb.ReleaseQueueAddResponse(customResp)
+	return writtenBytes, int64(writtenBytes), resp
+}
+
+func (h *beeStorage) queueFetch(shard uint64, req *raftcmdpb.Request) (uint64, int64, *raftcmdpb.Response) {
+	resp := pb.AcquireResponse()
+	queueFetch := rpcpb.QueueFetchRequest{}
+	protoc.MustUnmarshal(&queueFetch, req.Cmd)
+
+	customResp := rpcpb.AcquireQueueFetchResponse()
+	customResp.ID = queueFetch.ID
+
+	offset := queueFetch.AfterOffset
+	from := queueItemKey(req.Key, offset+1)
+	to := queueItemKey(req.Key, offset+1+uint64(queueFetch.Count))
+
+	err := h.getStore(shard).RangeDelete(queueItemKey(req.Key, 0), from)
+	if err != nil {
+		log.Fatalf("fetch queue failed with %+v", err)
+	}
+
+	err = h.getStore(shard).Scan(from, to, func(key, value []byte) (bool, error) {
+		offset++
+		customResp.Items = append(customResp.Items, value)
+		return true, nil
+	}, false)
+	if err != nil {
+		log.Fatalf("fetch queue failed with %+v", err)
+	}
+
+	customResp.LastOffset = offset
+	resp.Value = protoc.MustMarshal(customResp)
+	rpcpb.ReleaseQueueFetchResponse(customResp)
+	return 0, 0, resp
+}
+
 func (h *beeStorage) getValue(shard uint64, key []byte) ([]byte, error) {
 	value, err := h.getStore(shard).Get(key)
 	if err != nil {
@@ -387,14 +539,4 @@ func (h *beeStorage) getValue(shard uint64, key []byte) ([]byte, error) {
 		return nil, nil
 	}
 	return value[1:], nil
-}
-
-func mustParseBitmap(value []byte) *roaring.Bitmap {
-	bm := acquireBitmap()
-	bm.Containers.Reset()
-	_, _, err := bm.ImportRoaringBits(value, false, false, 0)
-	if err != nil {
-		log.Fatalf("BUG: parse bitmap failed with %+v", err)
-	}
-	return bm
 }

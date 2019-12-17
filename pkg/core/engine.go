@@ -6,10 +6,13 @@ import (
 	"sync"
 
 	"github.com/deepfabric/beehive/util"
+	"github.com/deepfabric/busybee/pkg/notify"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/deepfabric/busybee/pkg/storage"
+	bbutil "github.com/deepfabric/busybee/pkg/util"
 	"github.com/fagongzi/log"
+	"github.com/fagongzi/util/hack"
 	"github.com/fagongzi/util/task"
 	"github.com/pilosa/pilosa/roaring"
 )
@@ -28,24 +31,32 @@ type Engine interface {
 	// Start start the engine
 	Start() error
 	// Step drivers the workflow instance
-	Step(metapb.Event) error
+	Step(context.Context, metapb.Event) error
+	// Notifier returns notifier
+	Notifier() notify.Notifier
+	// Storage returns storage
+	Storage() storage.Storage
 }
 
 // NewEngine returns a engine
-func NewEngine(store storage.Storage) (Engine, error) {
+func NewEngine(store storage.Storage, notifier notify.Notifier) (Engine, error) {
 	return &engine{
-		store:  store,
-		eventC: store.WatchEvent(),
-		runner: task.NewRunner(),
+		store:                  store,
+		notifier:               notifier,
+		eventC:                 store.WatchEvent(),
+		retryNewInstanceC:      make(chan metapb.WorkflowInstance, 1024),
+		retryCompleteInstanceC: make(chan uint64, 1024),
+		runner:                 task.NewRunner(),
 	}, nil
 }
 
 type engine struct {
-	opts   options
-	store  storage.Storage
-	runner *task.Runner
+	opts     options
+	store    storage.Storage
+	notifier notify.Notifier
+	runner   *task.Runner
 
-	workers                sync.Map // instanceID + idx -> *worker
+	workers                sync.Map // key -> *worker
 	eventC                 chan storage.Event
 	retryNewInstanceC      chan metapb.WorkflowInstance
 	retryCompleteInstanceC chan uint64
@@ -56,8 +67,36 @@ func (eng *engine) Start() error {
 	return nil
 }
 
-func (eng *engine) Step(metapb.Event) error {
-	return nil
+func (eng *engine) Step(ctx context.Context, event metapb.Event) error {
+	var cb *stepCB
+	found := false
+	eng.workers.Range(func(key, value interface{}) bool {
+		w := value.(*stateWorker)
+		if w.matches(event.UserID) {
+			found = true
+			cb = acquireCB()
+			cb.ctx = ctx
+			cb.c = make(chan error)
+			w.step(event, cb)
+			return false
+		}
+
+		return true
+	})
+
+	if !found {
+		return ErrWorkerNotFound
+	}
+
+	return cb.wait()
+}
+
+func (eng *engine) Notifier() notify.Notifier {
+	return eng.notifier
+}
+
+func (eng *engine) Storage() storage.Storage {
+	return eng.store
 }
 
 func (eng *engine) handleEvent(ctx context.Context) {
@@ -87,24 +126,65 @@ func (eng *engine) doEvent(event storage.Event) {
 	case storage.InstanceLoadedEvent:
 		eng.doStartInstance(event.Data.(metapb.WorkflowInstance))
 	case storage.InstanceStateLoadedEvent:
+		eng.doStartInstanceState(event.Data.(metapb.WorkflowInstanceState))
+	case storage.InstanceStateUpdatedEvent:
+		eng.doUpdateInstanceState(event.Data.(metapb.WorkflowInstanceState))
 	case storage.InstanceStateRemovedEvent:
+		eng.doStopInstanceState(event.Data.(metapb.WorkflowInstanceState))
+	}
+}
+
+func (eng *engine) doStartInstanceState(state metapb.WorkflowInstanceState) {
+	key := hack.SliceToString(storage.InstanceStateKey(state.InstanceID, state.Start, state.End))
+
+	if _, ok := eng.workers.Load(key); ok {
+		log.Fatalf("BUG: start a exists state worker")
+	}
+
+	w, err := newStateWorker(key, state)
+	if err != nil {
+		log.Errorf("create worker for state %+v failed with %+v",
+			state,
+			err)
+		return
+	}
+
+	eng.workers.Store(w.key, w)
+	w.run()
+}
+
+func (eng *engine) doUpdateInstanceState(state metapb.WorkflowInstanceState) {
+	key := hack.SliceToString(storage.InstanceStateKey(state.InstanceID, state.Start, state.End))
+	w, ok := eng.workers.Load(key)
+	if !ok {
+		eng.doStartInstanceState(state)
+		return
+	}
+
+	w.(*stateWorker).instanceStateUpdated(state)
+}
+
+func (eng *engine) doStopInstanceState(state metapb.WorkflowInstanceState) {
+	key := hack.SliceToString(storage.InstanceStateKey(state.InstanceID, state.Start, state.End))
+	if w, ok := eng.workers.Load(key); ok {
+		eng.workers.Delete(key)
+		w.(*stateWorker).stop()
 	}
 }
 
 func (eng *engine) doStartInstance(instance metapb.WorkflowInstance) {
-	bm := roaring.NewBTreeBitmap()
-	_, _, err := bm.ImportRoaringBits(instance.Crowd, false, false, 0)
-	if err != nil {
-		log.Fatalf("parse bitmap failed with %+v", err)
-	}
-
 	state := metapb.WorkflowInstanceState{}
+	state.TenantID = instance.Snapshot.TenantID
+	state.WorkflowID = instance.Snapshot.ID
 	state.InstanceID = instance.ID
 
-	buf := bytes.NewBuffer(nil)
-	stateBM := roaring.NewBTreeBitmap()
+	bm := bbutil.MustParseBM(instance.Crowd)
+	buf := bbutil.AcquireBuf()
+	stateBM := bbutil.AcquireBitmap()
 	start := uint64(0)
 	count := uint64(0)
+
+	defer bbutil.ReleaseBuf(buf)
 
 	itr := bm.Iterator()
 	for {
@@ -114,10 +194,10 @@ func (eng *engine) doStartInstance(instance metapb.WorkflowInstance) {
 		}
 
 		if start == 0 {
-			stateBM.Containers.Reset()
+			stateBM = bbutil.AcquireBitmap()
 			for _, step := range instance.Snapshot.Steps {
 				state.States = append(state.States, metapb.StepState{
-					Name:  step.Name,
+					Step:  step,
 					Crowd: emptyBMData.Bytes(),
 				})
 			}
@@ -147,11 +227,7 @@ func (eng *engine) doStartInstance(instance metapb.WorkflowInstance) {
 
 	if start > 0 {
 		buf.Reset()
-		_, err := stateBM.WriteTo(buf)
-		if err != nil {
-			log.Fatalf("BUG: bitmap write failed with %+v", err)
-		}
-
+		bbutil.MustWriteTo(stateBM, buf)
 		state.States[0].Crowd = buf.Bytes()
 		state.Start = start
 		state.End = stateBM.Max() + 1
