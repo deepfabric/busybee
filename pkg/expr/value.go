@@ -1,7 +1,7 @@
 package expr
 
 import (
-	"github.com/pilosa/pilosa/roaring"
+	"github.com/RoaringBitmap/roaring"
 )
 
 // ValueFetcher value fetcher

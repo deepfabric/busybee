@@ -122,7 +122,7 @@ func (h *beeStorage) BuildRequest(req *raftcmdpb.Request, cmd interface{}) error
 	case *rpcpb.StartWFRequest:
 		msg := cmd.(*rpcpb.StartWFRequest)
 		msg.ID = req.ID
-		req.Key = InstanceKey(msg.Instance.ID)
+		req.Key = InstanceStartKey(msg.Instance.ID)
 		req.CustemType = uint64(rpcpb.StartWF)
 		req.Type = raftcmdpb.Write
 		req.Cmd = protoc.MustMarshal(msg)
@@ -130,7 +130,7 @@ func (h *beeStorage) BuildRequest(req *raftcmdpb.Request, cmd interface{}) error
 	case *rpcpb.RemoveWFRequest:
 		msg := cmd.(*rpcpb.RemoveWFRequest)
 		msg.ID = req.ID
-		req.Key = InstanceKey(msg.InstanceID)
+		req.Key = InstanceStartKey(msg.InstanceID)
 		req.CustemType = uint64(rpcpb.StartWF)
 		req.Type = raftcmdpb.Write
 		req.Cmd = protoc.MustMarshal(msg)
@@ -233,8 +233,8 @@ func (h *beeStorage) bmcontains(shard uint64, req *raftcmdpb.Request) *raftcmdpb
 	if len(value) > 0 {
 		bm := util.MustParseBM(value)
 		bm2 := util.AcquireBitmap()
-		bm2.Add(customReq.Value...)
-		contains = bm.Intersect(bm2).Count() == uint64(len(customReq.Value))
+		bm2.AddMany(customReq.Value)
+		contains = util.BMAnd(bm, bm2).GetCardinality() == uint64(len(customReq.Value))
 	}
 
 	customResp := rpcpb.AcquireBMContainsResponse()
@@ -257,7 +257,7 @@ func (h *beeStorage) bmcount(shard uint64, req *raftcmdpb.Request) *raftcmdpb.Re
 
 	count := uint64(0)
 	if len(value) > 0 {
-		count = util.MustParseBM(value).Count()
+		count = util.MustParseBM(value).GetCardinality()
 	}
 
 	customResp := rpcpb.AcquireBMCountResponse()
@@ -278,19 +278,18 @@ func (h *beeStorage) bmrange(shard uint64, req *raftcmdpb.Request) *raftcmdpb.Re
 		log.Fatalf("get %+v failed with %+v", req.Key, err)
 	}
 
-	var values []uint64
+	var values []uint32
 	if len(value) > 0 {
 		bm := util.MustParseBM(value)
 		count := uint64(0)
 		itr := bm.Iterator()
-		itr.Seek(customReq.Start)
+		itr.AdvanceIfNeeded(customReq.Start)
 		for {
-			value, eof := itr.Next()
-			if eof {
+			if !itr.HasNext() {
 				break
 			}
 
-			values = append(values, value)
+			values = append(values, itr.Next())
 			count++
 
 			if count >= customReq.Limit {

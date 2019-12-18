@@ -1,8 +1,7 @@
 package util
 
 import (
-	"bytes"
-	"github.com/pilosa/pilosa/roaring"
+	"github.com/RoaringBitmap/roaring"
 	"log"
 )
 
@@ -15,28 +14,28 @@ func MustParseBM(data []byte) *roaring.Bitmap {
 
 // MustParseBMTo parse a bitmap
 func MustParseBMTo(data []byte, bm *roaring.Bitmap) {
-	_, _, err := bm.ImportRoaringBits(data, false, false, 0)
+	err := bm.UnmarshalBinary(data)
 	if err != nil {
 		log.Fatalf("BUG: parse bm failed with %+v", err)
 	}
 }
 
-// MustWriteTo must write bitmap to buf
-func MustWriteTo(bm *roaring.Bitmap, buf *bytes.Buffer) {
-	_, err := bm.WriteTo(buf)
+// MustMarshalBM must marshal BM
+func MustMarshalBM(bm *roaring.Bitmap) []byte {
+	data, err := bm.MarshalBinary()
 	if err != nil {
 		log.Fatalf("BUG: write bm failed with %+v", err)
 	}
+
+	return data
 }
 
 // BMAnd bitmap and
 func BMAnd(bms ...*roaring.Bitmap) *roaring.Bitmap {
-	var value *roaring.Bitmap
-	for _, bm := range bms {
-		if value == nil {
-			value = bm
-		} else {
-			value = value.Intersect(bm)
+	value := bms[0].Clone()
+	for idx, bm := range bms {
+		if idx > 0 {
+			value.And(bm)
 		}
 	}
 
@@ -45,12 +44,10 @@ func BMAnd(bms ...*roaring.Bitmap) *roaring.Bitmap {
 
 // BMAndInterface bm and using interface{}
 func BMAndInterface(bms ...interface{}) *roaring.Bitmap {
-	var value *roaring.Bitmap
-	for _, bm := range bms {
-		if value == nil {
-			value = bm.(*roaring.Bitmap)
-		} else {
-			value = value.Intersect(bm.(*roaring.Bitmap))
+	value := bms[0].(*roaring.Bitmap).Clone()
+	for idx, bm := range bms {
+		if idx > 0 {
+			value.And(bm.(*roaring.Bitmap))
 		}
 	}
 
@@ -59,13 +56,9 @@ func BMAndInterface(bms ...interface{}) *roaring.Bitmap {
 
 // BMOr bitmap or
 func BMOr(bms ...*roaring.Bitmap) *roaring.Bitmap {
-	var value *roaring.Bitmap
+	value := AcquireBitmap()
 	for _, bm := range bms {
-		if value == nil {
-			value = bm
-		} else {
-			value = value.Union(bm)
-		}
+		value.Or(bm)
 	}
 
 	return value
@@ -73,13 +66,9 @@ func BMOr(bms ...*roaring.Bitmap) *roaring.Bitmap {
 
 // BMOrInterface bitmap or using interface{}
 func BMOrInterface(bms ...interface{}) *roaring.Bitmap {
-	var value *roaring.Bitmap
+	value := AcquireBitmap()
 	for _, bm := range bms {
-		if value == nil {
-			value = bm.(*roaring.Bitmap)
-		} else {
-			value = value.Union(bm.(*roaring.Bitmap))
-		}
+		value.Or(bm.(*roaring.Bitmap))
 	}
 
 	return value
@@ -87,12 +76,10 @@ func BMOrInterface(bms ...interface{}) *roaring.Bitmap {
 
 // BMXOr bitmap xor (A union B) - (A and B)
 func BMXOr(bms ...*roaring.Bitmap) *roaring.Bitmap {
-	var value *roaring.Bitmap
-	for _, bm := range bms {
-		if value == nil {
-			value = bm
-		} else {
-			value = value.Xor(bm)
+	value := bms[0].Clone()
+	for idx, bm := range bms {
+		if idx > 0 {
+			value.Xor(bm)
 		}
 	}
 
@@ -101,12 +88,10 @@ func BMXOr(bms ...*roaring.Bitmap) *roaring.Bitmap {
 
 // BMXOrInterface bitmap xor using interface{}
 func BMXOrInterface(bms ...interface{}) *roaring.Bitmap {
-	var value *roaring.Bitmap
-	for _, bm := range bms {
-		if value == nil {
-			value = bm.(*roaring.Bitmap)
-		} else {
-			value = value.Xor(bm.(*roaring.Bitmap))
+	value := bms[0].(*roaring.Bitmap).Clone()
+	for idx, bm := range bms {
+		if idx > 0 {
+			value.Xor(bm.(*roaring.Bitmap))
 		}
 	}
 
@@ -115,37 +100,21 @@ func BMXOrInterface(bms ...interface{}) *roaring.Bitmap {
 
 // BMAndnot bitmap andnot A - (A and B)
 func BMAndnot(bms ...*roaring.Bitmap) *roaring.Bitmap {
-	var value *roaring.Bitmap
-	var and *roaring.Bitmap
-	for idx, bm := range bms {
-		if idx == 0 {
-			value = bm
-			and = bm
-		} else {
-			and = and.Intersect(bm)
-		}
-	}
-
-	return value.Xor(and)
+	and := BMAnd(bms...)
+	value := bms[0].Clone()
+	value.Xor(and)
+	return value
 }
 
 // BMAndnotInterface bitmap andnot using interface{}
 func BMAndnotInterface(bms ...interface{}) *roaring.Bitmap {
-	var value *roaring.Bitmap
-	var and *roaring.Bitmap
-	for idx, bm := range bms {
-		if idx == 0 {
-			value = bm.(*roaring.Bitmap)
-			and = value
-		} else {
-			and = and.Intersect(bm.(*roaring.Bitmap))
-		}
-	}
-
-	return value.Xor(and)
+	and := BMAndInterface(bms...)
+	value := bms[0].(*roaring.Bitmap).Clone()
+	value.Xor(and)
+	return value
 }
 
 // AcquireBitmap create a bitmap
 func AcquireBitmap() *roaring.Bitmap {
-	return roaring.NewBTreeBitmap()
+	return roaring.NewBitmap()
 }

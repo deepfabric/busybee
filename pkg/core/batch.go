@@ -1,10 +1,9 @@
 package core
 
 import (
-	"bytes"
+	"github.com/RoaringBitmap/roaring"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/util"
-	"github.com/pilosa/pilosa/roaring"
 )
 
 type executionbatch struct {
@@ -12,16 +11,13 @@ type executionbatch struct {
 	from  string
 	to    string
 	crowd *roaring.Bitmap
-	buf   *bytes.Buffer
 
 	notifies []metapb.Notify
 	cbs      []*stepCB
 }
 
 func newExecutionbatch() *executionbatch {
-	return &executionbatch{
-		buf: util.AcquireBuf(),
-	}
+	return &executionbatch{}
 }
 
 func (b *executionbatch) next() {
@@ -33,9 +29,7 @@ func (b *executionbatch) next() {
 		Step:       b.from,
 	}
 	if b.crowd != nil {
-		b.buf.Reset()
-		util.MustWriteTo(b.crowd, b.buf)
-		value.Crowd = b.buf.Bytes()
+		value.Crowd = util.MustMarshalBM(b.crowd)
 	}
 	b.notifies = append(b.notifies, value)
 

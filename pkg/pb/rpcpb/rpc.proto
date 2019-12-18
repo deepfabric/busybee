@@ -72,7 +72,7 @@ message DeleteResponse {
 message BMCreateRequest {
     bytes           id    = 1 [(gogoproto.customname) = "ID"];
     bytes           key   = 2;
-    repeated uint64 value = 3;
+    repeated uint32 value = 3;
 }
 
 // BMCreateResponse response
@@ -84,7 +84,7 @@ message BMCreateResponse {
 message BMAddRequest {
     bytes           id    = 1 [(gogoproto.customname) = "ID"];
     bytes           key   = 2;
-    repeated uint64 value = 3;
+    repeated uint32 value = 3;
 }
 
 // BMCreateResponse response
@@ -96,7 +96,7 @@ message BMAddResponse {
 message BMRemoveRequest {
     bytes           id    = 1 [(gogoproto.customname) = "ID"];
     bytes           key   = 2;
-    repeated uint64 value = 3;
+    repeated uint32 value = 3;
 }
 
 // BMRemoveResponse response
@@ -119,7 +119,7 @@ message BMClearResponse {
 message BMContainsRequest {
     bytes           id    = 1 [(gogoproto.customname) = "ID"];
     bytes           key   = 2;
-    repeated uint64 value = 3;
+    repeated uint32 value = 3;
 }
 
 // BMContainsResponse response
@@ -155,7 +155,7 @@ message BMCountResponse {
 message BMRangeRequest {
     bytes           id    = 1 [(gogoproto.customname) = "ID"];
     bytes           key   = 2;
-    uint64          start = 3;
+    uint32          start = 3;
     uint64          limit = 4;
 }
 
@@ -163,7 +163,7 @@ message BMRangeRequest {
 message BMRangeResponse {
     bytes           id     = 1 [(gogoproto.customname) = "ID"];
     bytes           key    = 2;
-    repeated uint64 values = 3;
+    repeated uint32 values = 3;
 }
 
 // StartWFRequest start a workflow
@@ -215,8 +215,8 @@ message UpdateStateResponse {
 message RemoveStateRequest {
     bytes id          = 1 [(gogoproto.customname) = "ID"];
     uint64 instanceID = 2;
-    uint64 start      = 3;
-    uint64 end        = 4;
+    uint32 start      = 3;
+    uint32 end        = 4;
 }
 
 // RemoveStateResponse response

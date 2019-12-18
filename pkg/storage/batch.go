@@ -3,13 +3,13 @@ package storage
 import (
 	"bytes"
 
+	"github.com/RoaringBitmap/roaring"
 	"github.com/deepfabric/beehive/pb"
 	"github.com/deepfabric/beehive/pb/raftcmdpb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/deepfabric/busybee/pkg/util"
 	"github.com/fagongzi/log"
 	"github.com/fagongzi/util/protoc"
-	"github.com/pilosa/pilosa/roaring"
 )
 
 const (
@@ -157,7 +157,6 @@ func (b *batch) Execute() (uint64, int64, error) {
 	}
 
 	if len(b.bitmap.ops) > 0 {
-		buf := util.AcquireBuf()
 		bm := util.AcquireBitmap()
 		for idx, ops := range b.bitmap.ops {
 			key := b.bitmap.bitmaps[idx]
@@ -169,7 +168,6 @@ func (b *batch) Execute() (uint64, int64, error) {
 
 			value, err := s.Get(key)
 			if err != nil {
-				util.ReleaseBuf(buf)
 				return 0, 0, err
 			}
 
@@ -181,10 +179,10 @@ func (b *batch) Execute() (uint64, int64, error) {
 			for _, op := range ops {
 				switch op {
 				case opAdd:
-					bm = bm.Union(b.bitmap.bitmapAdds[idx])
+					bm = util.BMOr(bm, b.bitmap.bitmapAdds[idx])
 					break
 				case opRemove:
-					bm = bm.Xor(b.bitmap.bitmapRemoves[idx])
+					bm = util.BMXOr(bm, b.bitmap.bitmapRemoves[idx])
 					break
 				case opClear:
 					bm = util.AcquireBitmap()
@@ -195,16 +193,13 @@ func (b *batch) Execute() (uint64, int64, error) {
 				}
 			}
 
-			buf.Reset()
-			util.MustWriteTo(bm, buf)
+			data := util.MustMarshalBM(bm)
 
-			wb.Set(key, appendPrefix(buf.Bytes(), kvType))
+			wb.Set(key, appendPrefix(data, kvType))
 
-			b.writtenBytes += uint64(len(buf.Bytes()) - len(value))
-			b.changedBytes += int64(len(buf.Bytes()) - len(value))
+			b.writtenBytes += uint64(len(data) - len(value))
+			b.changedBytes += int64(len(data) - len(value))
 		}
-
-		util.ReleaseBuf(buf)
 	}
 
 	b.Reset()
@@ -245,7 +240,7 @@ type bitmapBatch struct {
 	ops           [][]int
 }
 
-func (rb *bitmapBatch) add(bm []byte, values ...uint64) {
+func (rb *bitmapBatch) add(bm []byte, values ...uint32) {
 	for idx, key := range rb.bitmaps {
 		if bytes.Compare(key, bm) == 0 {
 			rb.ops[idx] = append(rb.ops[idx], opAdd)
@@ -255,7 +250,7 @@ func (rb *bitmapBatch) add(bm []byte, values ...uint64) {
 	}
 
 	value := util.AcquireBitmap()
-	value.Add(values...)
+	value.AddMany(values)
 
 	rb.ops = append(rb.ops, []int{opAdd})
 	rb.bitmaps = append(rb.bitmaps, bm)
@@ -263,7 +258,7 @@ func (rb *bitmapBatch) add(bm []byte, values ...uint64) {
 	rb.bitmapRemoves = append(rb.bitmapRemoves, nil)
 }
 
-func (rb *bitmapBatch) remove(bm []byte, values ...uint64) {
+func (rb *bitmapBatch) remove(bm []byte, values ...uint32) {
 	for idx, key := range rb.bitmaps {
 		if bytes.Compare(key, bm) == 0 {
 			rb.ops[idx] = append(rb.ops[idx], opRemove)
@@ -273,7 +268,7 @@ func (rb *bitmapBatch) remove(bm []byte, values ...uint64) {
 	}
 
 	value := util.AcquireBitmap()
-	value.Add(values...)
+	value.AddMany(values)
 
 	rb.ops = append(rb.ops, []int{opRemove})
 	rb.bitmaps = append(rb.bitmaps, bm)
@@ -289,20 +284,20 @@ func (rb *bitmapBatch) del(bm []byte) {
 	rb.clean(bm, opDel)
 }
 
-func (rb *bitmapBatch) appendAdds(idx int, values ...uint64) {
+func (rb *bitmapBatch) appendAdds(idx int, values ...uint32) {
 	if rb.bitmapAdds[idx] == nil {
 		rb.bitmapAdds[idx] = util.AcquireBitmap()
 	}
 
-	rb.bitmapAdds[idx].Add(values...)
+	rb.bitmapAdds[idx].AddMany(values)
 }
 
-func (rb *bitmapBatch) appendRemoves(idx int, values ...uint64) {
+func (rb *bitmapBatch) appendRemoves(idx int, values ...uint32) {
 	if rb.bitmapRemoves[idx] == nil {
 		rb.bitmapRemoves[idx] = util.AcquireBitmap()
 	}
 
-	rb.bitmapRemoves[idx].Add(values...)
+	rb.bitmapRemoves[idx].AddMany(values)
 }
 
 func (rb *bitmapBatch) clean(bm []byte, op int) {

@@ -5,6 +5,5 @@ import (
 )
 
 type options struct {
-	maxCrowdShardSize uint64
-	retryInterval     time.Duration
+	retryInterval time.Duration
 }

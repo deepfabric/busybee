@@ -141,7 +141,7 @@ func TestBMCreate(t *testing.T) {
 	defer store.Close()
 
 	key := []byte("key1")
-	value := []uint64{1, 2, 3, 4, 5}
+	value := []uint32{1, 2, 3, 4, 5}
 
 	data, err := store.ExecCommand(&rpcpb.BMCreateRequest{
 		Key:   key,
@@ -160,7 +160,7 @@ func TestBMCreate(t *testing.T) {
 	assert.NotEmpty(t, resp.Value, "TestBMCreate failed")
 
 	bm := util.MustParseBM(resp.Value)
-	assert.Equal(t, uint64(len(value)), bm.Count(), "TestBMCreate failed")
+	assert.Equal(t, uint64(len(value)), bm.GetCardinality(), "TestBMCreate failed")
 }
 
 func TestBMAdd(t *testing.T) {
@@ -179,8 +179,8 @@ func TestBMAdd(t *testing.T) {
 	defer store.Close()
 
 	key := []byte("key1")
-	value := []uint64{1, 2, 3, 4, 5}
-	value2 := []uint64{6, 7, 8, 9, 10}
+	value := []uint32{1, 2, 3, 4, 5}
+	value2 := []uint32{6, 7, 8, 9, 10}
 
 	data, err := store.ExecCommand(&rpcpb.BMCreateRequest{
 		Key:   key,
@@ -205,7 +205,7 @@ func TestBMAdd(t *testing.T) {
 	assert.NotEmpty(t, resp.Value, "TestBMAdd failed")
 
 	bm := util.MustParseBM(resp.Value)
-	assert.Equal(t, uint64(len(value)+len(value2)), bm.Count(), "TestBMAdd failed")
+	assert.Equal(t, uint64(len(value)+len(value2)), bm.GetCardinality(), "TestBMAdd failed")
 }
 
 func TestBMRemove(t *testing.T) {
@@ -224,7 +224,7 @@ func TestBMRemove(t *testing.T) {
 	defer store.Close()
 
 	key := []byte("key1")
-	value := []uint64{1, 2, 3, 4, 5}
+	value := []uint32{1, 2, 3, 4, 5}
 
 	data, err := store.ExecCommand(&rpcpb.BMCreateRequest{
 		Key:   key,
@@ -249,7 +249,7 @@ func TestBMRemove(t *testing.T) {
 	assert.NotEmpty(t, resp.Value, "TestBMRemove failed")
 
 	bm := util.MustParseBM(resp.Value)
-	assert.Equal(t, uint64(2), bm.Count(), "TestBMRemove failed")
+	assert.Equal(t, uint64(2), bm.GetCardinality(), "TestBMRemove failed")
 }
 
 func TestBMClear(t *testing.T) {
@@ -268,7 +268,7 @@ func TestBMClear(t *testing.T) {
 	defer store.Close()
 
 	key := []byte("key1")
-	value := []uint64{1, 2, 3, 4, 5}
+	value := []uint32{1, 2, 3, 4, 5}
 
 	data, err := store.ExecCommand(&rpcpb.BMCreateRequest{
 		Key:   key,
@@ -308,7 +308,7 @@ func TestBMContains(t *testing.T) {
 	defer store.Close()
 
 	key := []byte("key1")
-	value := []uint64{1, 2, 3, 4, 5}
+	value := []uint32{1, 2, 3, 4, 5}
 
 	data, err := store.ExecCommand(&rpcpb.BMCreateRequest{
 		Key:   key,
@@ -343,7 +343,7 @@ func TestBMDel(t *testing.T) {
 	defer store.Close()
 
 	key := []byte("key1")
-	value := []uint64{1, 2, 3, 4, 5}
+	value := []uint32{1, 2, 3, 4, 5}
 
 	data, err := store.ExecCommand(&rpcpb.BMCreateRequest{
 		Key:   key,
@@ -382,7 +382,7 @@ func TestBMCount(t *testing.T) {
 	defer store.Close()
 
 	key := []byte("key1111")
-	value := []uint64{1, 2, 3, 4, 5}
+	value := []uint32{1, 2, 3, 4, 5}
 
 	data, err := store.ExecCommand(&rpcpb.BMCreateRequest{
 		Key:   key,
@@ -416,7 +416,7 @@ func TestBMRange(t *testing.T) {
 	defer store.Close()
 
 	key := []byte("key1")
-	value := []uint64{1, 2, 3, 4, 5}
+	value := []uint32{1, 2, 3, 4, 5}
 
 	data, err := store.ExecCommand(&rpcpb.BMCreateRequest{
 		Key:   key,
@@ -433,8 +433,8 @@ func TestBMRange(t *testing.T) {
 
 	resp := &rpcpb.BMRangeResponse{}
 	protoc.MustUnmarshal(resp, data)
-	assert.Equal(t, uint64(1), resp.Values[0], "TestBMCount failed")
-	assert.Equal(t, uint64(2), resp.Values[1], "TestBMCount failed")
+	assert.Equal(t, uint32(1), resp.Values[0], "TestBMCount failed")
+	assert.Equal(t, uint32(2), resp.Values[1], "TestBMCount failed")
 
 	data, err = store.ExecCommand(&rpcpb.BMRangeRequest{
 		Key:   key,
@@ -445,8 +445,8 @@ func TestBMRange(t *testing.T) {
 
 	resp = &rpcpb.BMRangeResponse{}
 	protoc.MustUnmarshal(resp, data)
-	assert.Equal(t, uint64(1), resp.Values[0], "TestBMCount failed")
-	assert.Equal(t, uint64(2), resp.Values[1], "TestBMCount failed")
+	assert.Equal(t, uint32(1), resp.Values[0], "TestBMCount failed")
+	assert.Equal(t, uint32(2), resp.Values[1], "TestBMCount failed")
 }
 
 func TestStartWF(t *testing.T) {

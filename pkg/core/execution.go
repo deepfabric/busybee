@@ -1,9 +1,9 @@
 package core
 
 import (
+	"github.com/RoaringBitmap/roaring"
 	"github.com/deepfabric/busybee/pkg/expr"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
-	"github.com/pilosa/pilosa/roaring"
 )
 
 type stepChangedFunc func(batch *executionbatch) error

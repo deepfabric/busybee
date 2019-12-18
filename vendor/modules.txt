@@ -1,5 +1,7 @@
 # github.com/BurntSushi/toml v0.3.1
 github.com/BurntSushi/toml
+# github.com/RoaringBitmap/roaring v0.4.21
+github.com/RoaringBitmap/roaring
 # github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d
 github.com/StackExchange/wmi
 # github.com/beorn7/perks v1.0.1
@@ -90,7 +92,7 @@ github.com/coreos/go-systemd/journal
 github.com/coreos/pkg/capnslog
 # github.com/davecgh/go-spew v1.1.1
 github.com/davecgh/go-spew/spew
-# github.com/deepfabric/beehive v0.0.0-20191217070621-042029d57ba1
+# github.com/deepfabric/beehive v0.0.0-20191218015628-258b24a154b5
 github.com/deepfabric/beehive
 github.com/deepfabric/beehive/metric
 github.com/deepfabric/beehive/pb
@@ -124,6 +126,8 @@ github.com/fagongzi/util/task
 github.com/fagongzi/util/uuid
 # github.com/funny/slab v0.0.0-20180511031532-b1fad5e5d478
 github.com/funny/slab
+# github.com/glycerine/go-unsnap-stream v0.0.0-20181221182339-f9677308dec2
+github.com/glycerine/go-unsnap-stream
 # github.com/go-ole/go-ole v1.2.4
 github.com/go-ole/go-ole
 github.com/go-ole/go-ole/oleutil
@@ -146,6 +150,8 @@ github.com/golang/protobuf/ptypes/duration
 github.com/golang/protobuf/ptypes/struct
 github.com/golang/protobuf/ptypes/timestamp
 github.com/golang/protobuf/ptypes/wrappers
+# github.com/golang/snappy v0.0.1
+github.com/golang/snappy
 # github.com/google/btree v1.0.0
 github.com/google/btree
 # github.com/google/uuid v1.1.1
@@ -166,18 +172,25 @@ github.com/jonboulle/clockwork
 github.com/json-iterator/go
 # github.com/konsorten/go-windows-terminal-sequences v1.0.1
 github.com/konsorten/go-windows-terminal-sequences
+# github.com/labstack/echo v3.3.10+incompatible
+github.com/labstack/echo
+# github.com/labstack/gommon v0.3.0
+github.com/labstack/gommon/color
+github.com/labstack/gommon/log
+# github.com/mattn/go-colorable v0.1.2
+github.com/mattn/go-colorable
+# github.com/mattn/go-isatty v0.0.9
+github.com/mattn/go-isatty
 # github.com/matttproud/golang_protobuf_extensions v1.0.1
 github.com/matttproud/golang_protobuf_extensions/pbutil
 # github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd
 github.com/modern-go/concurrent
 # github.com/modern-go/reflect2 v1.0.1
 github.com/modern-go/reflect2
-# github.com/pilosa/pilosa v1.4.0
-github.com/pilosa/pilosa/logger
-github.com/pilosa/pilosa/roaring
-github.com/pilosa/pilosa/stats
-# github.com/pkg/errors v0.8.1
-github.com/pkg/errors
+# github.com/mschoch/smat v0.0.0-20160514031455-90eadee771ae
+github.com/mschoch/smat
+# github.com/philhofer/fwd v1.0.0
+github.com/philhofer/fwd
 # github.com/pmezard/go-difflib v1.0.0
 github.com/pmezard/go-difflib/difflib
 # github.com/prometheus/client_golang v1.2.1
@@ -204,8 +217,16 @@ github.com/sirupsen/logrus
 github.com/soheilhy/cmux
 # github.com/stretchr/testify v1.4.0
 github.com/stretchr/testify/assert
+# github.com/tinylib/msgp v1.1.0
+github.com/tinylib/msgp/msgp
 # github.com/tmc/grpc-websocket-proxy v0.0.0-20190109142713-0ad062ec5ee5
 github.com/tmc/grpc-websocket-proxy/wsproxy
+# github.com/valyala/bytebufferpool v1.0.0
+github.com/valyala/bytebufferpool
+# github.com/valyala/fasttemplate v1.0.1
+github.com/valyala/fasttemplate
+# github.com/willf/bitset v1.1.10
+github.com/willf/bitset
 # github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2
 github.com/xiang90/probing
 # go.uber.org/atomic v1.4.0
@@ -220,6 +241,8 @@ go.uber.org/zap/internal/color
 go.uber.org/zap/internal/exit
 go.uber.org/zap/zapcore
 # golang.org/x/crypto v0.0.0-20190820162420-60c769a6c586
+golang.org/x/crypto/acme
+golang.org/x/crypto/acme/autocert
 golang.org/x/crypto/bcrypt
 golang.org/x/crypto/blowfish
 # golang.org/x/net v0.0.0-20190813141303-74dc4d7220e7

@@ -1,8 +1,8 @@
 package expr
 
 import (
+	"github.com/RoaringBitmap/roaring"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
-	"github.com/pilosa/pilosa/roaring"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )

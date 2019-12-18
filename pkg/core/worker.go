@@ -3,6 +3,7 @@ package core
 import (
 	"time"
 
+	"github.com/RoaringBitmap/roaring"
 	"github.com/deepfabric/beehive/util"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
@@ -10,7 +11,6 @@ import (
 	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/log"
 	"github.com/fagongzi/util/task"
-	"github.com/pilosa/pilosa/roaring"
 )
 
 var (
@@ -76,7 +76,7 @@ func (w *stateWorker) stop() {
 	})
 }
 
-func (w *stateWorker) matches(id uint64) bool {
+func (w *stateWorker) matches(id uint32) bool {
 	return id >= w.state.Start && id < w.state.End
 }
 
@@ -125,7 +125,7 @@ func (w *stateWorker) run() {
 
 func (w *stateWorker) execBatch(batch *executionbatch) {
 	if len(batch.notifies) > 0 {
-		err := w.eng.Notifier().Notify(batch.notifies...)
+		err := w.eng.Notifier().Notify(w.state.InstanceID, batch.notifies...)
 		if err != nil {
 			log.Fatalf("instance state notify failed with %+v", err)
 		}
@@ -145,7 +145,6 @@ func (w *stateWorker) execBatch(batch *executionbatch) {
 }
 
 func (w *stateWorker) stepChanged(batch *executionbatch) error {
-	buf := bbutil.AcquireBuf()
 	for idx, state := range w.state.States {
 		changed := false
 		if state.Step.Name == batch.from {
@@ -165,15 +164,12 @@ func (w *stateWorker) stepChanged(batch *executionbatch) error {
 		}
 
 		if changed {
-			buf.Reset()
-			bbutil.MustWriteTo(w.stepCrowds[idx], buf)
-			w.state.States[idx].Crowd = buf.Bytes()
+			w.state.States[idx].Crowd = bbutil.MustMarshalBM(w.stepCrowds[idx])
 			w.state.Version++
 		}
 	}
 
 	batch.next()
-	bbutil.ReleaseBuf(buf)
 	return nil
 }
 

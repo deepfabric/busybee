@@ -41,6 +41,8 @@ type Storage interface {
 	QueueAdd(id uint64, group uint64, items ...[]byte) (uint64, error)
 	// QueueFetch add items to work flow instance queue
 	QueueFetch(id uint64, group uint64, afterOffset uint64, count uint64) (uint64, [][]byte, error)
+	// RaftStore returns the raft store
+	RaftStore() raftstore.Store
 }
 
 type beeStorage struct {
@@ -165,4 +167,8 @@ func (h *beeStorage) QueueFetch(id uint64, group uint64, afterOffset uint64, cou
 	items := resp.Items
 	rpcpb.ReleaseQueueFetchResponse(resp)
 	return offset, items, nil
+}
+
+func (h *beeStorage) RaftStore() raftstore.Store {
+	return h.store
 }

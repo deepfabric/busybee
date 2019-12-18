@@ -18,9 +18,10 @@ message Workflow {
 
 // WorkflowInstance workflow instance
 message WorkflowInstance {
-    uint64   id       = 1 [(gogoproto.customname) = "ID"];
-    Workflow snapshot = 2 [(gogoproto.nullable) = false];
-    bytes    crowd    = 3;
+    uint64   id          = 1 [(gogoproto.customname) = "ID"];
+    Workflow snapshot    = 2 [(gogoproto.nullable) = false];
+    bytes    crowd       = 3;
+    uint64   maxPerShard = 4;
 }
 
 // WorkflowInstanceState workflow instance state, uid in [start,end). instance : instanceState = 1 : N
@@ -28,8 +29,8 @@ message WorkflowInstanceState {
     uint64             tenantID   = 1;
     uint64             workflowID = 2;
     uint64             instanceID = 3;
-    uint64             start      = 4;
-    uint64             end        = 5;
+    uint32             start      = 4;
+    uint32             end        = 5;
     repeated StepState states     = 6 [(gogoproto.nullable) = false];
     uint64             version    = 7;
 }

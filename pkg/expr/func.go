@@ -1,9 +1,9 @@
 package expr
 
 import (
+	"github.com/RoaringBitmap/roaring"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/fagongzi/util/format"
-	"github.com/pilosa/pilosa/roaring"
 )
 
 func (rt *runtime) doFunc(value []interface{}, src *metapb.Event) (bool, interface{}) {
@@ -59,9 +59,9 @@ func (rt *runtime) max(value []interface{}, src *metapb.Event) (bool, interface{
 
 		return true, max
 	case metapb.Bitmap:
-		max := uint64(0)
+		max := uint32(0)
 		for _, vv := range value {
-			v := vv.(*roaring.Bitmap).Max()
+			v := vv.(*roaring.Bitmap).Maximum()
 			if v > max {
 				max = v
 			}
@@ -97,9 +97,9 @@ func (rt *runtime) min(value []interface{}, src *metapb.Event) (bool, interface{
 
 		return true, min
 	case metapb.Bitmap:
-		min := uint64(0)
+		min := uint32(0)
 		for _, vv := range value {
-			v, _ := vv.(*roaring.Bitmap).Min()
+			v := vv.(*roaring.Bitmap).Minimum()
 			if min == 0 || v < min {
 				min = v
 			}
@@ -120,7 +120,7 @@ func (rt *runtime) count(value []interface{}, src *metapb.Event) (bool, interfac
 	case metapb.Bitmap:
 		c := uint64(0)
 		for _, vv := range value {
-			c += uint64(vv.(*roaring.Bitmap).Count())
+			c += uint64(vv.(*roaring.Bitmap).GetCardinality())
 
 		}
 

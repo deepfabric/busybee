@@ -4,17 +4,20 @@ import (
 	"github.com/fagongzi/goetty"
 )
 
-// InstanceKey instance key
-func InstanceKey(id uint64) []byte {
-	return goetty.Uint64ToBytes(id)
+// InstanceStartKey instance key
+func InstanceStartKey(id uint64) []byte {
+	key := make([]byte, 9, 9)
+	key[8] = 0
+	goetty.Uint64ToBytesTo(id, key)
+	return key
 }
 
 // InstanceStateKey instance state key
-func InstanceStateKey(id uint64, start uint64, end uint64) []byte {
-	key := make([]byte, 24, 24)
-	goetty.Uint64ToBytesTo(end, key)
-	goetty.Uint64ToBytesTo(start, key[8:])
-	goetty.Uint64ToBytesTo(id, key[16:])
+func InstanceStateKey(id uint64, start uint32, end uint32) []byte {
+	key := make([]byte, 16, 16)
+	goetty.Uint32ToBytesTo(end, key)
+	goetty.Uint32ToBytesTo(start, key[4:])
+	goetty.Uint64ToBytesTo(id, key[8:])
 	return key
 }
 

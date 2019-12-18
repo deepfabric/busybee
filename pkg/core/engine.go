@@ -3,23 +3,27 @@ package core
 import (
 	"bytes"
 	"context"
+	"errors"
+	"fmt"
 	"sync"
 
+	"github.com/RoaringBitmap/roaring"
 	"github.com/deepfabric/beehive/util"
 	"github.com/deepfabric/busybee/pkg/notify"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/deepfabric/busybee/pkg/storage"
 	bbutil "github.com/deepfabric/busybee/pkg/util"
+	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/log"
 	"github.com/fagongzi/util/hack"
+	"github.com/fagongzi/util/protoc"
 	"github.com/fagongzi/util/task"
-	"github.com/pilosa/pilosa/roaring"
 )
 
 var (
 	emptyBMData = bytes.NewBuffer(nil)
-	initBM      = roaring.NewBTreeBitmap()
+	initBM      = roaring.NewBitmap()
 )
 
 func init() {
@@ -30,6 +34,20 @@ func init() {
 type Engine interface {
 	// Start start the engine
 	Start() error
+	// Stop stop the engine
+	Stop() error
+	// Create create a work flow definition meta
+	Create(meta metapb.Workflow) (uint64, error)
+	// Update update a work flow definition meta
+	Update(meta metapb.Workflow) error
+	// CreateInstance create a new work flow instance,
+	// an instance may contain a lot of people, so an instance will be divided into many shards,
+	// each shard handles some people's events.
+	CreateInstance(workflowID uint64, crow []byte, maxPerShard uint64) (uint64, error)
+	// DeleteInstance delete instance
+	DeleteInstance(instanceID uint64) error
+	// StartInstance start instance
+	StartInstance(id uint64) error
 	// Step drivers the workflow instance
 	Step(context.Context, metapb.Event) error
 	// Notifier returns notifier
@@ -67,6 +85,101 @@ func (eng *engine) Start() error {
 	return nil
 }
 
+func (eng *engine) Stop() error {
+	return eng.runner.Stop()
+}
+
+func (eng *engine) Create(meta metapb.Workflow) (uint64, error) {
+	id := eng.store.RaftStore().MustAllocID()
+	meta.ID = id
+
+	err := eng.set(uint64Key(id), protoc.MustMarshal(&meta))
+	if err != nil {
+		return 0, err
+	}
+
+	return id, nil
+}
+
+func (eng *engine) Update(meta metapb.Workflow) error {
+	if meta.ID == 0 {
+		return errors.New("missing workflow id")
+	}
+
+	return eng.set(uint64Key(meta.ID), protoc.MustMarshal(&meta))
+}
+
+func (eng *engine) CreateInstance(workflowID uint64, crow []byte, maxPerShard uint64) (uint64, error) {
+	value, err := eng.get(uint64Key(workflowID))
+	if err != nil {
+		return 0, err
+	}
+
+	if len(value) == 0 {
+		return 0, fmt.Errorf("missing workflow %d", workflowID)
+	}
+
+	snapshot := metapb.Workflow{}
+	protoc.MustUnmarshal(&snapshot, value)
+	instance := metapb.WorkflowInstance{
+		ID:          eng.store.RaftStore().MustAllocID(),
+		Snapshot:    snapshot,
+		Crowd:       crow,
+		MaxPerShard: maxPerShard,
+	}
+
+	err = eng.set(uint64Key(instance.ID), protoc.MustMarshal(&instance))
+	if err != nil {
+		return 0, err
+	}
+
+	return instance.ID, nil
+}
+
+func (eng *engine) DeleteInstance(id uint64) error {
+	key := storage.InstanceStartKey(id)
+	value, err := eng.get(key)
+	if err != nil {
+		return err
+	}
+	if len(value) > 0 {
+		return fmt.Errorf("instance %d already started", id)
+	}
+
+	req := rpcpb.AcquireDeleteRequest()
+	req.Key = key
+	_, err = eng.store.ExecCommand(req)
+	rpcpb.ReleaseDeleteRequest(req)
+	return err
+}
+
+func (eng *engine) StartInstance(id uint64) error {
+	value, err := eng.get(storage.InstanceStartKey(id))
+	if err != nil {
+		return err
+	}
+	if len(value) > 0 {
+		return nil
+	}
+
+	value, err = eng.get(uint64Key(id))
+	if err != nil {
+		return err
+	}
+	if len(value) == 0 {
+		return fmt.Errorf("instance %d not create", id)
+	}
+
+	instance := metapb.WorkflowInstance{}
+	protoc.MustUnmarshal(&instance, value)
+
+	req := rpcpb.AcquireStartWFRequest()
+	req.Instance = instance
+	_, err = eng.store.ExecCommand(req)
+	rpcpb.ReleaseStartWFRequest(req)
+	return err
+}
+
 func (eng *engine) Step(ctx context.Context, event metapb.Event) error {
 	var cb *stepCB
 	found := false
@@ -97,6 +210,29 @@ func (eng *engine) Notifier() notify.Notifier {
 
 func (eng *engine) Storage() storage.Storage {
 	return eng.store
+}
+
+func uint64Key(id uint64) []byte {
+	return goetty.Uint64ToBytes(id)
+}
+
+func (eng *engine) get(key []byte) ([]byte, error) {
+	req := rpcpb.AcquireGetRequest()
+	req.Key = key
+
+	value, err := eng.store.ExecCommand(req)
+	rpcpb.ReleaseGetRequest(req)
+	return value, err
+}
+
+func (eng *engine) set(key, value []byte) error {
+	req := rpcpb.AcquireSetRequest()
+	req.Key = key
+	req.Value = value
+
+	_, err := eng.store.ExecCommand(req)
+	rpcpb.ReleaseSetRequest(req)
+	return err
 }
 
 func (eng *engine) handleEvent(ctx context.Context) {
@@ -181,18 +317,18 @@ func (eng *engine) doStartInstance(instance metapb.WorkflowInstance) {
 	bm := bbutil.MustParseBM(instance.Crowd)
 	buf := bbutil.AcquireBuf()
 	stateBM := bbutil.AcquireBitmap()
-	start := uint64(0)
+	start := uint32(0)
 	count := uint64(0)
 
 	defer bbutil.ReleaseBuf(buf)
 
 	itr := bm.Iterator()
 	for {
-		value, eof := itr.Next()
-		if eof {
+		if !itr.HasNext() {
 			break
 		}
 
+		value := itr.Next()
 		if start == 0 {
 			stateBM = bbutil.AcquireBitmap()
 			for _, step := range instance.Snapshot.Steps {
@@ -207,7 +343,7 @@ func (eng *engine) doStartInstance(instance metapb.WorkflowInstance) {
 		stateBM.Add(value)
 		count++
 
-		if count == eng.opts.maxCrowdShardSize {
+		if count == instance.MaxPerShard {
 			buf.Reset()
 			_, err := stateBM.WriteTo(buf)
 			if err != nil {
@@ -226,11 +362,9 @@ func (eng *engine) doStartInstance(instance metapb.WorkflowInstance) {
 	}
 
 	if start > 0 {
-		buf.Reset()
-		bbutil.MustWriteTo(stateBM, buf)
-		state.States[0].Crowd = buf.Bytes()
+		state.States[0].Crowd = bbutil.MustMarshalBM(stateBM)
 		state.Start = start
-		state.End = stateBM.Max() + 1
+		state.End = stateBM.Maximum() + 1
 		if !eng.doCreateInstanceState(instance, state) {
 			return
 		}
