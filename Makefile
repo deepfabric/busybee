@@ -10,6 +10,6 @@ dist_dir: ; $(info ======== prepare distribute dir:)
 	@rm -rf $(DIST_DIR)*
 
 .PHONY: busybee
-busybee: dist_dir; $(info ======== compiled busybee)
+busybee: ; $(info ======== compiled busybee)
 	env GO111MODULE=off GOOS=$(GOOS) go build -o $(DIST_DIR)busybee $(LD_FLAGS) $(ROOT_DIR)/cmd/server/*.go
 

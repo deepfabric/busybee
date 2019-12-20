@@ -35,6 +35,8 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/deepfabric/beehive v0.0.0-20191218015628-258b24a154b5 h1:hMWjxNn4wNZl7oWW/dLcZqfIFESW6FdwVbYFc6TYyZo=
 github.com/deepfabric/beehive v0.0.0-20191218015628-258b24a154b5/go.mod h1:G1KtBPn3AgVGwhJlQqBuyYckvBhczNs4n5V6GG1QAbc=
+github.com/deepfabric/beehive v0.0.0-20191220073544-b4be866eb8de h1:jh/lTMWC25r8B/jInCGvgtNBduaw44HIPPx7IbyDu7Y=
+github.com/deepfabric/beehive v0.0.0-20191220073544-b4be866eb8de/go.mod h1:G1KtBPn3AgVGwhJlQqBuyYckvBhczNs4n5V6GG1QAbc=
 github.com/deepfabric/c-nemo v0.0.0-20190419083223-23fa413d9df4 h1:r5nY1MRVgtskrh+F4ZXzG1/zgekyJfAI+twMWpfvh04=
 github.com/deepfabric/c-nemo v0.0.0-20190419083223-23fa413d9df4/go.mod h1:xHI4efz5VNLAaNzIpEzcWlG03PcKRA+S7J1LkYbCG9Q=
 github.com/deepfabric/etcd v3.3.17+incompatible h1:JDSLn0ZFr4Jtxko12SkJNl+yWRenHPeqlhUQ+PkMwew=
