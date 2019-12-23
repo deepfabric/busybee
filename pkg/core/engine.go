@@ -48,6 +48,10 @@ type Engine interface {
 	DeleteInstance(instanceID uint64) error
 	// StartInstance start instance
 	StartInstance(id uint64) error
+	// InstanceCountState returns instance count state
+	InstanceCountState(id uint64) (metapb.InstanceCountState, error)
+	// InstanceStepState returns instance step state
+	InstanceStepState(id uint64, name string) (metapb.StepState, error)
 	// Step drivers the workflow instance
 	Step(context.Context, metapb.Event) error
 	// Notifier returns notifier
@@ -180,6 +184,101 @@ func (eng *engine) StartInstance(id uint64) error {
 	return err
 }
 
+func (eng *engine) InstanceCountState(id uint64) (metapb.InstanceCountState, error) {
+	value, err := eng.get(storage.InstanceStartKey(id))
+	if err != nil {
+		return metapb.InstanceCountState{}, err
+	}
+
+	if len(value) == 0 {
+		return metapb.InstanceCountState{}, fmt.Errorf("instance %d not started", id)
+	}
+
+	instance := metapb.WorkflowInstance{}
+	protoc.MustUnmarshal(&instance, value)
+
+	bm := bbutil.MustParseBM(instance.Crowd)
+	m := make(map[string]*metapb.CountState)
+	state := metapb.InstanceCountState{}
+	state.Total = bm.GetCardinality()
+	state.Snapshot = instance.Snapshot
+	for _, step := range instance.Snapshot.Steps {
+		m[step.Name] = &metapb.CountState{
+			Step:  step.Name,
+			Count: 0,
+		}
+	}
+
+	shards := bbutil.BMSplit(bm, instance.MaxPerShard)
+	for _, shard := range shards {
+		key := storage.InstanceStateKey(instance.ID, shard.Minimum(), shard.Maximum()+1)
+		stepState := metapb.WorkflowInstanceState{}
+		value, err = eng.get(key)
+		if err != nil {
+			return metapb.InstanceCountState{}, err
+		}
+
+		if len(value) == 0 {
+			return metapb.InstanceCountState{}, fmt.Errorf("missing step state key %+v", key)
+		}
+
+		protoc.MustUnmarshal(&stepState, value)
+		for _, ss := range stepState.States {
+			m[ss.Step.Name].Count += bbutil.MustParseBM(ss.Crowd).GetCardinality()
+		}
+	}
+
+	for _, v := range m {
+		state.States = append(state.States, *v)
+	}
+
+	return state, nil
+}
+
+func (eng *engine) InstanceStepState(id uint64, name string) (metapb.StepState, error) {
+	value, err := eng.get(storage.InstanceStartKey(id))
+	if err != nil {
+		return metapb.StepState{}, err
+	}
+
+	if len(value) == 0 {
+		return metapb.StepState{}, fmt.Errorf("instance %d not started", id)
+	}
+
+	instance := metapb.WorkflowInstance{}
+	protoc.MustUnmarshal(&instance, value)
+
+	var valueStep metapb.Step
+	valueBM := bbutil.AcquireBitmap()
+	bm := bbutil.MustParseBM(instance.Crowd)
+	shards := bbutil.BMSplit(bm, instance.MaxPerShard)
+	for _, shard := range shards {
+		key := storage.InstanceStateKey(instance.ID, shard.Minimum(), shard.Maximum()+1)
+		stepState := metapb.WorkflowInstanceState{}
+		value, err = eng.get(key)
+		if err != nil {
+			return metapb.StepState{}, err
+		}
+
+		if len(value) == 0 {
+			return metapb.StepState{}, fmt.Errorf("missing step state key %+v", key)
+		}
+
+		protoc.MustUnmarshal(&stepState, value)
+		for _, ss := range stepState.States {
+			if ss.Step.Name == name {
+				valueStep = ss.Step
+				valueBM = bbutil.BMOr(valueBM, bbutil.MustParseBM(ss.Crowd))
+			}
+		}
+	}
+
+	return metapb.StepState{
+		Step:  valueStep,
+		Crowd: bbutil.MustMarshalBM(valueBM),
+	}, nil
+}
+
 func (eng *engine) Step(ctx context.Context, event metapb.Event) error {
 	var cb *stepCB
 	found := false
@@ -309,62 +408,24 @@ func (eng *engine) doStopInstanceState(state metapb.WorkflowInstanceState) {
 }
 
 func (eng *engine) doStartInstance(instance metapb.WorkflowInstance) {
-	state := metapb.WorkflowInstanceState{}
-	state.TenantID = instance.Snapshot.TenantID
-	state.WorkflowID = instance.Snapshot.ID
-	state.InstanceID = instance.ID
-
 	bm := bbutil.MustParseBM(instance.Crowd)
-	buf := bbutil.AcquireBuf()
-	stateBM := bbutil.AcquireBitmap()
-	start := uint32(0)
-	count := uint64(0)
+	shards := bbutil.BMSplit(bm, instance.MaxPerShard)
+	for _, shard := range shards {
+		state := metapb.WorkflowInstanceState{}
+		state.TenantID = instance.Snapshot.TenantID
+		state.WorkflowID = instance.Snapshot.ID
+		state.InstanceID = instance.ID
+		state.Start = shard.Minimum()
+		state.End = shard.Maximum() + 1
 
-	defer bbutil.ReleaseBuf(buf)
-
-	itr := bm.Iterator()
-	for {
-		if !itr.HasNext() {
-			break
+		for _, step := range instance.Snapshot.Steps {
+			state.States = append(state.States, metapb.StepState{
+				Step:  step,
+				Crowd: emptyBMData.Bytes(),
+			})
 		}
 
-		value := itr.Next()
-		if start == 0 {
-			stateBM = bbutil.AcquireBitmap()
-			for _, step := range instance.Snapshot.Steps {
-				state.States = append(state.States, metapb.StepState{
-					Step:  step,
-					Crowd: emptyBMData.Bytes(),
-				})
-			}
-			start = value
-		}
-
-		stateBM.Add(value)
-		count++
-
-		if count == instance.MaxPerShard {
-			buf.Reset()
-			_, err := stateBM.WriteTo(buf)
-			if err != nil {
-				log.Fatalf("BUG: bitmap write failed with %+v", err)
-			}
-
-			state.States[0].Crowd = buf.Bytes()
-			state.Start = start
-			state.End = value + 1
-
-			start = 0
-			if !eng.doCreateInstanceState(instance, state) {
-				return
-			}
-		}
-	}
-
-	if start > 0 {
-		state.States[0].Crowd = bbutil.MustMarshalBM(stateBM)
-		state.Start = start
-		state.End = stateBM.Maximum() + 1
+		state.States[0].Crowd = bbutil.MustMarshalBM(shard)
 		if !eng.doCreateInstanceState(instance, state) {
 			return
 		}

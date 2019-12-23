@@ -118,3 +118,30 @@ func BMAndnotInterface(bms ...interface{}) *roaring.Bitmap {
 func AcquireBitmap() *roaring.Bitmap {
 	return roaring.NewBitmap()
 }
+
+// BMSplit split the bitmap
+func BMSplit(bm *roaring.Bitmap, count uint64) []*roaring.Bitmap {
+	var values []*roaring.Bitmap
+	c := uint64(0)
+	tmp := AcquireBitmap()
+	itr := bm.Iterator()
+	for {
+		if !itr.HasNext() {
+			break
+		}
+
+		value := itr.Next()
+		tmp.Add(value)
+		c++
+		if c == count {
+			values = append(values, tmp)
+			tmp = AcquireBitmap()
+		}
+	}
+
+	if tmp.GetCardinality() > 0 {
+		values = append(values, tmp)
+	}
+
+	return values
+}

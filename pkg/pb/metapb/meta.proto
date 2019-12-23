@@ -35,6 +35,19 @@ message WorkflowInstanceState {
     uint64             version    = 7;
 }
 
+// CountState step count state
+message CountState {
+    string step  = 1;
+    uint64 count = 2;
+}
+
+// InstanceCountState active instance count state
+message InstanceCountState {
+    Workflow snapshot          = 1 [(gogoproto.nullable) = false];
+    repeated CountState states = 2 [(gogoproto.nullable) = false];
+    uint64   total             = 3;
+}
+
 // StepState workflow step state.
 message StepState {
     Step  step   = 1 [(gogoproto.nullable) = false];
