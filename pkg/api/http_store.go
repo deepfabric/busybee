@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/base64"
 	"fmt"
 	"net/http"
 
@@ -28,21 +29,29 @@ func (s *httpServer) putKV(c echo.Context) error {
 	value, err := readBody(c)
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
-			Code: codeFailed,
-			Data: err.Error(),
+			Code:  codeFailed,
+			Error: err.Error(),
+		})
+	}
+
+	key, err := parseKey(hack.StringToSlice(c.Param("key")))
+	if err != nil {
+		return c.JSON(http.StatusOK, &JSONResult{
+			Code:  codeFailed,
+			Error: err.Error(),
 		})
 	}
 
 	req := rpcpb.AcquireSetRequest()
-	req.Key = hack.StringToSlice(c.Param("key"))
+	req.Key = key
 	req.Value = value
 
 	_, err = s.engine.Storage().ExecCommand(req)
 	rpcpb.ReleaseSetRequest(req)
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
-			Code: codeFailed,
-			Data: err.Error(),
+			Code:  codeFailed,
+			Error: err.Error(),
 		})
 	}
 
@@ -50,15 +59,23 @@ func (s *httpServer) putKV(c echo.Context) error {
 }
 
 func (s *httpServer) getKV(c echo.Context) error {
+	key, err := parseKey(hack.StringToSlice(c.Param("key")))
+	if err != nil {
+		return c.JSON(http.StatusOK, &JSONResult{
+			Code:  codeFailed,
+			Error: err.Error(),
+		})
+	}
+
 	req := rpcpb.AcquireGetRequest()
-	req.Key = hack.StringToSlice(c.Param("key"))
+	req.Key = key
 
 	value, err := s.engine.Storage().ExecCommand(req)
 	rpcpb.ReleaseGetRequest(req)
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
-			Code: codeFailed,
-			Data: err.Error(),
+			Code:  codeFailed,
+			Error: err.Error(),
 		})
 	}
 
@@ -68,22 +85,30 @@ func (s *httpServer) getKV(c echo.Context) error {
 
 	resp := rpcpb.AcquireGetResponse()
 	err = c.JSON(http.StatusOK, &JSONResult{
-		Data: resp.Value,
+		Value: resp.Value,
 	})
 	rpcpb.ReleaseGetResponse(resp)
 	return err
 }
 
 func (s *httpServer) deleteKV(c echo.Context) error {
-	req := rpcpb.AcquireDeleteRequest()
-	req.Key = hack.StringToSlice(c.Param("key"))
+	key, err := parseKey(hack.StringToSlice(c.Param("key")))
+	if err != nil {
+		return c.JSON(http.StatusOK, &JSONResult{
+			Code:  codeFailed,
+			Error: err.Error(),
+		})
+	}
 
-	_, err := s.engine.Storage().ExecCommand(req)
+	req := rpcpb.AcquireDeleteRequest()
+	req.Key = key
+
+	_, err = s.engine.Storage().ExecCommand(req)
 	rpcpb.ReleaseDeleteRequest(req)
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
-			Code: codeFailed,
-			Data: err.Error(),
+			Code:  codeFailed,
+			Error: err.Error(),
 		})
 	}
 
@@ -94,29 +119,37 @@ func (s *httpServer) bmCreate(c echo.Context) error {
 	data, err := readBody(c)
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
-			Code: codeFailed,
-			Data: err.Error(),
+			Code:  codeFailed,
+			Error: err.Error(),
 		})
 	}
 
-	value, err := readUint32(data)
+	value, err := DecodeUint32Slice(data)
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
-			Code: codeFailed,
-			Data: err.Error(),
+			Code:  codeFailed,
+			Error: err.Error(),
+		})
+	}
+
+	key, err := parseKey(hack.StringToSlice(c.Param("key")))
+	if err != nil {
+		return c.JSON(http.StatusOK, &JSONResult{
+			Code:  codeFailed,
+			Error: err.Error(),
 		})
 	}
 
 	req := rpcpb.AcquireBMCreateRequest()
-	req.Key = hack.StringToSlice(c.Param("key"))
+	req.Key = key
 	req.Value = value
 
 	_, err = s.engine.Storage().ExecCommand(req)
 	rpcpb.ReleaseBMCreateRequest(req)
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
-			Code: codeFailed,
-			Data: err.Error(),
+			Code:  codeFailed,
+			Error: err.Error(),
 		})
 	}
 
@@ -127,29 +160,37 @@ func (s *httpServer) bmAdd(c echo.Context) error {
 	data, err := readBody(c)
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
-			Code: codeFailed,
-			Data: err.Error(),
+			Code:  codeFailed,
+			Error: err.Error(),
 		})
 	}
 
-	value, err := readUint32(data)
+	value, err := DecodeUint32Slice(data)
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
-			Code: codeFailed,
-			Data: err.Error(),
+			Code:  codeFailed,
+			Error: err.Error(),
+		})
+	}
+
+	key, err := parseKey(hack.StringToSlice(c.Param("key")))
+	if err != nil {
+		return c.JSON(http.StatusOK, &JSONResult{
+			Code:  codeFailed,
+			Error: err.Error(),
 		})
 	}
 
 	req := rpcpb.AcquireBMAddRequest()
-	req.Key = hack.StringToSlice(c.Param("key"))
+	req.Key = key
 	req.Value = value
 
 	_, err = s.engine.Storage().ExecCommand(req)
 	rpcpb.ReleaseBMAddRequest(req)
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
-			Code: codeFailed,
-			Data: err.Error(),
+			Code:  codeFailed,
+			Error: err.Error(),
 		})
 	}
 
@@ -160,29 +201,37 @@ func (s *httpServer) bmRemove(c echo.Context) error {
 	data, err := readBody(c)
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
-			Code: codeFailed,
-			Data: err.Error(),
+			Code:  codeFailed,
+			Error: err.Error(),
 		})
 	}
 
-	value, err := readUint32(data)
+	value, err := DecodeUint32Slice(data)
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
-			Code: codeFailed,
-			Data: err.Error(),
+			Code:  codeFailed,
+			Error: err.Error(),
+		})
+	}
+
+	key, err := parseKey(hack.StringToSlice(c.Param("key")))
+	if err != nil {
+		return c.JSON(http.StatusOK, &JSONResult{
+			Code:  codeFailed,
+			Error: err.Error(),
 		})
 	}
 
 	req := rpcpb.AcquireBMRemoveRequest()
-	req.Key = hack.StringToSlice(c.Param("key"))
+	req.Key = key
 	req.Value = value
 
 	_, err = s.engine.Storage().ExecCommand(req)
 	rpcpb.ReleaseBMRemoveRequest(req)
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
-			Code: codeFailed,
-			Data: err.Error(),
+			Code:  codeFailed,
+			Error: err.Error(),
 		})
 	}
 
@@ -190,15 +239,23 @@ func (s *httpServer) bmRemove(c echo.Context) error {
 }
 
 func (s *httpServer) bmClear(c echo.Context) error {
-	req := rpcpb.AcquireBMClearRequest()
-	req.Key = hack.StringToSlice(c.Param("key"))
+	key, err := parseKey(hack.StringToSlice(c.Param("key")))
+	if err != nil {
+		return c.JSON(http.StatusOK, &JSONResult{
+			Code:  codeFailed,
+			Error: err.Error(),
+		})
+	}
 
-	_, err := s.engine.Storage().ExecCommand(req)
+	req := rpcpb.AcquireBMClearRequest()
+	req.Key = key
+
+	_, err = s.engine.Storage().ExecCommand(req)
 	rpcpb.ReleaseBMClearRequest(req)
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
-			Code: codeFailed,
-			Data: err.Error(),
+			Code:  codeFailed,
+			Error: err.Error(),
 		})
 	}
 
@@ -209,21 +266,29 @@ func (s *httpServer) bmRange(c echo.Context) error {
 	start, err := format.ParseStrUInt64(c.Param("start"))
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
-			Code: codeFailed,
-			Data: err.Error(),
+			Code:  codeFailed,
+			Error: err.Error(),
 		})
 	}
 
 	limit, err := format.ParseStrUInt64(c.Param("limit"))
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
-			Code: codeFailed,
-			Data: err.Error(),
+			Code:  codeFailed,
+			Error: err.Error(),
+		})
+	}
+
+	key, err := parseKey(hack.StringToSlice(c.Param("key")))
+	if err != nil {
+		return c.JSON(http.StatusOK, &JSONResult{
+			Code:  codeFailed,
+			Error: err.Error(),
 		})
 	}
 
 	req := rpcpb.AcquireBMRangeRequest()
-	req.Key = hack.StringToSlice(c.Param("key"))
+	req.Key = key
 	req.Start = uint32(start)
 	req.Limit = limit
 
@@ -231,8 +296,8 @@ func (s *httpServer) bmRange(c echo.Context) error {
 	rpcpb.ReleaseBMRangeRequest(req)
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
-			Code: codeFailed,
-			Data: err.Error(),
+			Code:  codeFailed,
+			Error: err.Error(),
 		})
 	}
 
@@ -242,19 +307,13 @@ func (s *httpServer) bmRange(c echo.Context) error {
 		return c.JSON(http.StatusOK, &JSONResult{})
 	}
 
-	buf := goetty.NewByteBuf(4 * len(resp.Values))
-	for _, value := range resp.Values {
-		buf.WriteUInt32(value)
-	}
-	_, data, _ := buf.ReadAll()
-	err = c.JSON(http.StatusOK, &JSONResult{
-		Data: data,
+	return c.JSON(http.StatusOK, &JSONResult{
+		Value: EncodeUint32Slice(resp.Values),
 	})
-	buf.Release()
-	return err
 }
 
-func readUint32(data []byte) ([]uint32, error) {
+// DecodeUint32Slice decode []byte as []uint32
+func DecodeUint32Slice(data []byte) ([]uint32, error) {
 	n := len(data)
 	if n == 0 {
 		return nil, nil
@@ -269,5 +328,26 @@ func readUint32(data []byte) ([]uint32, error) {
 	for i := 0; i < size; i++ {
 		value = append(value, goetty.Byte2UInt32(data[size*4:]))
 	}
+	return value, nil
+}
+
+// EncodeUint32Slice encode []uint32 as []byte
+func EncodeUint32Slice(src []uint32) []byte {
+	buf := goetty.NewByteBuf(4 * len(src))
+	for _, value := range src {
+		buf.WriteUInt32(value)
+	}
+	_, data, _ := buf.ReadAll()
+	buf.Release()
+	return data
+}
+
+func parseKey(key []byte) ([]byte, error) {
+	value := make([]byte, base64.StdEncoding.DecodedLen(len(key)))
+	_, err := base64.StdEncoding.Decode(value, key)
+	if err != nil {
+		return nil, err
+	}
+
 	return value, nil
 }

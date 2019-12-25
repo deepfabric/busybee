@@ -131,7 +131,7 @@ func (h *beeStorage) BuildRequest(req *raftcmdpb.Request, cmd interface{}) error
 		msg := cmd.(*rpcpb.RemoveWFRequest)
 		msg.ID = req.ID
 		req.Key = InstanceStartKey(msg.InstanceID)
-		req.CustemType = uint64(rpcpb.StartWF)
+		req.CustemType = uint64(rpcpb.RemoveWF)
 		req.Type = raftcmdpb.Write
 		req.Cmd = protoc.MustMarshal(msg)
 		rpcpb.ReleaseRemoveWFRequest(msg)

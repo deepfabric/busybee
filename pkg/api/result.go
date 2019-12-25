@@ -2,6 +2,7 @@ package api
 
 // JSONResult json result
 type JSONResult struct {
-	Code int         `json:"code"`
-	Data interface{} `json:"data"`
+	Code  int         `json:"code"`
+	Error string      `json:"err"`
+	Value interface{} `json:"value"`
 }

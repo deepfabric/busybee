@@ -70,6 +70,10 @@ func (h *beeStorage) handleShardCycle(ctx context.Context) {
 
 func (h *beeStorage) doLoadEvent(shard beehivemetapb.Shard, remove bool) {
 	err := h.getStore(shard.ID).Scan(shard.Start, shard.End, func(key, value []byte) (bool, error) {
+		if len(value) == 0 {
+			return true, nil
+		}
+
 		switch value[0] {
 		case instanceType:
 			instance := metapb.WorkflowInstance{}

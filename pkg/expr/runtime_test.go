@@ -262,8 +262,8 @@ func TestBitmap(t *testing.T) {
 		m: make(map[string]*roaring.Bitmap),
 	}
 
-	f.m["k1"] = roaring.NewBTreeBitmap(1, 2, 3, 4)
-	f.m["k2"] = roaring.NewBTreeBitmap(4, 5, 6, 7, 8)
+	f.m["k1"] = roaring.BitmapOf(1, 2, 3, 4)
+	f.m["k2"] = roaring.BitmapOf(4, 5, 6, 7, 8)
 
 	expr := metapb.Expr{
 		Sources: []string{"k1", "k2"},
@@ -287,26 +287,26 @@ func TestBitmap(t *testing.T) {
 	ok, value, err = rt.Exec(&metapb.Event{})
 	assert.NoError(t, err, "TestBitmap failed")
 	assert.True(t, ok, "TestBitmap failed")
-	assert.Equal(t, rt.expectUint64Value, value.(*roaring.Bitmap).Count(), "TestBitmap failed")
+	assert.Equal(t, rt.expectUint64Value, value.(*roaring.Bitmap).GetCardinality(), "TestBitmap failed")
 
 	rt.expr.Op = metapb.BMOr
 	rt.expectUint64Value = 8
 	ok, value, err = rt.Exec(&metapb.Event{})
 	assert.NoError(t, err, "TestBitmap failed")
 	assert.True(t, ok, "TestBitmap failed")
-	assert.Equal(t, rt.expectUint64Value, value.(*roaring.Bitmap).Count(), "TestBitmap failed")
+	assert.Equal(t, rt.expectUint64Value, value.(*roaring.Bitmap).GetCardinality(), "TestBitmap failed")
 
 	rt.expr.Op = metapb.BMXor
 	rt.expectUint64Value = 7
 	ok, value, err = rt.Exec(&metapb.Event{})
 	assert.NoError(t, err, "TestBitmap failed")
 	assert.True(t, ok, "TestBitmap failed")
-	assert.Equal(t, rt.expectUint64Value, value.(*roaring.Bitmap).Count(), "TestBitmap failed")
+	assert.Equal(t, rt.expectUint64Value, value.(*roaring.Bitmap).GetCardinality(), "TestBitmap failed")
 
 	rt.expr.Op = metapb.BMAndNot
 	rt.expectUint64Value = 3
 	ok, value, err = rt.Exec(&metapb.Event{})
 	assert.NoError(t, err, "TestBitmap failed")
 	assert.True(t, ok, "TestBitmap failed")
-	assert.Equal(t, rt.expectUint64Value, value.(*roaring.Bitmap).Count(), "TestBitmap failed")
+	assert.Equal(t, rt.expectUint64Value, value.(*roaring.Bitmap).GetCardinality(), "TestBitmap failed")
 }

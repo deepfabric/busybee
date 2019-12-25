@@ -11,7 +11,7 @@ import (
 // CreateInstance create instance
 type CreateInstance struct {
 	ID          uint64 `json:"instance"`
-	Crow        []byte `json:"crow"`
+	Crowd       []byte `json:"crowd"`
 	MaxPerShard uint64 `json:"maxPerShard"`
 }
 
@@ -28,21 +28,21 @@ func (s *httpServer) createWorkflow(c echo.Context) error {
 	err := readJSONFromBody(c, &wf)
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
-			Code: codeFailed,
-			Data: err.Error(),
+			Code:  codeFailed,
+			Error: err.Error(),
 		})
 	}
 
 	id, err := s.engine.Create(wf)
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
-			Code: codeFailed,
-			Data: err.Error(),
+			Code:  codeFailed,
+			Error: err.Error(),
 		})
 	}
 
 	return c.JSON(http.StatusOK, &JSONResult{
-		Data: id,
+		Value: id,
 	})
 }
 
@@ -50,8 +50,8 @@ func (s *httpServer) updateWorkflow(c echo.Context) error {
 	id, err := format.ParseStrUInt64(c.Param("id"))
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
-			Code: codeFailed,
-			Data: err.Error(),
+			Code:  codeFailed,
+			Error: err.Error(),
 		})
 	}
 
@@ -59,8 +59,8 @@ func (s *httpServer) updateWorkflow(c echo.Context) error {
 	err = readJSONFromBody(c, &wf)
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
-			Code: codeFailed,
-			Data: err.Error(),
+			Code:  codeFailed,
+			Error: err.Error(),
 		})
 	}
 
@@ -68,8 +68,8 @@ func (s *httpServer) updateWorkflow(c echo.Context) error {
 	err = s.engine.Update(wf)
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
-			Code: codeFailed,
-			Data: err.Error(),
+			Code:  codeFailed,
+			Error: err.Error(),
 		})
 	}
 
@@ -81,21 +81,21 @@ func (s *httpServer) createInstance(c echo.Context) error {
 	err := readJSONFromBody(c, &value)
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
-			Code: codeFailed,
-			Data: err.Error(),
+			Code:  codeFailed,
+			Error: err.Error(),
 		})
 	}
 
-	id, err := s.engine.CreateInstance(value.ID, value.Crow, value.MaxPerShard)
+	id, err := s.engine.CreateInstance(value.ID, value.Crowd, value.MaxPerShard)
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
-			Code: codeFailed,
-			Data: err.Error(),
+			Code:  codeFailed,
+			Error: err.Error(),
 		})
 	}
 
 	return c.JSON(http.StatusOK, &JSONResult{
-		Data: id,
+		Value: id,
 	})
 }
 
@@ -103,16 +103,16 @@ func (s *httpServer) deleteInstance(c echo.Context) error {
 	id, err := format.ParseStrUInt64(c.Param("id"))
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
-			Code: codeFailed,
-			Data: err.Error(),
+			Code:  codeFailed,
+			Error: err.Error(),
 		})
 	}
 
 	err = s.engine.DeleteInstance(id)
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
-			Code: codeFailed,
-			Data: err.Error(),
+			Code:  codeFailed,
+			Error: err.Error(),
 		})
 	}
 
@@ -123,16 +123,16 @@ func (s *httpServer) startInstance(c echo.Context) error {
 	id, err := format.ParseStrUInt64(c.Param("id"))
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
-			Code: codeFailed,
-			Data: err.Error(),
+			Code:  codeFailed,
+			Error: err.Error(),
 		})
 	}
 
 	err = s.engine.StartInstance(id)
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
-			Code: codeFailed,
-			Data: err.Error(),
+			Code:  codeFailed,
+			Error: err.Error(),
 		})
 	}
 

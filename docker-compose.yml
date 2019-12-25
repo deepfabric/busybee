@@ -1,0 +1,51 @@
+version: '2.1'
+services:
+  node1:
+    image: deepfabric/busybee
+    ports:
+      - "9091:8080"
+    volumes:
+      - ./cfg/node1.toml:/etc/node.toml
+    command: 
+      - --addr=node1:8081
+      - --addr-api=node1:8080
+      - --data=/tmp
+      - --beehive-cfg=/etc/node.toml
+
+  node2:
+    image: deepfabric/busybee
+    ports:
+      - "9092:8080"
+    volumes:
+      - ./cfg/node2.toml:/etc/node.toml
+    command: 
+      - --addr=node2:8081
+      - --addr-api=node2:8080
+      - --data=/tmp
+      - --beehive-cfg=/etc/node.toml
+
+  node3:
+    image: deepfabric/busybee
+    ports:
+      - "9093:8080"
+    volumes:
+      - ./cfg/node3.toml:/etc/node.toml
+    command: 
+      - --wait=10
+      - --addr=node3:8081
+      - --addr-api=node3:8080
+      - --data=/tmp
+      - --beehive-cfg=/etc/node.toml
+
+  node4:
+    image: deepfabric/busybee
+    ports:
+      - "9094:8080"
+    volumes:
+      - ./cfg/node4.toml:/etc/node.toml
+    command: 
+      - --wait=10
+      - --addr=node4:8081
+      - --addr-api=node4:8080
+      - --data=/tmp
+      - --beehive-cfg=/etc/node.toml

@@ -19,7 +19,7 @@ import (
 )
 
 var (
-	addr    = flag.String("addr", "127.0.0.1:6379", "beehive rpc address")
+	addr    = flag.String("addr", "127.0.0.1:8081", "beehive rpc address")
 	apiAddr = flag.String("addr-api", "127.0.0.1:8080", "http restful api address")
 	data    = flag.String("data", "", "data path")
 	wait    = flag.Int("wait", 0, "wait")

@@ -16,7 +16,6 @@ import (
 	bbutil "github.com/deepfabric/busybee/pkg/util"
 	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/log"
-	"github.com/fagongzi/util/hack"
 	"github.com/fagongzi/util/protoc"
 	"github.com/fagongzi/util/task"
 )
@@ -96,7 +95,6 @@ func (eng *engine) Stop() error {
 func (eng *engine) Create(meta metapb.Workflow) (uint64, error) {
 	id := eng.store.RaftStore().MustAllocID()
 	meta.ID = id
-
 	err := eng.set(uint64Key(id), protoc.MustMarshal(&meta))
 	if err != nil {
 		return 0, err
@@ -284,7 +282,7 @@ func (eng *engine) Step(ctx context.Context, event metapb.Event) error {
 	found := false
 	eng.workers.Range(func(key, value interface{}) bool {
 		w := value.(*stateWorker)
-		if w.matches(event.UserID) {
+		if w.matches(event.InstanceID, event.UserID) {
 			found = true
 			cb = acquireCB()
 			cb.ctx = ctx
@@ -321,7 +319,13 @@ func (eng *engine) get(key []byte) ([]byte, error) {
 
 	value, err := eng.store.ExecCommand(req)
 	rpcpb.ReleaseGetRequest(req)
-	return value, err
+	if err != nil {
+		return nil, err
+	}
+
+	resp := rpcpb.GetResponse{}
+	protoc.MustUnmarshal(&resp, value)
+	return resp.Value, err
 }
 
 func (eng *engine) set(key, value []byte) error {
@@ -370,8 +374,7 @@ func (eng *engine) doEvent(event storage.Event) {
 }
 
 func (eng *engine) doStartInstanceState(state metapb.WorkflowInstanceState) {
-	key := hack.SliceToString(storage.InstanceStateKey(state.InstanceID, state.Start, state.End))
-
+	key := workerKey(state)
 	if _, ok := eng.workers.Load(key); ok {
 		log.Fatalf("BUG: start a exists state worker")
 	}
@@ -389,7 +392,7 @@ func (eng *engine) doStartInstanceState(state metapb.WorkflowInstanceState) {
 }
 
 func (eng *engine) doUpdateInstanceState(state metapb.WorkflowInstanceState) {
-	key := hack.SliceToString(storage.InstanceStateKey(state.InstanceID, state.Start, state.End))
+	key := workerKey(state)
 	w, ok := eng.workers.Load(key)
 	if !ok {
 		eng.doStartInstanceState(state)
@@ -400,7 +403,7 @@ func (eng *engine) doUpdateInstanceState(state metapb.WorkflowInstanceState) {
 }
 
 func (eng *engine) doStopInstanceState(state metapb.WorkflowInstanceState) {
-	key := hack.SliceToString(storage.InstanceStateKey(state.InstanceID, state.Start, state.End))
+	key := workerKey(state)
 	if w, ok := eng.workers.Load(key); ok {
 		eng.workers.Delete(key)
 		w.(*stateWorker).stop()
@@ -463,4 +466,8 @@ func (eng *engine) addToRetryNewInstance(arg interface{}) {
 
 func (eng *engine) addToRetryCompleteInstance(arg interface{}) {
 	eng.retryCompleteInstanceC <- arg.(uint64)
+}
+
+func workerKey(state metapb.WorkflowInstanceState) string {
+	return fmt.Sprintf("%d/[%d-%d)", state.InstanceID, state.Start, state.End)
 }

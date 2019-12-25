@@ -76,8 +76,8 @@ func (w *stateWorker) stop() {
 	})
 }
 
-func (w *stateWorker) matches(id uint32) bool {
-	return id >= w.state.Start && id < w.state.End
+func (w *stateWorker) matches(id uint64, uid uint32) bool {
+	return w.state.InstanceID == id && uid >= w.state.Start && uid < w.state.End
 }
 
 func (w *stateWorker) run() {
@@ -98,6 +98,7 @@ func (w *stateWorker) run() {
 					w.queue.Dispose()
 					w.timeout.Stop()
 					log.Infof("worker %s stopped", w.key)
+					return
 				}
 
 				switch value.action {

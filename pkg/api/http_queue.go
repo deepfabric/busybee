@@ -95,16 +95,16 @@ func (s *httpServer) queueEventCreate(c echo.Context) error {
 	id, err := format.ParseStrUInt64(c.Param("id"))
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
-			Code: codeFailed,
-			Data: err.Error(),
+			Code:  codeFailed,
+			Error: err.Error(),
 		})
 	}
 
 	err = s.engine.Storage().CreateEventQueue(id)
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
-			Code: codeFailed,
-			Data: err.Error(),
+			Code:  codeFailed,
+			Error: err.Error(),
 		})
 	}
 
@@ -115,16 +115,16 @@ func (s *httpServer) queueNotifyCreate(c echo.Context) error {
 	id, err := format.ParseStrUInt64(c.Param("id"))
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
-			Code: codeFailed,
-			Data: err.Error(),
+			Code:  codeFailed,
+			Error: err.Error(),
 		})
 	}
 
 	err = s.engine.Storage().CreateNotifyQueue(id)
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
-			Code: codeFailed,
-			Data: err.Error(),
+			Code:  codeFailed,
+			Error: err.Error(),
 		})
 	}
 
@@ -135,8 +135,8 @@ func (s *httpServer) doQueueAdd(group uint64, c echo.Context) error {
 	id, err := format.ParseStrUInt64(c.Param("id"))
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
-			Code: codeFailed,
-			Data: err.Error(),
+			Code:  codeFailed,
+			Error: err.Error(),
 		})
 	}
 
@@ -145,8 +145,8 @@ func (s *httpServer) doQueueAdd(group uint64, c echo.Context) error {
 	if err != nil {
 		releaseQueueAdd(value)
 		return c.JSON(http.StatusOK, &JSONResult{
-			Code: codeFailed,
-			Data: err.Error(),
+			Code:  codeFailed,
+			Error: err.Error(),
 		})
 	}
 
@@ -154,13 +154,13 @@ func (s *httpServer) doQueueAdd(group uint64, c echo.Context) error {
 	releaseQueueAdd(value)
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
-			Code: codeFailed,
-			Data: err.Error(),
+			Code:  codeFailed,
+			Error: err.Error(),
 		})
 	}
 
 	return c.JSON(http.StatusOK, &JSONResult{
-		Data: offset,
+		Value: offset,
 	})
 }
 
@@ -168,8 +168,8 @@ func (s *httpServer) doQueueFetch(group uint64, c echo.Context) error {
 	id, err := format.ParseStrUInt64(c.Param("id"))
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
-			Code: codeFailed,
-			Data: err.Error(),
+			Code:  codeFailed,
+			Error: err.Error(),
 		})
 	}
 
@@ -178,8 +178,8 @@ func (s *httpServer) doQueueFetch(group uint64, c echo.Context) error {
 	if err != nil {
 		releaseQueueFetch(value)
 		return c.JSON(http.StatusOK, &JSONResult{
-			Code: codeFailed,
-			Data: err.Error(),
+			Code:  codeFailed,
+			Error: err.Error(),
 		})
 	}
 
@@ -187,13 +187,13 @@ func (s *httpServer) doQueueFetch(group uint64, c echo.Context) error {
 	releaseQueueFetch(value)
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
-			Code: codeFailed,
-			Data: err.Error(),
+			Code:  codeFailed,
+			Error: err.Error(),
 		})
 	}
 
 	return c.JSON(http.StatusOK, &JSONResult{
-		Data: QueueFetchResult{
+		Value: QueueFetchResult{
 			LastOffset: offset,
 			Items:      items,
 		},
