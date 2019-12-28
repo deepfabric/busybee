@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+
+	"github.com/deepfabric/busybee/pkg/pb/metapb"
 )
 
 func (c *httpClient) doPost(url string, data []byte) (*http.Response, error) {
@@ -60,6 +62,26 @@ func readBytesResult(resp *http.Response) ([]byte, error) {
 
 func readEmptyResult(resp *http.Response) error {
 	return readResult(resp, &codeResult{})
+}
+
+func readInstanceCountStateResultResult(resp *http.Response) (metapb.InstanceCountState, error) {
+	result := &instanceCountStateResult{}
+	err := readResult(resp, result)
+	if err != nil {
+		return metapb.InstanceCountState{}, err
+	}
+
+	return result.Value, nil
+}
+
+func readInstanceStepStateResultResult(resp *http.Response) (metapb.StepState, error) {
+	result := &instanceStepStateResult{}
+	err := readResult(resp, result)
+	if err != nil {
+		return metapb.StepState{}, err
+	}
+
+	return result.Value, nil
 }
 
 func readResult(resp *http.Response, result result) error {

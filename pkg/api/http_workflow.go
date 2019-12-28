@@ -21,6 +21,9 @@ func (s *httpServer) initWorkflowAPI() {
 	s.http.POST("/workflows/instance", s.createInstance)
 	s.http.DELETE("/workflows/instance/:id", s.deleteInstance)
 	s.http.POST("/workflows/instance/:id/start", s.startInstance)
+	s.http.PUT("/workflows/instance/:id/step", s.stepInstance)
+	s.http.GET("/workflows/instance/:id/state/count", s.instanceCount)
+	s.http.GET("/workflows/instance/:id/state/step/:name", s.instanceStep)
 }
 
 func (s *httpServer) createWorkflow(c echo.Context) error {
@@ -137,4 +140,78 @@ func (s *httpServer) startInstance(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, &JSONResult{})
+}
+
+func (s *httpServer) stepInstance(c echo.Context) error {
+	id, err := format.ParseStrUInt64(c.Param("id"))
+	if err != nil {
+		return c.JSON(http.StatusOK, &JSONResult{
+			Code:  codeFailed,
+			Error: err.Error(),
+		})
+	}
+
+	var event metapb.Event
+	err = readJSONFromBody(c, &event)
+	if err != nil {
+		return c.JSON(http.StatusOK, &JSONResult{
+			Code:  codeFailed,
+			Error: err.Error(),
+		})
+	}
+
+	event.InstanceID = id
+	err = s.engine.Step(event)
+	if err != nil {
+		return c.JSON(http.StatusOK, &JSONResult{
+			Code:  codeFailed,
+			Error: err.Error(),
+		})
+	}
+
+	return c.JSON(http.StatusOK, &JSONResult{})
+}
+
+func (s *httpServer) instanceCount(c echo.Context) error {
+	id, err := format.ParseStrUInt64(c.Param("id"))
+	if err != nil {
+		return c.JSON(http.StatusOK, &JSONResult{
+			Code:  codeFailed,
+			Error: err.Error(),
+		})
+	}
+
+	state, err := s.engine.InstanceCountState(id)
+	if err != nil {
+		return c.JSON(http.StatusOK, &JSONResult{
+			Code:  codeFailed,
+			Error: err.Error(),
+		})
+	}
+
+	return c.JSON(http.StatusOK, &JSONResult{
+		Value: state,
+	})
+}
+
+func (s *httpServer) instanceStep(c echo.Context) error {
+	id, err := format.ParseStrUInt64(c.Param("id"))
+	if err != nil {
+		return c.JSON(http.StatusOK, &JSONResult{
+			Code:  codeFailed,
+			Error: err.Error(),
+		})
+	}
+
+	state, err := s.engine.InstanceStepState(id, c.Param("step"))
+	if err != nil {
+		return c.JSON(http.StatusOK, &JSONResult{
+			Code:  codeFailed,
+			Error: err.Error(),
+		})
+	}
+
+	return c.JSON(http.StatusOK, &JSONResult{
+		Value: state,
+	})
 }

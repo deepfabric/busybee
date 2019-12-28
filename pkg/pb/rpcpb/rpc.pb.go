@@ -28,24 +28,25 @@ const _ = proto.GoGoProtoPackageIsVersion3 // please upgrade the proto package
 type Type int32
 
 const (
-	Set         Type = 0
-	Get         Type = 1
-	Delete      Type = 2
-	BMCreate    Type = 100
-	BMAdd       Type = 101
-	BMRemove    Type = 102
-	BMClear     Type = 103
-	BMContains  Type = 104
-	BMDel       Type = 105
-	BMCount     Type = 106
-	BMRange     Type = 107
-	StartWF     Type = 200
-	RemoveWF    Type = 201
-	CreateState Type = 202
-	UpdateState Type = 203
-	RemoveState Type = 204
-	QueueAdd    Type = 300
-	QueueFetch  Type = 301
+	Set                      Type = 0
+	Get                      Type = 1
+	Delete                   Type = 2
+	BMCreate                 Type = 100
+	BMAdd                    Type = 101
+	BMRemove                 Type = 102
+	BMClear                  Type = 103
+	BMContains               Type = 104
+	BMDel                    Type = 105
+	BMCount                  Type = 106
+	BMRange                  Type = 107
+	StartingInstance         Type = 200
+	StartedInstance          Type = 201
+	CreateInstanceStateShard Type = 202
+	UpdateInstanceStateShard Type = 203
+	RemoveInstanceStateShard Type = 204
+	StepInstanceStateShard   Type = 205
+	QueueAdd                 Type = 300
+	QueueFetch               Type = 301
 )
 
 var Type_name = map[int32]string{
@@ -60,34 +61,36 @@ var Type_name = map[int32]string{
 	105: "BMDel",
 	106: "BMCount",
 	107: "BMRange",
-	200: "StartWF",
-	201: "RemoveWF",
-	202: "CreateState",
-	203: "UpdateState",
-	204: "RemoveState",
+	200: "StartingInstance",
+	201: "StartedInstance",
+	202: "CreateInstanceStateShard",
+	203: "UpdateInstanceStateShard",
+	204: "RemoveInstanceStateShard",
+	205: "StepInstanceStateShard",
 	300: "QueueAdd",
 	301: "QueueFetch",
 }
 
 var Type_value = map[string]int32{
-	"Set":         0,
-	"Get":         1,
-	"Delete":      2,
-	"BMCreate":    100,
-	"BMAdd":       101,
-	"BMRemove":    102,
-	"BMClear":     103,
-	"BMContains":  104,
-	"BMDel":       105,
-	"BMCount":     106,
-	"BMRange":     107,
-	"StartWF":     200,
-	"RemoveWF":    201,
-	"CreateState": 202,
-	"UpdateState": 203,
-	"RemoveState": 204,
-	"QueueAdd":    300,
-	"QueueFetch":  301,
+	"Set":                      0,
+	"Get":                      1,
+	"Delete":                   2,
+	"BMCreate":                 100,
+	"BMAdd":                    101,
+	"BMRemove":                 102,
+	"BMClear":                  103,
+	"BMContains":               104,
+	"BMDel":                    105,
+	"BMCount":                  106,
+	"BMRange":                  107,
+	"StartingInstance":         200,
+	"StartedInstance":          201,
+	"CreateInstanceStateShard": 202,
+	"UpdateInstanceStateShard": 203,
+	"RemoveInstanceStateShard": 204,
+	"StepInstanceStateShard":   205,
+	"QueueAdd":                 300,
+	"QueueFetch":               301,
 }
 
 func (x Type) String() string {
@@ -1272,24 +1275,24 @@ func (m *BMRangeResponse) GetValues() []uint32 {
 	return nil
 }
 
-// StartWFRequest start a workflow
-type StartWFRequest struct {
+// StartingInstanceRequest start a workflow
+type StartingInstanceRequest struct {
 	ID       []byte                  `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	Instance metapb.WorkflowInstance `protobuf:"bytes,2,opt,name=instance,proto3" json:"instance"`
 }
 
-func (m *StartWFRequest) Reset()         { *m = StartWFRequest{} }
-func (m *StartWFRequest) String() string { return proto.CompactTextString(m) }
-func (*StartWFRequest) ProtoMessage()    {}
-func (*StartWFRequest) Descriptor() ([]byte, []int) {
+func (m *StartingInstanceRequest) Reset()         { *m = StartingInstanceRequest{} }
+func (m *StartingInstanceRequest) String() string { return proto.CompactTextString(m) }
+func (*StartingInstanceRequest) ProtoMessage()    {}
+func (*StartingInstanceRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_77a6da22d6a3feb1, []int{22}
 }
-func (m *StartWFRequest) XXX_Unmarshal(b []byte) error {
+func (m *StartingInstanceRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
 }
-func (m *StartWFRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+func (m *StartingInstanceRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	if deterministic {
-		return xxx_messageInfo_StartWFRequest.Marshal(b, m, deterministic)
+		return xxx_messageInfo_StartingInstanceRequest.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
 		n, err := m.MarshalToSizedBuffer(b)
@@ -1299,49 +1302,49 @@ func (m *StartWFRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, erro
 		return b[:n], nil
 	}
 }
-func (m *StartWFRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_StartWFRequest.Merge(m, src)
+func (m *StartingInstanceRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_StartingInstanceRequest.Merge(m, src)
 }
-func (m *StartWFRequest) XXX_Size() int {
+func (m *StartingInstanceRequest) XXX_Size() int {
 	return m.Size()
 }
-func (m *StartWFRequest) XXX_DiscardUnknown() {
-	xxx_messageInfo_StartWFRequest.DiscardUnknown(m)
+func (m *StartingInstanceRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_StartingInstanceRequest.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_StartWFRequest proto.InternalMessageInfo
+var xxx_messageInfo_StartingInstanceRequest proto.InternalMessageInfo
 
-func (m *StartWFRequest) GetID() []byte {
+func (m *StartingInstanceRequest) GetID() []byte {
 	if m != nil {
 		return m.ID
 	}
 	return nil
 }
 
-func (m *StartWFRequest) GetInstance() metapb.WorkflowInstance {
+func (m *StartingInstanceRequest) GetInstance() metapb.WorkflowInstance {
 	if m != nil {
 		return m.Instance
 	}
 	return metapb.WorkflowInstance{}
 }
 
-// StartWFResponse response
-type StartWFResponse struct {
+// StartingInstanceResponse response
+type StartingInstanceResponse struct {
 	ID []byte `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 }
 
-func (m *StartWFResponse) Reset()         { *m = StartWFResponse{} }
-func (m *StartWFResponse) String() string { return proto.CompactTextString(m) }
-func (*StartWFResponse) ProtoMessage()    {}
-func (*StartWFResponse) Descriptor() ([]byte, []int) {
+func (m *StartingInstanceResponse) Reset()         { *m = StartingInstanceResponse{} }
+func (m *StartingInstanceResponse) String() string { return proto.CompactTextString(m) }
+func (*StartingInstanceResponse) ProtoMessage()    {}
+func (*StartingInstanceResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_77a6da22d6a3feb1, []int{23}
 }
-func (m *StartWFResponse) XXX_Unmarshal(b []byte) error {
+func (m *StartingInstanceResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
 }
-func (m *StartWFResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+func (m *StartingInstanceResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	if deterministic {
-		return xxx_messageInfo_StartWFResponse.Marshal(b, m, deterministic)
+		return xxx_messageInfo_StartingInstanceResponse.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
 		n, err := m.MarshalToSizedBuffer(b)
@@ -1351,43 +1354,43 @@ func (m *StartWFResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, err
 		return b[:n], nil
 	}
 }
-func (m *StartWFResponse) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_StartWFResponse.Merge(m, src)
+func (m *StartingInstanceResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_StartingInstanceResponse.Merge(m, src)
 }
-func (m *StartWFResponse) XXX_Size() int {
+func (m *StartingInstanceResponse) XXX_Size() int {
 	return m.Size()
 }
-func (m *StartWFResponse) XXX_DiscardUnknown() {
-	xxx_messageInfo_StartWFResponse.DiscardUnknown(m)
+func (m *StartingInstanceResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_StartingInstanceResponse.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_StartWFResponse proto.InternalMessageInfo
+var xxx_messageInfo_StartingInstanceResponse proto.InternalMessageInfo
 
-func (m *StartWFResponse) GetID() []byte {
+func (m *StartingInstanceResponse) GetID() []byte {
 	if m != nil {
 		return m.ID
 	}
 	return nil
 }
 
-// RemoveWFRequest remove a workflow
-type RemoveWFRequest struct {
+// StartedInstanceRequest remove a workflow
+type StartedInstanceRequest struct {
 	ID         []byte `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	InstanceID uint64 `protobuf:"varint,2,opt,name=instanceID,proto3" json:"instanceID,omitempty"`
 }
 
-func (m *RemoveWFRequest) Reset()         { *m = RemoveWFRequest{} }
-func (m *RemoveWFRequest) String() string { return proto.CompactTextString(m) }
-func (*RemoveWFRequest) ProtoMessage()    {}
-func (*RemoveWFRequest) Descriptor() ([]byte, []int) {
+func (m *StartedInstanceRequest) Reset()         { *m = StartedInstanceRequest{} }
+func (m *StartedInstanceRequest) String() string { return proto.CompactTextString(m) }
+func (*StartedInstanceRequest) ProtoMessage()    {}
+func (*StartedInstanceRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_77a6da22d6a3feb1, []int{24}
 }
-func (m *RemoveWFRequest) XXX_Unmarshal(b []byte) error {
+func (m *StartedInstanceRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
 }
-func (m *RemoveWFRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+func (m *StartedInstanceRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	if deterministic {
-		return xxx_messageInfo_RemoveWFRequest.Marshal(b, m, deterministic)
+		return xxx_messageInfo_StartedInstanceRequest.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
 		n, err := m.MarshalToSizedBuffer(b)
@@ -1397,49 +1400,49 @@ func (m *RemoveWFRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, err
 		return b[:n], nil
 	}
 }
-func (m *RemoveWFRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_RemoveWFRequest.Merge(m, src)
+func (m *StartedInstanceRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_StartedInstanceRequest.Merge(m, src)
 }
-func (m *RemoveWFRequest) XXX_Size() int {
+func (m *StartedInstanceRequest) XXX_Size() int {
 	return m.Size()
 }
-func (m *RemoveWFRequest) XXX_DiscardUnknown() {
-	xxx_messageInfo_RemoveWFRequest.DiscardUnknown(m)
+func (m *StartedInstanceRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_StartedInstanceRequest.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_RemoveWFRequest proto.InternalMessageInfo
+var xxx_messageInfo_StartedInstanceRequest proto.InternalMessageInfo
 
-func (m *RemoveWFRequest) GetID() []byte {
+func (m *StartedInstanceRequest) GetID() []byte {
 	if m != nil {
 		return m.ID
 	}
 	return nil
 }
 
-func (m *RemoveWFRequest) GetInstanceID() uint64 {
+func (m *StartedInstanceRequest) GetInstanceID() uint64 {
 	if m != nil {
 		return m.InstanceID
 	}
 	return 0
 }
 
-// RemoveWFResponse response
-type RemoveWFResponse struct {
+// StartedInstanceResponse response
+type StartedInstanceResponse struct {
 	ID []byte `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 }
 
-func (m *RemoveWFResponse) Reset()         { *m = RemoveWFResponse{} }
-func (m *RemoveWFResponse) String() string { return proto.CompactTextString(m) }
-func (*RemoveWFResponse) ProtoMessage()    {}
-func (*RemoveWFResponse) Descriptor() ([]byte, []int) {
+func (m *StartedInstanceResponse) Reset()         { *m = StartedInstanceResponse{} }
+func (m *StartedInstanceResponse) String() string { return proto.CompactTextString(m) }
+func (*StartedInstanceResponse) ProtoMessage()    {}
+func (*StartedInstanceResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_77a6da22d6a3feb1, []int{25}
 }
-func (m *RemoveWFResponse) XXX_Unmarshal(b []byte) error {
+func (m *StartedInstanceResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
 }
-func (m *RemoveWFResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+func (m *StartedInstanceResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	if deterministic {
-		return xxx_messageInfo_RemoveWFResponse.Marshal(b, m, deterministic)
+		return xxx_messageInfo_StartedInstanceResponse.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
 		n, err := m.MarshalToSizedBuffer(b)
@@ -1449,43 +1452,43 @@ func (m *RemoveWFResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, er
 		return b[:n], nil
 	}
 }
-func (m *RemoveWFResponse) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_RemoveWFResponse.Merge(m, src)
+func (m *StartedInstanceResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_StartedInstanceResponse.Merge(m, src)
 }
-func (m *RemoveWFResponse) XXX_Size() int {
+func (m *StartedInstanceResponse) XXX_Size() int {
 	return m.Size()
 }
-func (m *RemoveWFResponse) XXX_DiscardUnknown() {
-	xxx_messageInfo_RemoveWFResponse.DiscardUnknown(m)
+func (m *StartedInstanceResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_StartedInstanceResponse.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_RemoveWFResponse proto.InternalMessageInfo
+var xxx_messageInfo_StartedInstanceResponse proto.InternalMessageInfo
 
-func (m *RemoveWFResponse) GetID() []byte {
+func (m *StartedInstanceResponse) GetID() []byte {
 	if m != nil {
 		return m.ID
 	}
 	return nil
 }
 
-// CreateStateRequest create a instance state
-type CreateStateRequest struct {
+// CreateInstanceStateShardRequest create a instance state
+type CreateInstanceStateShardRequest struct {
 	ID    []byte                       `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	State metapb.WorkflowInstanceState `protobuf:"bytes,2,opt,name=state,proto3" json:"state"`
 }
 
-func (m *CreateStateRequest) Reset()         { *m = CreateStateRequest{} }
-func (m *CreateStateRequest) String() string { return proto.CompactTextString(m) }
-func (*CreateStateRequest) ProtoMessage()    {}
-func (*CreateStateRequest) Descriptor() ([]byte, []int) {
+func (m *CreateInstanceStateShardRequest) Reset()         { *m = CreateInstanceStateShardRequest{} }
+func (m *CreateInstanceStateShardRequest) String() string { return proto.CompactTextString(m) }
+func (*CreateInstanceStateShardRequest) ProtoMessage()    {}
+func (*CreateInstanceStateShardRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_77a6da22d6a3feb1, []int{26}
 }
-func (m *CreateStateRequest) XXX_Unmarshal(b []byte) error {
+func (m *CreateInstanceStateShardRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
 }
-func (m *CreateStateRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+func (m *CreateInstanceStateShardRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	if deterministic {
-		return xxx_messageInfo_CreateStateRequest.Marshal(b, m, deterministic)
+		return xxx_messageInfo_CreateInstanceStateShardRequest.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
 		n, err := m.MarshalToSizedBuffer(b)
@@ -1495,49 +1498,49 @@ func (m *CreateStateRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, 
 		return b[:n], nil
 	}
 }
-func (m *CreateStateRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_CreateStateRequest.Merge(m, src)
+func (m *CreateInstanceStateShardRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_CreateInstanceStateShardRequest.Merge(m, src)
 }
-func (m *CreateStateRequest) XXX_Size() int {
+func (m *CreateInstanceStateShardRequest) XXX_Size() int {
 	return m.Size()
 }
-func (m *CreateStateRequest) XXX_DiscardUnknown() {
-	xxx_messageInfo_CreateStateRequest.DiscardUnknown(m)
+func (m *CreateInstanceStateShardRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_CreateInstanceStateShardRequest.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_CreateStateRequest proto.InternalMessageInfo
+var xxx_messageInfo_CreateInstanceStateShardRequest proto.InternalMessageInfo
 
-func (m *CreateStateRequest) GetID() []byte {
+func (m *CreateInstanceStateShardRequest) GetID() []byte {
 	if m != nil {
 		return m.ID
 	}
 	return nil
 }
 
-func (m *CreateStateRequest) GetState() metapb.WorkflowInstanceState {
+func (m *CreateInstanceStateShardRequest) GetState() metapb.WorkflowInstanceState {
 	if m != nil {
 		return m.State
 	}
 	return metapb.WorkflowInstanceState{}
 }
 
-// CreateStateResponse response
-type CreateStateResponse struct {
+// CreateInstanceStateShardResponse response
+type CreateInstanceStateShardResponse struct {
 	ID []byte `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 }
 
-func (m *CreateStateResponse) Reset()         { *m = CreateStateResponse{} }
-func (m *CreateStateResponse) String() string { return proto.CompactTextString(m) }
-func (*CreateStateResponse) ProtoMessage()    {}
-func (*CreateStateResponse) Descriptor() ([]byte, []int) {
+func (m *CreateInstanceStateShardResponse) Reset()         { *m = CreateInstanceStateShardResponse{} }
+func (m *CreateInstanceStateShardResponse) String() string { return proto.CompactTextString(m) }
+func (*CreateInstanceStateShardResponse) ProtoMessage()    {}
+func (*CreateInstanceStateShardResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_77a6da22d6a3feb1, []int{27}
 }
-func (m *CreateStateResponse) XXX_Unmarshal(b []byte) error {
+func (m *CreateInstanceStateShardResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
 }
-func (m *CreateStateResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+func (m *CreateInstanceStateShardResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	if deterministic {
-		return xxx_messageInfo_CreateStateResponse.Marshal(b, m, deterministic)
+		return xxx_messageInfo_CreateInstanceStateShardResponse.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
 		n, err := m.MarshalToSizedBuffer(b)
@@ -1547,43 +1550,43 @@ func (m *CreateStateResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte,
 		return b[:n], nil
 	}
 }
-func (m *CreateStateResponse) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_CreateStateResponse.Merge(m, src)
+func (m *CreateInstanceStateShardResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_CreateInstanceStateShardResponse.Merge(m, src)
 }
-func (m *CreateStateResponse) XXX_Size() int {
+func (m *CreateInstanceStateShardResponse) XXX_Size() int {
 	return m.Size()
 }
-func (m *CreateStateResponse) XXX_DiscardUnknown() {
-	xxx_messageInfo_CreateStateResponse.DiscardUnknown(m)
+func (m *CreateInstanceStateShardResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_CreateInstanceStateShardResponse.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_CreateStateResponse proto.InternalMessageInfo
+var xxx_messageInfo_CreateInstanceStateShardResponse proto.InternalMessageInfo
 
-func (m *CreateStateResponse) GetID() []byte {
+func (m *CreateInstanceStateShardResponse) GetID() []byte {
 	if m != nil {
 		return m.ID
 	}
 	return nil
 }
 
-// UpdateStateRequest update a instance state
-type UpdateStateRequest struct {
+// UpdateInstanceStateShardRequest update a instance state
+type UpdateInstanceStateShardRequest struct {
 	ID    []byte                       `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	State metapb.WorkflowInstanceState `protobuf:"bytes,2,opt,name=state,proto3" json:"state"`
 }
 
-func (m *UpdateStateRequest) Reset()         { *m = UpdateStateRequest{} }
-func (m *UpdateStateRequest) String() string { return proto.CompactTextString(m) }
-func (*UpdateStateRequest) ProtoMessage()    {}
-func (*UpdateStateRequest) Descriptor() ([]byte, []int) {
+func (m *UpdateInstanceStateShardRequest) Reset()         { *m = UpdateInstanceStateShardRequest{} }
+func (m *UpdateInstanceStateShardRequest) String() string { return proto.CompactTextString(m) }
+func (*UpdateInstanceStateShardRequest) ProtoMessage()    {}
+func (*UpdateInstanceStateShardRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_77a6da22d6a3feb1, []int{28}
 }
-func (m *UpdateStateRequest) XXX_Unmarshal(b []byte) error {
+func (m *UpdateInstanceStateShardRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
 }
-func (m *UpdateStateRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+func (m *UpdateInstanceStateShardRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	if deterministic {
-		return xxx_messageInfo_UpdateStateRequest.Marshal(b, m, deterministic)
+		return xxx_messageInfo_UpdateInstanceStateShardRequest.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
 		n, err := m.MarshalToSizedBuffer(b)
@@ -1593,49 +1596,49 @@ func (m *UpdateStateRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, 
 		return b[:n], nil
 	}
 }
-func (m *UpdateStateRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_UpdateStateRequest.Merge(m, src)
+func (m *UpdateInstanceStateShardRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_UpdateInstanceStateShardRequest.Merge(m, src)
 }
-func (m *UpdateStateRequest) XXX_Size() int {
+func (m *UpdateInstanceStateShardRequest) XXX_Size() int {
 	return m.Size()
 }
-func (m *UpdateStateRequest) XXX_DiscardUnknown() {
-	xxx_messageInfo_UpdateStateRequest.DiscardUnknown(m)
+func (m *UpdateInstanceStateShardRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_UpdateInstanceStateShardRequest.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_UpdateStateRequest proto.InternalMessageInfo
+var xxx_messageInfo_UpdateInstanceStateShardRequest proto.InternalMessageInfo
 
-func (m *UpdateStateRequest) GetID() []byte {
+func (m *UpdateInstanceStateShardRequest) GetID() []byte {
 	if m != nil {
 		return m.ID
 	}
 	return nil
 }
 
-func (m *UpdateStateRequest) GetState() metapb.WorkflowInstanceState {
+func (m *UpdateInstanceStateShardRequest) GetState() metapb.WorkflowInstanceState {
 	if m != nil {
 		return m.State
 	}
 	return metapb.WorkflowInstanceState{}
 }
 
-// UpdateStateResponse response
-type UpdateStateResponse struct {
+// UpdateInstanceStateShardResponse response
+type UpdateInstanceStateShardResponse struct {
 	ID []byte `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 }
 
-func (m *UpdateStateResponse) Reset()         { *m = UpdateStateResponse{} }
-func (m *UpdateStateResponse) String() string { return proto.CompactTextString(m) }
-func (*UpdateStateResponse) ProtoMessage()    {}
-func (*UpdateStateResponse) Descriptor() ([]byte, []int) {
+func (m *UpdateInstanceStateShardResponse) Reset()         { *m = UpdateInstanceStateShardResponse{} }
+func (m *UpdateInstanceStateShardResponse) String() string { return proto.CompactTextString(m) }
+func (*UpdateInstanceStateShardResponse) ProtoMessage()    {}
+func (*UpdateInstanceStateShardResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_77a6da22d6a3feb1, []int{29}
 }
-func (m *UpdateStateResponse) XXX_Unmarshal(b []byte) error {
+func (m *UpdateInstanceStateShardResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
 }
-func (m *UpdateStateResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+func (m *UpdateInstanceStateShardResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	if deterministic {
-		return xxx_messageInfo_UpdateStateResponse.Marshal(b, m, deterministic)
+		return xxx_messageInfo_UpdateInstanceStateShardResponse.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
 		n, err := m.MarshalToSizedBuffer(b)
@@ -1645,45 +1648,45 @@ func (m *UpdateStateResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte,
 		return b[:n], nil
 	}
 }
-func (m *UpdateStateResponse) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_UpdateStateResponse.Merge(m, src)
+func (m *UpdateInstanceStateShardResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_UpdateInstanceStateShardResponse.Merge(m, src)
 }
-func (m *UpdateStateResponse) XXX_Size() int {
+func (m *UpdateInstanceStateShardResponse) XXX_Size() int {
 	return m.Size()
 }
-func (m *UpdateStateResponse) XXX_DiscardUnknown() {
-	xxx_messageInfo_UpdateStateResponse.DiscardUnknown(m)
+func (m *UpdateInstanceStateShardResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_UpdateInstanceStateShardResponse.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_UpdateStateResponse proto.InternalMessageInfo
+var xxx_messageInfo_UpdateInstanceStateShardResponse proto.InternalMessageInfo
 
-func (m *UpdateStateResponse) GetID() []byte {
+func (m *UpdateInstanceStateShardResponse) GetID() []byte {
 	if m != nil {
 		return m.ID
 	}
 	return nil
 }
 
-// RemoveStateRequest remove a instance state
-type RemoveStateRequest struct {
+// RemoveInstanceStateShardRequest remove a instance state
+type RemoveInstanceStateShardRequest struct {
 	ID         []byte `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	InstanceID uint64 `protobuf:"varint,2,opt,name=instanceID,proto3" json:"instanceID,omitempty"`
 	Start      uint32 `protobuf:"varint,3,opt,name=start,proto3" json:"start,omitempty"`
 	End        uint32 `protobuf:"varint,4,opt,name=end,proto3" json:"end,omitempty"`
 }
 
-func (m *RemoveStateRequest) Reset()         { *m = RemoveStateRequest{} }
-func (m *RemoveStateRequest) String() string { return proto.CompactTextString(m) }
-func (*RemoveStateRequest) ProtoMessage()    {}
-func (*RemoveStateRequest) Descriptor() ([]byte, []int) {
+func (m *RemoveInstanceStateShardRequest) Reset()         { *m = RemoveInstanceStateShardRequest{} }
+func (m *RemoveInstanceStateShardRequest) String() string { return proto.CompactTextString(m) }
+func (*RemoveInstanceStateShardRequest) ProtoMessage()    {}
+func (*RemoveInstanceStateShardRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_77a6da22d6a3feb1, []int{30}
 }
-func (m *RemoveStateRequest) XXX_Unmarshal(b []byte) error {
+func (m *RemoveInstanceStateShardRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
 }
-func (m *RemoveStateRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+func (m *RemoveInstanceStateShardRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	if deterministic {
-		return xxx_messageInfo_RemoveStateRequest.Marshal(b, m, deterministic)
+		return xxx_messageInfo_RemoveInstanceStateShardRequest.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
 		n, err := m.MarshalToSizedBuffer(b)
@@ -1693,63 +1696,63 @@ func (m *RemoveStateRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, 
 		return b[:n], nil
 	}
 }
-func (m *RemoveStateRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_RemoveStateRequest.Merge(m, src)
+func (m *RemoveInstanceStateShardRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_RemoveInstanceStateShardRequest.Merge(m, src)
 }
-func (m *RemoveStateRequest) XXX_Size() int {
+func (m *RemoveInstanceStateShardRequest) XXX_Size() int {
 	return m.Size()
 }
-func (m *RemoveStateRequest) XXX_DiscardUnknown() {
-	xxx_messageInfo_RemoveStateRequest.DiscardUnknown(m)
+func (m *RemoveInstanceStateShardRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_RemoveInstanceStateShardRequest.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_RemoveStateRequest proto.InternalMessageInfo
+var xxx_messageInfo_RemoveInstanceStateShardRequest proto.InternalMessageInfo
 
-func (m *RemoveStateRequest) GetID() []byte {
+func (m *RemoveInstanceStateShardRequest) GetID() []byte {
 	if m != nil {
 		return m.ID
 	}
 	return nil
 }
 
-func (m *RemoveStateRequest) GetInstanceID() uint64 {
+func (m *RemoveInstanceStateShardRequest) GetInstanceID() uint64 {
 	if m != nil {
 		return m.InstanceID
 	}
 	return 0
 }
 
-func (m *RemoveStateRequest) GetStart() uint32 {
+func (m *RemoveInstanceStateShardRequest) GetStart() uint32 {
 	if m != nil {
 		return m.Start
 	}
 	return 0
 }
 
-func (m *RemoveStateRequest) GetEnd() uint32 {
+func (m *RemoveInstanceStateShardRequest) GetEnd() uint32 {
 	if m != nil {
 		return m.End
 	}
 	return 0
 }
 
-// RemoveStateResponse response
-type RemoveStateResponse struct {
+// RemoveInstanceStateShardResponse response
+type RemoveInstanceStateShardResponse struct {
 	ID []byte `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 }
 
-func (m *RemoveStateResponse) Reset()         { *m = RemoveStateResponse{} }
-func (m *RemoveStateResponse) String() string { return proto.CompactTextString(m) }
-func (*RemoveStateResponse) ProtoMessage()    {}
-func (*RemoveStateResponse) Descriptor() ([]byte, []int) {
+func (m *RemoveInstanceStateShardResponse) Reset()         { *m = RemoveInstanceStateShardResponse{} }
+func (m *RemoveInstanceStateShardResponse) String() string { return proto.CompactTextString(m) }
+func (*RemoveInstanceStateShardResponse) ProtoMessage()    {}
+func (*RemoveInstanceStateShardResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_77a6da22d6a3feb1, []int{31}
 }
-func (m *RemoveStateResponse) XXX_Unmarshal(b []byte) error {
+func (m *RemoveInstanceStateShardResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
 }
-func (m *RemoveStateResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+func (m *RemoveInstanceStateShardResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	if deterministic {
-		return xxx_messageInfo_RemoveStateResponse.Marshal(b, m, deterministic)
+		return xxx_messageInfo_RemoveInstanceStateShardResponse.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
 		n, err := m.MarshalToSizedBuffer(b)
@@ -1759,19 +1762,19 @@ func (m *RemoveStateResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte,
 		return b[:n], nil
 	}
 }
-func (m *RemoveStateResponse) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_RemoveStateResponse.Merge(m, src)
+func (m *RemoveInstanceStateShardResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_RemoveInstanceStateShardResponse.Merge(m, src)
 }
-func (m *RemoveStateResponse) XXX_Size() int {
+func (m *RemoveInstanceStateShardResponse) XXX_Size() int {
 	return m.Size()
 }
-func (m *RemoveStateResponse) XXX_DiscardUnknown() {
-	xxx_messageInfo_RemoveStateResponse.DiscardUnknown(m)
+func (m *RemoveInstanceStateShardResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_RemoveInstanceStateShardResponse.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_RemoveStateResponse proto.InternalMessageInfo
+var xxx_messageInfo_RemoveInstanceStateShardResponse proto.InternalMessageInfo
 
-func (m *RemoveStateResponse) GetID() []byte {
+func (m *RemoveInstanceStateShardResponse) GetID() []byte {
 	if m != nil {
 		return m.ID
 	}
@@ -2022,6 +2025,118 @@ func (m *QueueFetchResponse) GetLastOffset() uint64 {
 	return 0
 }
 
+type StepInstanceStateShardRequest struct {
+	ID    []byte       `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Event metapb.Event `protobuf:"bytes,2,opt,name=event,proto3" json:"event"`
+	Start uint32       `protobuf:"varint,3,opt,name=start,proto3" json:"start,omitempty"`
+	End   uint32       `protobuf:"varint,4,opt,name=end,proto3" json:"end,omitempty"`
+}
+
+func (m *StepInstanceStateShardRequest) Reset()         { *m = StepInstanceStateShardRequest{} }
+func (m *StepInstanceStateShardRequest) String() string { return proto.CompactTextString(m) }
+func (*StepInstanceStateShardRequest) ProtoMessage()    {}
+func (*StepInstanceStateShardRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_77a6da22d6a3feb1, []int{36}
+}
+func (m *StepInstanceStateShardRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *StepInstanceStateShardRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_StepInstanceStateShardRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *StepInstanceStateShardRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_StepInstanceStateShardRequest.Merge(m, src)
+}
+func (m *StepInstanceStateShardRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *StepInstanceStateShardRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_StepInstanceStateShardRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_StepInstanceStateShardRequest proto.InternalMessageInfo
+
+func (m *StepInstanceStateShardRequest) GetID() []byte {
+	if m != nil {
+		return m.ID
+	}
+	return nil
+}
+
+func (m *StepInstanceStateShardRequest) GetEvent() metapb.Event {
+	if m != nil {
+		return m.Event
+	}
+	return metapb.Event{}
+}
+
+func (m *StepInstanceStateShardRequest) GetStart() uint32 {
+	if m != nil {
+		return m.Start
+	}
+	return 0
+}
+
+func (m *StepInstanceStateShardRequest) GetEnd() uint32 {
+	if m != nil {
+		return m.End
+	}
+	return 0
+}
+
+type StepInstanceStateShardResponse struct {
+	ID []byte `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+}
+
+func (m *StepInstanceStateShardResponse) Reset()         { *m = StepInstanceStateShardResponse{} }
+func (m *StepInstanceStateShardResponse) String() string { return proto.CompactTextString(m) }
+func (*StepInstanceStateShardResponse) ProtoMessage()    {}
+func (*StepInstanceStateShardResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_77a6da22d6a3feb1, []int{37}
+}
+func (m *StepInstanceStateShardResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *StepInstanceStateShardResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_StepInstanceStateShardResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *StepInstanceStateShardResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_StepInstanceStateShardResponse.Merge(m, src)
+}
+func (m *StepInstanceStateShardResponse) XXX_Size() int {
+	return m.Size()
+}
+func (m *StepInstanceStateShardResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_StepInstanceStateShardResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_StepInstanceStateShardResponse proto.InternalMessageInfo
+
+func (m *StepInstanceStateShardResponse) GetID() []byte {
+	if m != nil {
+		return m.ID
+	}
+	return nil
+}
+
 func init() {
 	proto.RegisterEnum("rpcpb.Type", Type_name, Type_value)
 	proto.RegisterType((*SetRequest)(nil), "rpcpb.SetRequest")
@@ -2046,78 +2161,85 @@ func init() {
 	proto.RegisterType((*BMCountResponse)(nil), "rpcpb.BMCountResponse")
 	proto.RegisterType((*BMRangeRequest)(nil), "rpcpb.BMRangeRequest")
 	proto.RegisterType((*BMRangeResponse)(nil), "rpcpb.BMRangeResponse")
-	proto.RegisterType((*StartWFRequest)(nil), "rpcpb.StartWFRequest")
-	proto.RegisterType((*StartWFResponse)(nil), "rpcpb.StartWFResponse")
-	proto.RegisterType((*RemoveWFRequest)(nil), "rpcpb.RemoveWFRequest")
-	proto.RegisterType((*RemoveWFResponse)(nil), "rpcpb.RemoveWFResponse")
-	proto.RegisterType((*CreateStateRequest)(nil), "rpcpb.CreateStateRequest")
-	proto.RegisterType((*CreateStateResponse)(nil), "rpcpb.CreateStateResponse")
-	proto.RegisterType((*UpdateStateRequest)(nil), "rpcpb.UpdateStateRequest")
-	proto.RegisterType((*UpdateStateResponse)(nil), "rpcpb.UpdateStateResponse")
-	proto.RegisterType((*RemoveStateRequest)(nil), "rpcpb.RemoveStateRequest")
-	proto.RegisterType((*RemoveStateResponse)(nil), "rpcpb.RemoveStateResponse")
+	proto.RegisterType((*StartingInstanceRequest)(nil), "rpcpb.StartingInstanceRequest")
+	proto.RegisterType((*StartingInstanceResponse)(nil), "rpcpb.StartingInstanceResponse")
+	proto.RegisterType((*StartedInstanceRequest)(nil), "rpcpb.StartedInstanceRequest")
+	proto.RegisterType((*StartedInstanceResponse)(nil), "rpcpb.StartedInstanceResponse")
+	proto.RegisterType((*CreateInstanceStateShardRequest)(nil), "rpcpb.CreateInstanceStateShardRequest")
+	proto.RegisterType((*CreateInstanceStateShardResponse)(nil), "rpcpb.CreateInstanceStateShardResponse")
+	proto.RegisterType((*UpdateInstanceStateShardRequest)(nil), "rpcpb.UpdateInstanceStateShardRequest")
+	proto.RegisterType((*UpdateInstanceStateShardResponse)(nil), "rpcpb.UpdateInstanceStateShardResponse")
+	proto.RegisterType((*RemoveInstanceStateShardRequest)(nil), "rpcpb.RemoveInstanceStateShardRequest")
+	proto.RegisterType((*RemoveInstanceStateShardResponse)(nil), "rpcpb.RemoveInstanceStateShardResponse")
 	proto.RegisterType((*QueueAddRequest)(nil), "rpcpb.QueueAddRequest")
 	proto.RegisterType((*QueueAddResponse)(nil), "rpcpb.QueueAddResponse")
 	proto.RegisterType((*QueueFetchRequest)(nil), "rpcpb.QueueFetchRequest")
 	proto.RegisterType((*QueueFetchResponse)(nil), "rpcpb.QueueFetchResponse")
+	proto.RegisterType((*StepInstanceStateShardRequest)(nil), "rpcpb.StepInstanceStateShardRequest")
+	proto.RegisterType((*StepInstanceStateShardResponse)(nil), "rpcpb.StepInstanceStateShardResponse")
 }
 
 func init() { proto.RegisterFile("rpc.proto", fileDescriptor_77a6da22d6a3feb1) }
 
 var fileDescriptor_77a6da22d6a3feb1 = []byte{
-	// 829 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xbc, 0x56, 0xdd, 0x4e, 0xe3, 0x46,
-	0x14, 0x8e, 0x9d, 0x10, 0xc2, 0xc9, 0x0f, 0xc3, 0xb4, 0x42, 0x11, 0x6a, 0x0d, 0xb2, 0x54, 0x95,
-	0x22, 0x91, 0x48, 0xad, 0x84, 0x0a, 0xbd, 0xa8, 0x1a, 0x22, 0x68, 0xaa, 0xa6, 0x15, 0xce, 0xae,
-	0xb8, 0xf6, 0xcf, 0x38, 0x78, 0xe3, 0xd8, 0x5e, 0x7b, 0xcc, 0x8a, 0xbb, 0x7d, 0x84, 0x7d, 0x90,
-	0xdd, 0xf7, 0x60, 0x7f, 0x2e, 0xb8, 0xdc, 0x2b, 0xb4, 0x1b, 0x5e, 0x64, 0xe5, 0x19, 0x9b, 0x18,
-	0x56, 0x68, 0x92, 0x08, 0xed, 0x95, 0xe7, 0x9c, 0x99, 0xf3, 0x7d, 0xe7, 0x67, 0xce, 0x19, 0xc3,
-	0x4a, 0x18, 0x98, 0xad, 0x20, 0xf4, 0xa9, 0x8f, 0x97, 0xc2, 0xc0, 0x0c, 0x8c, 0x8d, 0xdd, 0xa1,
-	0x43, 0xcf, 0x62, 0xa3, 0x65, 0xfa, 0xe3, 0xf6, 0xd0, 0x1f, 0xfa, 0x6d, 0xb6, 0x6b, 0xc4, 0x36,
-	0x93, 0x98, 0xc0, 0x56, 0xdc, 0x6a, 0x63, 0x2f, 0x77, 0xdc, 0x22, 0x24, 0xb0, 0x75, 0x23, 0x74,
-	0xcc, 0xb6, 0x11, 0x47, 0x17, 0x06, 0x21, 0xed, 0x60, 0x34, 0x6c, 0x07, 0x46, 0x7b, 0x4c, 0xa8,
-	0x9e, 0x7e, 0xb8, 0x9d, 0xfa, 0x2f, 0xc0, 0x80, 0x50, 0x8d, 0x3c, 0x8f, 0x49, 0x44, 0xf1, 0x3a,
-	0xc8, 0x8e, 0xd5, 0x94, 0xb6, 0xa4, 0xed, 0x5a, 0xa7, 0x3c, 0xb9, 0xde, 0x94, 0x7b, 0x5d, 0x4d,
-	0x76, 0x2c, 0x8c, 0xa0, 0x38, 0x22, 0x17, 0x4d, 0x39, 0xd9, 0xd0, 0x92, 0x25, 0xfe, 0x1e, 0x96,
-	0xce, 0x75, 0x37, 0x26, 0xcd, 0x22, 0xd3, 0x71, 0x41, 0xfd, 0x09, 0xaa, 0x0c, 0x2d, 0x0a, 0x7c,
-	0x2f, 0x22, 0x0f, 0xc1, 0xa9, 0x7b, 0x00, 0xc7, 0x0b, 0x90, 0xaa, 0x7f, 0x40, 0xf5, 0x58, 0x0c,
-	0x3f, 0xf5, 0x4d, 0xce, 0xfb, 0xb6, 0x0f, 0xf5, 0x2e, 0x71, 0x09, 0x25, 0xf3, 0xf3, 0x6e, 0x43,
-	0x23, 0x33, 0x15, 0x44, 0x76, 0x02, 0xab, 0x9d, 0xfe, 0x61, 0x48, 0xf4, 0x05, 0x68, 0xf2, 0x39,
-	0x2d, 0x6e, 0xd7, 0x33, 0xbf, 0x77, 0x00, 0x4d, 0x21, 0x05, 0xf4, 0xff, 0x41, 0xad, 0xd3, 0xff,
-	0xcb, 0xb2, 0x1e, 0x8b, 0xfb, 0x67, 0xa8, 0xa7, 0x78, 0xb3, 0xc4, 0xad, 0x91, 0xb1, 0x7f, 0xfe,
-	0xb8, 0x71, 0x67, 0x90, 0x02, 0xfa, 0x03, 0x68, 0x74, 0xfa, 0x87, 0x2e, 0xd1, 0xc3, 0xf9, 0x8b,
-	0xfb, 0x0b, 0x2b, 0x19, 0xb7, 0x15, 0xd0, 0x0c, 0x60, 0xad, 0xd3, 0x3f, 0xf4, 0x3d, 0xaa, 0x3b,
-	0x5e, 0xf4, 0x58, 0x71, 0xfe, 0x0d, 0x38, 0x0f, 0x2a, 0xb8, 0xdb, 0x1b, 0x50, 0x31, 0xd3, 0xb3,
-	0x0c, 0xba, 0xa2, 0xdd, 0xca, 0xea, 0xef, 0x49, 0xf5, 0xbb, 0xc4, 0x9d, 0x3f, 0x07, 0xac, 0xce,
-	0xcc, 0x72, 0xa6, 0x44, 0xfb, 0xb1, 0xb7, 0x40, 0xf7, 0xfe, 0xc9, 0x12, 0xcd, 0x6d, 0xc5, 0x1d,
-	0x6c, 0x26, 0x07, 0x99, 0x79, 0x49, 0xe3, 0x82, 0x6a, 0x27, 0xe4, 0x9a, 0xee, 0x0d, 0x17, 0xbb,
-	0x63, 0x11, 0xd5, 0x43, 0xca, 0xe6, 0x55, 0x5d, 0xe3, 0x42, 0xa2, 0x75, 0x9d, 0xb1, 0x43, 0x9b,
-	0x25, 0xce, 0xc3, 0x04, 0x75, 0xc0, 0x2e, 0x33, 0xe7, 0x11, 0x38, 0xfa, 0x35, 0xd1, 0x3a, 0x94,
-	0x59, 0x5d, 0xa3, 0xb4, 0xca, 0xa9, 0xa4, 0x5a, 0xd0, 0x18, 0x24, 0x9c, 0xa7, 0x47, 0x22, 0xe7,
-	0x0f, 0xa0, 0xe2, 0x78, 0x11, 0xd5, 0x3d, 0x93, 0x4f, 0xb0, 0xea, 0xaf, 0xcd, 0x16, 0x1f, 0xdc,
-	0xad, 0x53, 0x3f, 0x1c, 0xd9, 0xae, 0xff, 0xa2, 0x97, 0xee, 0x77, 0x4a, 0x97, 0xd7, 0x9b, 0x05,
-	0xed, 0xf6, 0x7c, 0x72, 0x99, 0x6f, 0x59, 0x04, 0xa5, 0xec, 0xc1, 0x2a, 0xef, 0x2e, 0xb1, 0x47,
-	0x0a, 0x40, 0xc6, 0xd0, 0xeb, 0xa6, 0x35, 0xc9, 0x69, 0x92, 0x56, 0x9d, 0x42, 0x09, 0x68, 0x87,
-	0x80, 0xf9, 0x30, 0x1b, 0xd0, 0x19, 0x86, 0xe4, 0x3e, 0x2b, 0x1b, 0xcd, 0x12, 0xf1, 0xe3, 0x43,
-	0x89, 0x60, 0x60, 0x69, 0x36, 0xb8, 0x85, 0xba, 0x0b, 0xdf, 0xdd, 0x21, 0x12, 0xfb, 0xf5, 0x34,
-	0xb0, 0xbe, 0x8d, 0x5f, 0x77, 0x88, 0x04, 0x7e, 0x51, 0xc0, 0x3c, 0xb7, 0x33, 0xf9, 0x25, 0xa8,
-	0xd4, 0x03, 0x6d, 0x80, 0xa0, 0x48, 0x3c, 0x8b, 0x35, 0x41, 0x5d, 0x4b, 0x96, 0x89, 0x93, 0x77,
-	0x58, 0xc5, 0xe3, 0xff, 0x24, 0x26, 0x31, 0x59, 0xf4, 0xe9, 0x71, 0x28, 0x19, 0xf3, 0x86, 0xa9,
-	0x69, 0x5c, 0x50, 0xff, 0x01, 0x34, 0x85, 0x14, 0x74, 0xa1, 0x02, 0xe0, 0xea, 0x11, 0xfd, 0xdf,
-	0xb6, 0x23, 0x92, 0xcd, 0x8c, 0x9c, 0x46, 0x8d, 0x61, 0x8d, 0x61, 0x1d, 0x11, 0x6a, 0x9e, 0xcd,
-	0xef, 0xe0, 0x16, 0x54, 0x75, 0x9b, 0x92, 0x30, 0xc5, 0x2f, 0x32, 0xfc, 0xbc, 0x6a, 0x3a, 0xaf,
-	0x4a, 0xf9, 0x79, 0x65, 0x00, 0xce, 0xd3, 0x8a, 0x67, 0x1e, 0x4f, 0x83, 0x9c, 0x4b, 0xc3, 0xbd,
-	0xd0, 0x8a, 0xf7, 0x43, 0xdb, 0x79, 0x29, 0x43, 0xe9, 0xc9, 0x45, 0x40, 0xf0, 0x32, 0x14, 0x07,
-	0x84, 0xa2, 0x42, 0xb2, 0x38, 0x26, 0x14, 0x49, 0x18, 0xa0, 0xcc, 0xff, 0x5a, 0x90, 0x8c, 0x6b,
-	0x50, 0xc9, 0x7e, 0x22, 0x90, 0x85, 0x57, 0x60, 0x89, 0x3d, 0xeb, 0x88, 0xf0, 0x0d, 0x5e, 0x6a,
-	0x64, 0xe3, 0x2a, 0x2c, 0xa7, 0x6f, 0x21, 0x1a, 0xe2, 0x06, 0xc0, 0xf4, 0x61, 0x42, 0x67, 0xdc,
-	0xaa, 0x4b, 0x5c, 0xe4, 0xa4, 0xe7, 0x92, 0x20, 0xd1, 0x33, 0x2e, 0xb0, 0x71, 0x89, 0x46, 0xb8,
-	0x06, 0xcb, 0xe9, 0x00, 0x42, 0x97, 0x12, 0xae, 0x43, 0x25, 0x1b, 0x0c, 0xe8, 0xad, 0x84, 0x11,
-	0x54, 0x73, 0x2d, 0x89, 0xde, 0x31, 0x4d, 0xae, 0x19, 0xd0, 0x7b, 0xa6, 0xc9, 0xdd, 0x3c, 0xf4,
-	0x81, 0x81, 0x64, 0x37, 0x01, 0xbd, 0x96, 0xf1, 0x2a, 0xc0, 0x34, 0xab, 0xe8, 0x8d, 0xdc, 0xf9,
-	0xe1, 0xea, 0xb3, 0x52, 0xb8, 0x9c, 0x28, 0xd2, 0xd5, 0x44, 0x91, 0x3e, 0x4d, 0x14, 0xe9, 0xd5,
-	0x8d, 0x52, 0xb8, 0xba, 0x51, 0x0a, 0x1f, 0x6f, 0x94, 0x82, 0x51, 0x66, 0xff, 0xb9, 0xbf, 0x7d,
-	0x09, 0x00, 0x00, 0xff, 0xff, 0x3e, 0xfa, 0x8f, 0x04, 0x62, 0x0b, 0x00, 0x00,
+	// 906 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xc4, 0x57, 0x4f, 0x6f, 0xe3, 0x44,
+	0x14, 0x8f, 0x9d, 0xb4, 0x9b, 0x7d, 0x69, 0xda, 0xd9, 0xd1, 0x52, 0xa2, 0x42, 0xdd, 0xca, 0x12,
+	0xa2, 0xbb, 0x12, 0x8d, 0x28, 0x62, 0xb5, 0x5b, 0x0e, 0x88, 0x34, 0x50, 0x8a, 0x28, 0xb0, 0x36,
+	0x88, 0xb3, 0xff, 0x3c, 0xa7, 0xa6, 0x8e, 0x6d, 0xec, 0x71, 0x51, 0x8f, 0x5c, 0x39, 0xf1, 0x41,
+	0xe0, 0x7b, 0x94, 0x7f, 0x52, 0x0f, 0x1c, 0x38, 0xad, 0x20, 0xfd, 0x22, 0xc8, 0x33, 0x76, 0x63,
+	0xb5, 0x98, 0x49, 0xa2, 0x4a, 0x7b, 0x8a, 0xdf, 0xcc, 0xbc, 0xdf, 0xef, 0xfd, 0x9f, 0x09, 0xdc,
+	0x4f, 0x62, 0x67, 0x37, 0x4e, 0x22, 0x16, 0xd1, 0xa5, 0x24, 0x76, 0x62, 0x7b, 0xe3, 0xad, 0x91,
+	0xcf, 0x4e, 0x32, 0x7b, 0xd7, 0x89, 0xc6, 0xfd, 0x51, 0x34, 0x8a, 0xfa, 0x7c, 0xd7, 0xce, 0x3c,
+	0x2e, 0x71, 0x81, 0x7f, 0x09, 0xad, 0x8d, 0x27, 0x95, 0xe3, 0x2e, 0x62, 0xec, 0x59, 0x76, 0xe2,
+	0x3b, 0x7d, 0x3b, 0x4b, 0xcf, 0x6d, 0xc4, 0x7e, 0x7c, 0x3a, 0xea, 0xc7, 0x76, 0x7f, 0x8c, 0xcc,
+	0x2a, 0x7e, 0x0a, 0xbd, 0x77, 0xe7, 0xd1, 0xb3, 0x62, 0x5f, 0xa8, 0xe9, 0x9f, 0x02, 0x98, 0xc8,
+	0x0c, 0xfc, 0x36, 0xc3, 0x94, 0xd1, 0x75, 0x50, 0x7d, 0xb7, 0xa7, 0x6c, 0x2b, 0x3b, 0x2b, 0x83,
+	0xe5, 0xc9, 0x8b, 0x2d, 0xf5, 0x68, 0x68, 0xa8, 0xbe, 0x4b, 0x09, 0x34, 0x4f, 0xf1, 0xbc, 0xa7,
+	0xe6, 0x1b, 0x46, 0xfe, 0x49, 0x1f, 0xc2, 0xd2, 0x99, 0x15, 0x64, 0xd8, 0x6b, 0xf2, 0x35, 0x21,
+	0xe8, 0x6f, 0x40, 0x87, 0xa3, 0xa5, 0x71, 0x14, 0xa6, 0x58, 0x07, 0xa7, 0x3f, 0x01, 0x38, 0x5c,
+	0x80, 0x54, 0x7f, 0x0f, 0x3a, 0x87, 0x72, 0xf8, 0xa9, 0x6d, 0x6a, 0xd5, 0xb6, 0x67, 0xd0, 0x1d,
+	0x62, 0x80, 0x0c, 0xe7, 0xe7, 0xdd, 0x81, 0xd5, 0x52, 0x55, 0xe2, 0xd9, 0x73, 0x58, 0x1b, 0x1c,
+	0x1f, 0x24, 0x68, 0x2d, 0x40, 0x53, 0x8d, 0x69, 0x73, 0xa7, 0x5b, 0xda, 0xfd, 0x18, 0xc8, 0x14,
+	0x52, 0x42, 0xff, 0x19, 0xac, 0x0c, 0x8e, 0x3f, 0x70, 0xdd, 0xbb, 0xe2, 0x7e, 0x13, 0xba, 0x05,
+	0xde, 0x2c, 0x7e, 0x1b, 0x38, 0x8e, 0xce, 0xee, 0xd6, 0xef, 0x12, 0x52, 0x42, 0xbf, 0x0f, 0xab,
+	0x83, 0xe3, 0x83, 0x00, 0xad, 0x64, 0xfe, 0xe4, 0x3e, 0xe2, 0x29, 0x13, 0xba, 0x12, 0x1a, 0x13,
+	0x1e, 0x0c, 0x8e, 0x0f, 0xa2, 0x90, 0x59, 0x7e, 0x98, 0xde, 0x95, 0x9f, 0x1f, 0x03, 0xad, 0x82,
+	0x4a, 0x6a, 0x7b, 0x03, 0xda, 0x4e, 0x71, 0x96, 0x43, 0xb7, 0x8d, 0x6b, 0x59, 0x7f, 0x9a, 0x67,
+	0x7f, 0x88, 0xc1, 0xfc, 0x31, 0xe0, 0x79, 0xe6, 0x9a, 0x33, 0x05, 0x3a, 0xca, 0xc2, 0x05, 0xba,
+	0xf7, 0x7d, 0x1e, 0x68, 0xa1, 0x2b, 0xef, 0x60, 0x27, 0x3f, 0xc8, 0xd5, 0x5b, 0x86, 0x10, 0x74,
+	0x2f, 0x27, 0x37, 0xac, 0x70, 0xb4, 0x58, 0x8d, 0xa5, 0xcc, 0x4a, 0x18, 0x9f, 0x57, 0x5d, 0x43,
+	0x08, 0xf9, 0x6a, 0xe0, 0x8f, 0x7d, 0xd6, 0x6b, 0x09, 0x1e, 0x2e, 0xe8, 0x26, 0x2f, 0x66, 0xc1,
+	0x23, 0x31, 0xf4, 0x36, 0xd1, 0x3a, 0x2c, 0xf3, 0xbc, 0xa6, 0x45, 0x96, 0x0b, 0x49, 0x1f, 0xc3,
+	0xab, 0x66, 0xce, 0xe9, 0x87, 0xa3, 0xa3, 0x30, 0x65, 0x56, 0xe8, 0x48, 0xbd, 0xd8, 0x87, 0xb6,
+	0x5f, 0x1c, 0xe5, 0x0c, 0x9d, 0xbd, 0xde, 0xae, 0x18, 0xe0, 0xbb, 0x5f, 0x47, 0xc9, 0xa9, 0x17,
+	0x44, 0xdf, 0x95, 0x50, 0x83, 0xd6, 0xc5, 0x8b, 0xad, 0x86, 0x71, 0x7d, 0x5e, 0xdf, 0x83, 0xde,
+	0x6d, 0x3a, 0x49, 0x72, 0xbf, 0x80, 0x75, 0xae, 0x83, 0xee, 0xac, 0x16, 0x6a, 0x00, 0x25, 0xe3,
+	0xd1, 0xb0, 0x48, 0x56, 0x65, 0x45, 0x7f, 0xbb, 0x70, 0xba, 0x8a, 0x28, 0x31, 0x82, 0xc1, 0x96,
+	0x18, 0x76, 0xa5, 0x86, 0xc9, 0x2c, 0x86, 0xe6, 0x89, 0x95, 0x48, 0xa7, 0xda, 0x33, 0x9e, 0x63,
+	0x56, 0x06, 0x6b, 0xb3, 0x2e, 0x58, 0x1c, 0xb1, 0x88, 0x98, 0xd0, 0xd0, 0xf7, 0x61, 0xbb, 0x9e,
+	0x55, 0x6e, 0xf1, 0x57, 0xb1, 0xfb, 0x12, 0x2c, 0xae, 0x67, 0x95, 0x58, 0xfc, 0xbd, 0x02, 0x5b,
+	0x62, 0xb2, 0xce, 0x6f, 0xb2, 0x24, 0xe5, 0x35, 0x8d, 0x46, 0xa0, 0x89, 0xa1, 0xcb, 0xdb, 0xac,
+	0x6b, 0xe4, 0x9f, 0xb9, 0xfd, 0xf5, 0x26, 0xc8, 0x6f, 0x9b, 0xe7, 0x19, 0x66, 0xb8, 0xe8, 0x4d,
+	0xe7, 0x33, 0x1c, 0x8b, 0xfe, 0x5c, 0x31, 0x84, 0xa0, 0x7f, 0x02, 0x64, 0x0a, 0x29, 0x69, 0x7a,
+	0x0d, 0x20, 0xb0, 0x52, 0xf6, 0xb9, 0xe7, 0xa5, 0x58, 0x8e, 0xa8, 0xca, 0x8a, 0x9e, 0xc1, 0x03,
+	0x8e, 0xf5, 0x11, 0x32, 0xe7, 0x64, 0x7e, 0x03, 0xb7, 0xa1, 0x63, 0x79, 0x0c, 0x93, 0x02, 0xbf,
+	0xc9, 0xf1, 0xab, 0x4b, 0xd3, 0xf1, 0xd8, 0xaa, 0x8e, 0x47, 0x1b, 0x68, 0x95, 0x56, 0x3e, 0x62,
+	0x45, 0x18, 0xd4, 0x4a, 0x18, 0x6e, 0xb8, 0xd6, 0xbc, 0xe5, 0xda, 0x0f, 0x0a, 0x6c, 0x9a, 0x0c,
+	0xe3, 0xf9, 0xeb, 0xe6, 0x11, 0x2c, 0xe1, 0x19, 0x16, 0x23, 0xbd, 0xb3, 0xd7, 0x2d, 0x4b, 0xfd,
+	0xc3, 0x7c, 0xb1, 0x2c, 0x6d, 0x7e, 0x62, 0xe6, 0x12, 0x7a, 0x0a, 0x5a, 0x9d, 0x2d, 0xff, 0xef,
+	0xfc, 0xe3, 0x3f, 0x55, 0x68, 0x7d, 0x79, 0x1e, 0x23, 0xbd, 0x07, 0x4d, 0x13, 0x19, 0x69, 0xe4,
+	0x1f, 0x87, 0xc8, 0x88, 0x42, 0x01, 0x96, 0xc5, 0x5b, 0x8f, 0xa8, 0x74, 0x05, 0xda, 0xe5, 0xd3,
+	0x8b, 0xb8, 0xf4, 0x3e, 0x2c, 0xf1, 0xc7, 0x10, 0x41, 0xb1, 0x21, 0xca, 0x97, 0x78, 0xb4, 0x03,
+	0xf7, 0x8a, 0x17, 0x04, 0x19, 0xd1, 0x55, 0x80, 0xe9, 0x75, 0x4e, 0x4e, 0x84, 0xd6, 0x10, 0x03,
+	0xe2, 0x17, 0xe7, 0xf2, 0x5c, 0x91, 0x6f, 0x84, 0xc0, 0x2f, 0x19, 0x72, 0x4a, 0x5f, 0x01, 0x72,
+	0x73, 0x5a, 0x93, 0x0b, 0x85, 0x3e, 0x84, 0xb5, 0x1b, 0xe3, 0x93, 0xfc, 0xa2, 0xd0, 0x4d, 0xe8,
+	0xd5, 0xcd, 0x2a, 0xf2, 0x2b, 0xdf, 0xae, 0x1b, 0x0c, 0xe4, 0x37, 0xbe, 0x5d, 0xd7, 0x77, 0xe4,
+	0x77, 0x85, 0xbe, 0x96, 0xdf, 0x01, 0xff, 0x15, 0x53, 0xf2, 0x87, 0x42, 0xbb, 0xd0, 0x2e, 0x9b,
+	0x84, 0xfc, 0xa4, 0xd2, 0x35, 0x80, 0x69, 0xc1, 0x91, 0x9f, 0xd5, 0xc1, 0xeb, 0x97, 0xff, 0x68,
+	0x8d, 0x8b, 0x89, 0xa6, 0x5c, 0x4e, 0x34, 0xe5, 0xef, 0x89, 0xa6, 0xfc, 0x78, 0xa5, 0x35, 0x2e,
+	0xaf, 0xb4, 0xc6, 0x5f, 0x57, 0x5a, 0xc3, 0x5e, 0xe6, 0xff, 0x38, 0xde, 0xf9, 0x37, 0x00, 0x00,
+	0xff, 0xff, 0xb6, 0x0b, 0x06, 0x98, 0x23, 0x0d, 0x00, 0x00,
 }
 
 func (m *SetRequest) Marshal() (dAtA []byte, err error) {
@@ -2993,7 +3115,7 @@ func (m *BMRangeResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
-func (m *StartWFRequest) Marshal() (dAtA []byte, err error) {
+func (m *StartingInstanceRequest) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
 	n, err := m.MarshalToSizedBuffer(dAtA[:size])
@@ -3003,12 +3125,12 @@ func (m *StartWFRequest) Marshal() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *StartWFRequest) MarshalTo(dAtA []byte) (int, error) {
+func (m *StartingInstanceRequest) MarshalTo(dAtA []byte) (int, error) {
 	size := m.Size()
 	return m.MarshalToSizedBuffer(dAtA[:size])
 }
 
-func (m *StartWFRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+func (m *StartingInstanceRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	i := len(dAtA)
 	_ = i
 	var l int
@@ -3033,7 +3155,7 @@ func (m *StartWFRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
-func (m *StartWFResponse) Marshal() (dAtA []byte, err error) {
+func (m *StartingInstanceResponse) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
 	n, err := m.MarshalToSizedBuffer(dAtA[:size])
@@ -3043,12 +3165,12 @@ func (m *StartWFResponse) Marshal() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *StartWFResponse) MarshalTo(dAtA []byte) (int, error) {
+func (m *StartingInstanceResponse) MarshalTo(dAtA []byte) (int, error) {
 	size := m.Size()
 	return m.MarshalToSizedBuffer(dAtA[:size])
 }
 
-func (m *StartWFResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+func (m *StartingInstanceResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	i := len(dAtA)
 	_ = i
 	var l int
@@ -3063,7 +3185,7 @@ func (m *StartWFResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
-func (m *RemoveWFRequest) Marshal() (dAtA []byte, err error) {
+func (m *StartedInstanceRequest) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
 	n, err := m.MarshalToSizedBuffer(dAtA[:size])
@@ -3073,12 +3195,12 @@ func (m *RemoveWFRequest) Marshal() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *RemoveWFRequest) MarshalTo(dAtA []byte) (int, error) {
+func (m *StartedInstanceRequest) MarshalTo(dAtA []byte) (int, error) {
 	size := m.Size()
 	return m.MarshalToSizedBuffer(dAtA[:size])
 }
 
-func (m *RemoveWFRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+func (m *StartedInstanceRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	i := len(dAtA)
 	_ = i
 	var l int
@@ -3098,7 +3220,7 @@ func (m *RemoveWFRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
-func (m *RemoveWFResponse) Marshal() (dAtA []byte, err error) {
+func (m *StartedInstanceResponse) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
 	n, err := m.MarshalToSizedBuffer(dAtA[:size])
@@ -3108,12 +3230,12 @@ func (m *RemoveWFResponse) Marshal() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *RemoveWFResponse) MarshalTo(dAtA []byte) (int, error) {
+func (m *StartedInstanceResponse) MarshalTo(dAtA []byte) (int, error) {
 	size := m.Size()
 	return m.MarshalToSizedBuffer(dAtA[:size])
 }
 
-func (m *RemoveWFResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+func (m *StartedInstanceResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	i := len(dAtA)
 	_ = i
 	var l int
@@ -3128,7 +3250,7 @@ func (m *RemoveWFResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
-func (m *CreateStateRequest) Marshal() (dAtA []byte, err error) {
+func (m *CreateInstanceStateShardRequest) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
 	n, err := m.MarshalToSizedBuffer(dAtA[:size])
@@ -3138,82 +3260,12 @@ func (m *CreateStateRequest) Marshal() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *CreateStateRequest) MarshalTo(dAtA []byte) (int, error) {
+func (m *CreateInstanceStateShardRequest) MarshalTo(dAtA []byte) (int, error) {
 	size := m.Size()
 	return m.MarshalToSizedBuffer(dAtA[:size])
 }
 
-func (m *CreateStateRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
-	i := len(dAtA)
-	_ = i
-	var l int
-	_ = l
-	{
-		size, err := m.State.MarshalToSizedBuffer(dAtA[:i])
-		if err != nil {
-			return 0, err
-		}
-		i -= size
-		i = encodeVarintRpc(dAtA, i, uint64(size))
-	}
-	i--
-	dAtA[i] = 0x12
-	if len(m.ID) > 0 {
-		i -= len(m.ID)
-		copy(dAtA[i:], m.ID)
-		i = encodeVarintRpc(dAtA, i, uint64(len(m.ID)))
-		i--
-		dAtA[i] = 0xa
-	}
-	return len(dAtA) - i, nil
-}
-
-func (m *CreateStateResponse) Marshal() (dAtA []byte, err error) {
-	size := m.Size()
-	dAtA = make([]byte, size)
-	n, err := m.MarshalToSizedBuffer(dAtA[:size])
-	if err != nil {
-		return nil, err
-	}
-	return dAtA[:n], nil
-}
-
-func (m *CreateStateResponse) MarshalTo(dAtA []byte) (int, error) {
-	size := m.Size()
-	return m.MarshalToSizedBuffer(dAtA[:size])
-}
-
-func (m *CreateStateResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
-	i := len(dAtA)
-	_ = i
-	var l int
-	_ = l
-	if len(m.ID) > 0 {
-		i -= len(m.ID)
-		copy(dAtA[i:], m.ID)
-		i = encodeVarintRpc(dAtA, i, uint64(len(m.ID)))
-		i--
-		dAtA[i] = 0xa
-	}
-	return len(dAtA) - i, nil
-}
-
-func (m *UpdateStateRequest) Marshal() (dAtA []byte, err error) {
-	size := m.Size()
-	dAtA = make([]byte, size)
-	n, err := m.MarshalToSizedBuffer(dAtA[:size])
-	if err != nil {
-		return nil, err
-	}
-	return dAtA[:n], nil
-}
-
-func (m *UpdateStateRequest) MarshalTo(dAtA []byte) (int, error) {
-	size := m.Size()
-	return m.MarshalToSizedBuffer(dAtA[:size])
-}
-
-func (m *UpdateStateRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+func (m *CreateInstanceStateShardRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	i := len(dAtA)
 	_ = i
 	var l int
@@ -3238,7 +3290,7 @@ func (m *UpdateStateRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
-func (m *UpdateStateResponse) Marshal() (dAtA []byte, err error) {
+func (m *CreateInstanceStateShardResponse) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
 	n, err := m.MarshalToSizedBuffer(dAtA[:size])
@@ -3248,12 +3300,12 @@ func (m *UpdateStateResponse) Marshal() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *UpdateStateResponse) MarshalTo(dAtA []byte) (int, error) {
+func (m *CreateInstanceStateShardResponse) MarshalTo(dAtA []byte) (int, error) {
 	size := m.Size()
 	return m.MarshalToSizedBuffer(dAtA[:size])
 }
 
-func (m *UpdateStateResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+func (m *CreateInstanceStateShardResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	i := len(dAtA)
 	_ = i
 	var l int
@@ -3268,7 +3320,7 @@ func (m *UpdateStateResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
-func (m *RemoveStateRequest) Marshal() (dAtA []byte, err error) {
+func (m *UpdateInstanceStateShardRequest) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
 	n, err := m.MarshalToSizedBuffer(dAtA[:size])
@@ -3278,12 +3330,82 @@ func (m *RemoveStateRequest) Marshal() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *RemoveStateRequest) MarshalTo(dAtA []byte) (int, error) {
+func (m *UpdateInstanceStateShardRequest) MarshalTo(dAtA []byte) (int, error) {
 	size := m.Size()
 	return m.MarshalToSizedBuffer(dAtA[:size])
 }
 
-func (m *RemoveStateRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+func (m *UpdateInstanceStateShardRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	{
+		size, err := m.State.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarintRpc(dAtA, i, uint64(size))
+	}
+	i--
+	dAtA[i] = 0x12
+	if len(m.ID) > 0 {
+		i -= len(m.ID)
+		copy(dAtA[i:], m.ID)
+		i = encodeVarintRpc(dAtA, i, uint64(len(m.ID)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *UpdateInstanceStateShardResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *UpdateInstanceStateShardResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *UpdateInstanceStateShardResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.ID) > 0 {
+		i -= len(m.ID)
+		copy(dAtA[i:], m.ID)
+		i = encodeVarintRpc(dAtA, i, uint64(len(m.ID)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *RemoveInstanceStateShardRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *RemoveInstanceStateShardRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *RemoveInstanceStateShardRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	i := len(dAtA)
 	_ = i
 	var l int
@@ -3313,7 +3435,7 @@ func (m *RemoveStateRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
-func (m *RemoveStateResponse) Marshal() (dAtA []byte, err error) {
+func (m *RemoveInstanceStateShardResponse) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
 	n, err := m.MarshalToSizedBuffer(dAtA[:size])
@@ -3323,12 +3445,12 @@ func (m *RemoveStateResponse) Marshal() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *RemoveStateResponse) MarshalTo(dAtA []byte) (int, error) {
+func (m *RemoveInstanceStateShardResponse) MarshalTo(dAtA []byte) (int, error) {
 	size := m.Size()
 	return m.MarshalToSizedBuffer(dAtA[:size])
 }
 
-func (m *RemoveStateResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+func (m *RemoveInstanceStateShardResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	i := len(dAtA)
 	_ = i
 	var l int
@@ -3505,6 +3627,86 @@ func (m *QueueFetchResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 			dAtA[i] = 0x12
 		}
 	}
+	if len(m.ID) > 0 {
+		i -= len(m.ID)
+		copy(dAtA[i:], m.ID)
+		i = encodeVarintRpc(dAtA, i, uint64(len(m.ID)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *StepInstanceStateShardRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *StepInstanceStateShardRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *StepInstanceStateShardRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.End != 0 {
+		i = encodeVarintRpc(dAtA, i, uint64(m.End))
+		i--
+		dAtA[i] = 0x20
+	}
+	if m.Start != 0 {
+		i = encodeVarintRpc(dAtA, i, uint64(m.Start))
+		i--
+		dAtA[i] = 0x18
+	}
+	{
+		size, err := m.Event.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarintRpc(dAtA, i, uint64(size))
+	}
+	i--
+	dAtA[i] = 0x12
+	if len(m.ID) > 0 {
+		i -= len(m.ID)
+		copy(dAtA[i:], m.ID)
+		i = encodeVarintRpc(dAtA, i, uint64(len(m.ID)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *StepInstanceStateShardResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *StepInstanceStateShardResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *StepInstanceStateShardResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
 	if len(m.ID) > 0 {
 		i -= len(m.ID)
 		copy(dAtA[i:], m.ID)
@@ -3915,7 +4117,7 @@ func (m *BMRangeResponse) Size() (n int) {
 	return n
 }
 
-func (m *StartWFRequest) Size() (n int) {
+func (m *StartingInstanceRequest) Size() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -3930,7 +4132,7 @@ func (m *StartWFRequest) Size() (n int) {
 	return n
 }
 
-func (m *StartWFResponse) Size() (n int) {
+func (m *StartingInstanceResponse) Size() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -3943,7 +4145,7 @@ func (m *StartWFResponse) Size() (n int) {
 	return n
 }
 
-func (m *RemoveWFRequest) Size() (n int) {
+func (m *StartedInstanceRequest) Size() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -3959,7 +4161,7 @@ func (m *RemoveWFRequest) Size() (n int) {
 	return n
 }
 
-func (m *RemoveWFResponse) Size() (n int) {
+func (m *StartedInstanceResponse) Size() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -3972,35 +4174,7 @@ func (m *RemoveWFResponse) Size() (n int) {
 	return n
 }
 
-func (m *CreateStateRequest) Size() (n int) {
-	if m == nil {
-		return 0
-	}
-	var l int
-	_ = l
-	l = len(m.ID)
-	if l > 0 {
-		n += 1 + l + sovRpc(uint64(l))
-	}
-	l = m.State.Size()
-	n += 1 + l + sovRpc(uint64(l))
-	return n
-}
-
-func (m *CreateStateResponse) Size() (n int) {
-	if m == nil {
-		return 0
-	}
-	var l int
-	_ = l
-	l = len(m.ID)
-	if l > 0 {
-		n += 1 + l + sovRpc(uint64(l))
-	}
-	return n
-}
-
-func (m *UpdateStateRequest) Size() (n int) {
+func (m *CreateInstanceStateShardRequest) Size() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -4015,7 +4189,7 @@ func (m *UpdateStateRequest) Size() (n int) {
 	return n
 }
 
-func (m *UpdateStateResponse) Size() (n int) {
+func (m *CreateInstanceStateShardResponse) Size() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -4028,7 +4202,35 @@ func (m *UpdateStateResponse) Size() (n int) {
 	return n
 }
 
-func (m *RemoveStateRequest) Size() (n int) {
+func (m *UpdateInstanceStateShardRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.ID)
+	if l > 0 {
+		n += 1 + l + sovRpc(uint64(l))
+	}
+	l = m.State.Size()
+	n += 1 + l + sovRpc(uint64(l))
+	return n
+}
+
+func (m *UpdateInstanceStateShardResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.ID)
+	if l > 0 {
+		n += 1 + l + sovRpc(uint64(l))
+	}
+	return n
+}
+
+func (m *RemoveInstanceStateShardRequest) Size() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -4050,7 +4252,7 @@ func (m *RemoveStateRequest) Size() (n int) {
 	return n
 }
 
-func (m *RemoveStateResponse) Size() (n int) {
+func (m *RemoveInstanceStateShardResponse) Size() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -4143,6 +4345,40 @@ func (m *QueueFetchResponse) Size() (n int) {
 	}
 	if m.LastOffset != 0 {
 		n += 1 + sovRpc(uint64(m.LastOffset))
+	}
+	return n
+}
+
+func (m *StepInstanceStateShardRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.ID)
+	if l > 0 {
+		n += 1 + l + sovRpc(uint64(l))
+	}
+	l = m.Event.Size()
+	n += 1 + l + sovRpc(uint64(l))
+	if m.Start != 0 {
+		n += 1 + sovRpc(uint64(m.Start))
+	}
+	if m.End != 0 {
+		n += 1 + sovRpc(uint64(m.End))
+	}
+	return n
+}
+
+func (m *StepInstanceStateShardResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.ID)
+	if l > 0 {
+		n += 1 + l + sovRpc(uint64(l))
 	}
 	return n
 }
@@ -7000,7 +7236,7 @@ func (m *BMRangeResponse) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *StartWFRequest) Unmarshal(dAtA []byte) error {
+func (m *StartingInstanceRequest) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -7023,10 +7259,10 @@ func (m *StartWFRequest) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: StartWFRequest: wiretype end group for non-group")
+			return fmt.Errorf("proto: StartingInstanceRequest: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: StartWFRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: StartingInstanceRequest: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -7120,7 +7356,7 @@ func (m *StartWFRequest) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *StartWFResponse) Unmarshal(dAtA []byte) error {
+func (m *StartingInstanceResponse) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -7143,10 +7379,10 @@ func (m *StartWFResponse) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: StartWFResponse: wiretype end group for non-group")
+			return fmt.Errorf("proto: StartingInstanceResponse: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: StartWFResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: StartingInstanceResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -7207,7 +7443,7 @@ func (m *StartWFResponse) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *RemoveWFRequest) Unmarshal(dAtA []byte) error {
+func (m *StartedInstanceRequest) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -7230,10 +7466,10 @@ func (m *RemoveWFRequest) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: RemoveWFRequest: wiretype end group for non-group")
+			return fmt.Errorf("proto: StartedInstanceRequest: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: RemoveWFRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: StartedInstanceRequest: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -7313,7 +7549,7 @@ func (m *RemoveWFRequest) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *RemoveWFResponse) Unmarshal(dAtA []byte) error {
+func (m *StartedInstanceResponse) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -7336,10 +7572,10 @@ func (m *RemoveWFResponse) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: RemoveWFResponse: wiretype end group for non-group")
+			return fmt.Errorf("proto: StartedInstanceResponse: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: RemoveWFResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: StartedInstanceResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -7400,7 +7636,7 @@ func (m *RemoveWFResponse) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *CreateStateRequest) Unmarshal(dAtA []byte) error {
+func (m *CreateInstanceStateShardRequest) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -7423,217 +7659,10 @@ func (m *CreateStateRequest) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: CreateStateRequest: wiretype end group for non-group")
+			return fmt.Errorf("proto: CreateInstanceStateShardRequest: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: CreateStateRequest: illegal tag %d (wire type %d)", fieldNum, wire)
-		}
-		switch fieldNum {
-		case 1:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field ID", wireType)
-			}
-			var byteLen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowRpc
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				byteLen |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if byteLen < 0 {
-				return ErrInvalidLengthRpc
-			}
-			postIndex := iNdEx + byteLen
-			if postIndex < 0 {
-				return ErrInvalidLengthRpc
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.ID = append(m.ID[:0], dAtA[iNdEx:postIndex]...)
-			if m.ID == nil {
-				m.ID = []byte{}
-			}
-			iNdEx = postIndex
-		case 2:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field State", wireType)
-			}
-			var msglen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowRpc
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				msglen |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if msglen < 0 {
-				return ErrInvalidLengthRpc
-			}
-			postIndex := iNdEx + msglen
-			if postIndex < 0 {
-				return ErrInvalidLengthRpc
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			if err := m.State.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
-				return err
-			}
-			iNdEx = postIndex
-		default:
-			iNdEx = preIndex
-			skippy, err := skipRpc(dAtA[iNdEx:])
-			if err != nil {
-				return err
-			}
-			if skippy < 0 {
-				return ErrInvalidLengthRpc
-			}
-			if (iNdEx + skippy) < 0 {
-				return ErrInvalidLengthRpc
-			}
-			if (iNdEx + skippy) > l {
-				return io.ErrUnexpectedEOF
-			}
-			iNdEx += skippy
-		}
-	}
-
-	if iNdEx > l {
-		return io.ErrUnexpectedEOF
-	}
-	return nil
-}
-func (m *CreateStateResponse) Unmarshal(dAtA []byte) error {
-	l := len(dAtA)
-	iNdEx := 0
-	for iNdEx < l {
-		preIndex := iNdEx
-		var wire uint64
-		for shift := uint(0); ; shift += 7 {
-			if shift >= 64 {
-				return ErrIntOverflowRpc
-			}
-			if iNdEx >= l {
-				return io.ErrUnexpectedEOF
-			}
-			b := dAtA[iNdEx]
-			iNdEx++
-			wire |= uint64(b&0x7F) << shift
-			if b < 0x80 {
-				break
-			}
-		}
-		fieldNum := int32(wire >> 3)
-		wireType := int(wire & 0x7)
-		if wireType == 4 {
-			return fmt.Errorf("proto: CreateStateResponse: wiretype end group for non-group")
-		}
-		if fieldNum <= 0 {
-			return fmt.Errorf("proto: CreateStateResponse: illegal tag %d (wire type %d)", fieldNum, wire)
-		}
-		switch fieldNum {
-		case 1:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field ID", wireType)
-			}
-			var byteLen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowRpc
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				byteLen |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if byteLen < 0 {
-				return ErrInvalidLengthRpc
-			}
-			postIndex := iNdEx + byteLen
-			if postIndex < 0 {
-				return ErrInvalidLengthRpc
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.ID = append(m.ID[:0], dAtA[iNdEx:postIndex]...)
-			if m.ID == nil {
-				m.ID = []byte{}
-			}
-			iNdEx = postIndex
-		default:
-			iNdEx = preIndex
-			skippy, err := skipRpc(dAtA[iNdEx:])
-			if err != nil {
-				return err
-			}
-			if skippy < 0 {
-				return ErrInvalidLengthRpc
-			}
-			if (iNdEx + skippy) < 0 {
-				return ErrInvalidLengthRpc
-			}
-			if (iNdEx + skippy) > l {
-				return io.ErrUnexpectedEOF
-			}
-			iNdEx += skippy
-		}
-	}
-
-	if iNdEx > l {
-		return io.ErrUnexpectedEOF
-	}
-	return nil
-}
-func (m *UpdateStateRequest) Unmarshal(dAtA []byte) error {
-	l := len(dAtA)
-	iNdEx := 0
-	for iNdEx < l {
-		preIndex := iNdEx
-		var wire uint64
-		for shift := uint(0); ; shift += 7 {
-			if shift >= 64 {
-				return ErrIntOverflowRpc
-			}
-			if iNdEx >= l {
-				return io.ErrUnexpectedEOF
-			}
-			b := dAtA[iNdEx]
-			iNdEx++
-			wire |= uint64(b&0x7F) << shift
-			if b < 0x80 {
-				break
-			}
-		}
-		fieldNum := int32(wire >> 3)
-		wireType := int(wire & 0x7)
-		if wireType == 4 {
-			return fmt.Errorf("proto: UpdateStateRequest: wiretype end group for non-group")
-		}
-		if fieldNum <= 0 {
-			return fmt.Errorf("proto: UpdateStateRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: CreateInstanceStateShardRequest: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -7727,7 +7756,7 @@ func (m *UpdateStateRequest) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *UpdateStateResponse) Unmarshal(dAtA []byte) error {
+func (m *CreateInstanceStateShardResponse) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -7750,10 +7779,10 @@ func (m *UpdateStateResponse) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: UpdateStateResponse: wiretype end group for non-group")
+			return fmt.Errorf("proto: CreateInstanceStateShardResponse: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: UpdateStateResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: CreateInstanceStateShardResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -7814,7 +7843,7 @@ func (m *UpdateStateResponse) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *RemoveStateRequest) Unmarshal(dAtA []byte) error {
+func (m *UpdateInstanceStateShardRequest) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -7837,10 +7866,217 @@ func (m *RemoveStateRequest) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: RemoveStateRequest: wiretype end group for non-group")
+			return fmt.Errorf("proto: UpdateInstanceStateShardRequest: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: RemoveStateRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: UpdateInstanceStateShardRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ID", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowRpc
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthRpc
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthRpc
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ID = append(m.ID[:0], dAtA[iNdEx:postIndex]...)
+			if m.ID == nil {
+				m.ID = []byte{}
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field State", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowRpc
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthRpc
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthRpc
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if err := m.State.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipRpc(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthRpc
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthRpc
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *UpdateInstanceStateShardResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowRpc
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: UpdateInstanceStateShardResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: UpdateInstanceStateShardResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ID", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowRpc
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthRpc
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthRpc
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ID = append(m.ID[:0], dAtA[iNdEx:postIndex]...)
+			if m.ID == nil {
+				m.ID = []byte{}
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipRpc(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthRpc
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthRpc
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *RemoveInstanceStateShardRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowRpc
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: RemoveInstanceStateShardRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: RemoveInstanceStateShardRequest: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -7958,7 +8194,7 @@ func (m *RemoveStateRequest) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *RemoveStateResponse) Unmarshal(dAtA []byte) error {
+func (m *RemoveInstanceStateShardResponse) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -7981,10 +8217,10 @@ func (m *RemoveStateResponse) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: RemoveStateResponse: wiretype end group for non-group")
+			return fmt.Errorf("proto: RemoveInstanceStateShardResponse: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: RemoveStateResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: RemoveInstanceStateShardResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -8577,6 +8813,251 @@ func (m *QueueFetchResponse) Unmarshal(dAtA []byte) error {
 					break
 				}
 			}
+		default:
+			iNdEx = preIndex
+			skippy, err := skipRpc(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthRpc
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthRpc
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *StepInstanceStateShardRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowRpc
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: StepInstanceStateShardRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: StepInstanceStateShardRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ID", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowRpc
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthRpc
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthRpc
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ID = append(m.ID[:0], dAtA[iNdEx:postIndex]...)
+			if m.ID == nil {
+				m.ID = []byte{}
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Event", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowRpc
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthRpc
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthRpc
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if err := m.Event.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Start", wireType)
+			}
+			m.Start = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowRpc
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Start |= uint32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field End", wireType)
+			}
+			m.End = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowRpc
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.End |= uint32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		default:
+			iNdEx = preIndex
+			skippy, err := skipRpc(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthRpc
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthRpc
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *StepInstanceStateShardResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowRpc
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: StepInstanceStateShardResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: StepInstanceStateShardResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ID", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowRpc
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthRpc
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthRpc
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ID = append(m.ID[:0], dAtA[iNdEx:postIndex]...)
+			if m.ID == nil {
+				m.ID = []byte{}
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipRpc(dAtA[iNdEx:])

@@ -5,9 +5,6 @@ import (
 )
 
 var (
-	// ErrTimeout timeout error
-	ErrTimeout = errors.New("Timeout")
-
-	// ErrWorkerNotFound The state worker not in the node
-	ErrWorkerNotFound = errors.New("The state worker not in the node")
+	errTimeout        = errors.New("Timeout")
+	errWorkerNotFound = errors.New("The state worker not in the node")
 )

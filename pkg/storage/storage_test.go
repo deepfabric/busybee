@@ -62,7 +62,7 @@ func TestSetAndGet(t *testing.T) {
 
 	store, err := NewStorage("127.0.0.1:12345", tmp, []storage.MetadataStorage{s}, []storage.DataStorage{s})
 	assert.NoError(t, err, "TestSetAndGet failed")
-	assert.NoError(t, store.Start(), "TestSetAndGet failed")
+	assert.NoError(t, store.Start(nil), "TestSetAndGet failed")
 	defer store.Close()
 
 	key := []byte("key1")
@@ -97,7 +97,7 @@ func TestDelete(t *testing.T) {
 
 	store, err := NewStorage("127.0.0.1:12345", tmp, []storage.MetadataStorage{s}, []storage.DataStorage{s})
 	assert.NoError(t, err, "TestDelete failed")
-	assert.NoError(t, store.Start(), "TestDelete failed")
+	assert.NoError(t, store.Start(nil), "TestDelete failed")
 	defer store.Close()
 
 	key := []byte("key1")
@@ -137,7 +137,7 @@ func TestBMCreate(t *testing.T) {
 
 	store, err := NewStorage("127.0.0.1:12345", tmp, []storage.MetadataStorage{s}, []storage.DataStorage{s})
 	assert.NoError(t, err, "TestBMCreate failed")
-	assert.NoError(t, store.Start(), "TestBMCreate failed")
+	assert.NoError(t, store.Start(nil), "TestBMCreate failed")
 	defer store.Close()
 
 	key := []byte("key1")
@@ -175,7 +175,7 @@ func TestBMAdd(t *testing.T) {
 
 	store, err := NewStorage("127.0.0.1:12345", tmp, []storage.MetadataStorage{s}, []storage.DataStorage{s})
 	assert.NoError(t, err, "TestBMAdd failed")
-	assert.NoError(t, store.Start(), "TestBMAdd failed")
+	assert.NoError(t, store.Start(nil), "TestBMAdd failed")
 	defer store.Close()
 
 	key := []byte("key1")
@@ -220,7 +220,7 @@ func TestBMRemove(t *testing.T) {
 
 	store, err := NewStorage("127.0.0.1:12345", tmp, []storage.MetadataStorage{s}, []storage.DataStorage{s})
 	assert.NoError(t, err, "TestBMRemove failed")
-	assert.NoError(t, store.Start(), "TestBMRemove failed")
+	assert.NoError(t, store.Start(nil), "TestBMRemove failed")
 	defer store.Close()
 
 	key := []byte("key1")
@@ -264,7 +264,7 @@ func TestBMClear(t *testing.T) {
 
 	store, err := NewStorage("127.0.0.1:12345", tmp, []storage.MetadataStorage{s}, []storage.DataStorage{s})
 	assert.NoError(t, err, "TestBMClear failed")
-	assert.NoError(t, store.Start(), "TestBMClear failed")
+	assert.NoError(t, store.Start(nil), "TestBMClear failed")
 	defer store.Close()
 
 	key := []byte("key1")
@@ -304,7 +304,7 @@ func TestBMContains(t *testing.T) {
 
 	store, err := NewStorage("127.0.0.1:12345", tmp, []storage.MetadataStorage{s}, []storage.DataStorage{s})
 	assert.NoError(t, err, "TestBMContains failed")
-	assert.NoError(t, store.Start(), "TestBMContains failed")
+	assert.NoError(t, store.Start(nil), "TestBMContains failed")
 	defer store.Close()
 
 	key := []byte("key1")
@@ -339,7 +339,7 @@ func TestBMDel(t *testing.T) {
 
 	store, err := NewStorage("127.0.0.1:12345", tmp, []storage.MetadataStorage{s}, []storage.DataStorage{s})
 	assert.NoError(t, err, "TestBMDel failed")
-	assert.NoError(t, store.Start(), "TestBMDel failed")
+	assert.NoError(t, store.Start(nil), "TestBMDel failed")
 	defer store.Close()
 
 	key := []byte("key1")
@@ -378,7 +378,7 @@ func TestBMCount(t *testing.T) {
 
 	store, err := NewStorage("127.0.0.1:12345", tmp, []storage.MetadataStorage{s}, []storage.DataStorage{s})
 	assert.NoError(t, err, "TestBMCount failed")
-	assert.NoError(t, store.Start(), "TestBMCount failed")
+	assert.NoError(t, store.Start(nil), "TestBMCount failed")
 	defer store.Close()
 
 	key := []byte("key1111")
@@ -412,7 +412,7 @@ func TestBMRange(t *testing.T) {
 
 	store, err := NewStorage("127.0.0.1:12345", tmp, []storage.MetadataStorage{s}, []storage.DataStorage{s})
 	assert.NoError(t, err, "TestBMRange failed")
-	assert.NoError(t, store.Start(), "TestBMRange failed")
+	assert.NoError(t, store.Start(nil), "TestBMRange failed")
 	defer store.Close()
 
 	key := []byte("key1")
@@ -460,8 +460,8 @@ func TestStartWF(t *testing.T) {
 
 	store, err := NewStorage("127.0.0.1:12345", tmp, []storage.MetadataStorage{s}, []storage.DataStorage{s})
 	assert.NoError(t, err, "TestStartWF failed")
-	assert.NoError(t, store.Start(), "TestStartWF failed")
-	_, err = store.ExecCommand(&rpcpb.StartWFRequest{
+	assert.NoError(t, store.Start(nil), "TestStartWF failed")
+	_, err = store.ExecCommand(&rpcpb.StartingInstanceRequest{
 		Instance: metapb.WorkflowInstance{
 			ID:       1,
 			Snapshot: metapb.Workflow{},
@@ -469,6 +469,14 @@ func TestStartWF(t *testing.T) {
 	})
 	assert.NoError(t, err, "TestStartWF failed")
 	assert.True(t, len(store.WatchEvent()) > 0, "TestStartWF failed")
+
+	v, err := store.ExecCommand(&rpcpb.GetRequest{
+		Key: InstanceStartKey(1),
+	})
+	assert.NoError(t, err, "TestStartWF failed")
+	resp := &rpcpb.GetResponse{}
+	protoc.MustUnmarshal(resp, v)
+	assert.True(t, len(resp.Value) > 0, "TestStartWF failed")
 
 	store.Close()
 	s.Close()
@@ -479,7 +487,7 @@ func TestStartWF(t *testing.T) {
 
 	store, err = NewStorage("127.0.0.1:12345", tmp, []storage.MetadataStorage{s}, []storage.DataStorage{s})
 	assert.NoError(t, err, "TestStartWF failed")
-	assert.NoError(t, store.Start(), "TestStartWF failed")
+	assert.NoError(t, store.Start(nil), "TestStartWF failed")
 	defer store.Close()
 
 	c := store.WatchEvent()
@@ -500,7 +508,7 @@ func TestQueue(t *testing.T) {
 
 	store, err := NewStorage("127.0.0.1:12345", tmp, []storage.MetadataStorage{s}, []storage.DataStorage{s})
 	assert.NoError(t, err, "TestQueue failed")
-	assert.NoError(t, store.Start(), "TestQueue failed")
+	assert.NoError(t, store.Start(nil), "TestQueue failed")
 	defer store.Close()
 
 	instanceID := uint64(101)

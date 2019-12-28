@@ -1,7 +1,6 @@
 package core
 
 import (
-	"context"
 	"sync"
 )
 
@@ -18,7 +17,6 @@ func acquireCB() *stepCB {
 }
 
 func releaseCB(value *stepCB) {
-	value.ctx = nil
 	if value.c != nil {
 		close(value.c)
 	}
@@ -26,10 +24,9 @@ func releaseCB(value *stepCB) {
 }
 
 type stepCB struct {
-	ctx context.Context
-	c   chan error
+	c chan struct{}
 }
 
-func (cb *stepCB) wait() error {
-	return <-cb.c
+func (cb *stepCB) wait() {
+	<-cb.c
 }

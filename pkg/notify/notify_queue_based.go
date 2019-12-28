@@ -29,6 +29,6 @@ func (n *queueNotifier) Notify(id uint64, notifies ...metapb.Notify) error {
 		return err
 	}
 
-	log.Infof("%d notify queue max offset is %d", offset)
+	log.Infof("instance %d notify queue last offset is %d", id, offset)
 	return nil
 }

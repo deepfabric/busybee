@@ -12,19 +12,23 @@ import (
 	"github.com/fagongzi/util/protoc"
 )
 
-func (h *beeStorage) init() {
+func (h *beeStorage) init(stepFunc raftstore.LocalCommandFunc) {
 	h.AddReadFunc("get", uint64(rpcpb.Get), h.get)
-	h.AddReadFunc("bmcontains", uint64(rpcpb.BMContains), h.bmcontains)
-	h.AddReadFunc("bmcount", uint64(rpcpb.BMCount), h.bmcount)
-	h.AddReadFunc("bmrange", uint64(rpcpb.BMRange), h.bmrange)
+	h.AddReadFunc("bm-contains", uint64(rpcpb.BMContains), h.bmcontains)
+	h.AddReadFunc("bm-count", uint64(rpcpb.BMCount), h.bmcount)
+	h.AddReadFunc("bm-range", uint64(rpcpb.BMRange), h.bmrange)
 
-	h.AddWriteFunc("startwf", uint64(rpcpb.StartWF), h.startWF)
-	h.AddWriteFunc("removewf", uint64(rpcpb.RemoveWF), h.removeWF)
-	h.AddWriteFunc("createstate", uint64(rpcpb.CreateState), h.createState)
-	h.AddWriteFunc("updatestate", uint64(rpcpb.UpdateState), h.updateState)
-	h.AddWriteFunc("removestate", uint64(rpcpb.RemoveState), h.removeState)
-	h.AddWriteFunc("queueadd", uint64(rpcpb.QueueAdd), h.queueAdd)
-	h.AddWriteFunc("queuefetch", uint64(rpcpb.QueueFetch), h.queueFetch)
+	h.AddWriteFunc("starting-instance", uint64(rpcpb.StartingInstance), h.startingInstance)
+	h.AddWriteFunc("started-instance", uint64(rpcpb.StartedInstance), h.startedInstance)
+	h.AddWriteFunc("create-state", uint64(rpcpb.CreateInstanceStateShard), h.createState)
+	h.AddWriteFunc("update-state", uint64(rpcpb.UpdateInstanceStateShard), h.updateState)
+	h.AddWriteFunc("remove-state", uint64(rpcpb.RemoveInstanceStateShard), h.removeState)
+	h.AddWriteFunc("queue-add", uint64(rpcpb.QueueAdd), h.queueAdd)
+	h.AddWriteFunc("queue-fetch", uint64(rpcpb.QueueFetch), h.queueFetch)
+
+	if nil != stepFunc {
+		h.AddLocalFunc("step-state", uint64(rpcpb.StepInstanceStateShard), stepFunc)
+	}
 
 	h.runner.RunCancelableTask(h.handleShardCycle)
 }
@@ -119,46 +123,54 @@ func (h *beeStorage) BuildRequest(req *raftcmdpb.Request, cmd interface{}) error
 		req.Type = raftcmdpb.Read
 		req.Cmd = protoc.MustMarshal(msg)
 		rpcpb.ReleaseBMRangeRequest(msg)
-	case *rpcpb.StartWFRequest:
-		msg := cmd.(*rpcpb.StartWFRequest)
+	case *rpcpb.StartingInstanceRequest:
+		msg := cmd.(*rpcpb.StartingInstanceRequest)
 		msg.ID = req.ID
 		req.Key = InstanceStartKey(msg.Instance.ID)
-		req.CustemType = uint64(rpcpb.StartWF)
+		req.CustemType = uint64(rpcpb.StartingInstance)
 		req.Type = raftcmdpb.Write
 		req.Cmd = protoc.MustMarshal(msg)
-		rpcpb.ReleaseStartWFRequest(msg)
-	case *rpcpb.RemoveWFRequest:
-		msg := cmd.(*rpcpb.RemoveWFRequest)
+		rpcpb.ReleaseStartingInstanceRequest(msg)
+	case *rpcpb.StartedInstanceRequest:
+		msg := cmd.(*rpcpb.StartedInstanceRequest)
 		msg.ID = req.ID
 		req.Key = InstanceStartKey(msg.InstanceID)
-		req.CustemType = uint64(rpcpb.RemoveWF)
+		req.CustemType = uint64(rpcpb.StartedInstance)
 		req.Type = raftcmdpb.Write
 		req.Cmd = protoc.MustMarshal(msg)
-		rpcpb.ReleaseRemoveWFRequest(msg)
-	case *rpcpb.CreateStateRequest:
-		msg := cmd.(*rpcpb.CreateStateRequest)
+		rpcpb.ReleaseStartedInstanceRequest(msg)
+	case *rpcpb.CreateInstanceStateShardRequest:
+		msg := cmd.(*rpcpb.CreateInstanceStateShardRequest)
 		msg.ID = req.ID
 		req.Key = InstanceStateKey(msg.State.InstanceID, msg.State.Start, msg.State.End)
-		req.CustemType = uint64(rpcpb.CreateState)
+		req.CustemType = uint64(rpcpb.CreateInstanceStateShard)
 		req.Type = raftcmdpb.Write
 		req.Cmd = protoc.MustMarshal(msg)
-		rpcpb.ReleaseCreateStateRequest(msg)
-	case *rpcpb.UpdateStateRequest:
-		msg := cmd.(*rpcpb.UpdateStateRequest)
+		rpcpb.ReleaseCreateInstanceStateShardRequest(msg)
+	case *rpcpb.UpdateInstanceStateShardRequest:
+		msg := cmd.(*rpcpb.UpdateInstanceStateShardRequest)
 		msg.ID = req.ID
 		req.Key = InstanceStateKey(msg.State.InstanceID, msg.State.Start, msg.State.End)
-		req.CustemType = uint64(rpcpb.CreateState)
+		req.CustemType = uint64(rpcpb.UpdateInstanceStateShard)
 		req.Type = raftcmdpb.Write
 		req.Cmd = protoc.MustMarshal(msg)
-		rpcpb.ReleaseUpdateStateRequest(msg)
-	case *rpcpb.RemoveStateRequest:
-		msg := cmd.(*rpcpb.RemoveStateRequest)
+		rpcpb.ReleaseUpdateInstanceStateShardRequest(msg)
+	case *rpcpb.RemoveInstanceStateShardRequest:
+		msg := cmd.(*rpcpb.RemoveInstanceStateShardRequest)
 		msg.ID = req.ID
 		req.Key = InstanceStateKey(msg.InstanceID, msg.Start, msg.End)
-		req.CustemType = uint64(rpcpb.CreateState)
+		req.CustemType = uint64(rpcpb.CreateInstanceStateShard)
 		req.Type = raftcmdpb.Write
 		req.Cmd = protoc.MustMarshal(msg)
-		rpcpb.ReleaseRemoveStateRequest(msg)
+		rpcpb.ReleaseRemoveInstanceStateShardRequest(msg)
+	case *rpcpb.StepInstanceStateShardRequest:
+		msg := cmd.(*rpcpb.StepInstanceStateShardRequest)
+		msg.ID = req.ID
+		req.Key = InstanceStateKey(msg.Event.InstanceID, msg.Start, msg.End)
+		req.CustemType = uint64(rpcpb.StepInstanceStateShard)
+		req.Type = raftcmdpb.Write
+		req.Cmd = protoc.MustMarshal(msg)
+		rpcpb.ReleaseStepInstanceStateShardRequest(msg)
 	case *rpcpb.QueueAddRequest:
 		msg := cmd.(*rpcpb.QueueAddRequest)
 		msg.ID = req.ID
@@ -192,6 +204,10 @@ func (h *beeStorage) AddReadFunc(cmd string, cmdType uint64, cb raftstore.ReadCo
 
 func (h *beeStorage) AddWriteFunc(cmd string, cmdType uint64, cb raftstore.WriteCommandFunc) {
 	h.store.RegisterWriteFunc(cmdType, cb)
+}
+
+func (h *beeStorage) AddLocalFunc(cmd string, cmdType uint64, cb raftstore.LocalCommandFunc) {
+	h.store.RegisterLocalFunc(cmdType, cb)
 }
 
 func (h *beeStorage) WriteBatch() raftstore.CommandWriteBatch {
@@ -306,15 +322,15 @@ func (h *beeStorage) bmrange(shard uint64, req *raftcmdpb.Request) *raftcmdpb.Re
 	return resp
 }
 
-func (h *beeStorage) startWF(shard uint64, req *raftcmdpb.Request) (uint64, int64, *raftcmdpb.Response) {
+func (h *beeStorage) startingInstance(shard uint64, req *raftcmdpb.Request) (uint64, int64, *raftcmdpb.Response) {
 	resp := pb.AcquireResponse()
-	startWF := rpcpb.StartWFRequest{}
+	startWF := rpcpb.StartingInstanceRequest{}
 	protoc.MustUnmarshal(&startWF, req.Cmd)
 
-	customResp := rpcpb.AcquireStartWFResponse()
+	customResp := rpcpb.AcquireStartingInstanceResponse()
 	customResp.ID = startWF.ID
 	resp.Value = protoc.MustMarshal(customResp)
-	rpcpb.ReleaseStartWFResponse(customResp)
+	rpcpb.ReleaseStartingInstanceResponse(customResp)
 
 	value, err := h.getValue(shard, req.Key)
 	if err != nil {
@@ -325,7 +341,7 @@ func (h *beeStorage) startWF(shard uint64, req *raftcmdpb.Request) (uint64, int6
 	}
 
 	value = protoc.MustMarshal(&startWF.Instance)
-	err = h.getStore(shard).Set(req.Key, appendPrefix(value, instanceType))
+	err = h.getStore(shard).Set(req.Key, appendPrefix(value, instanceStartingType))
 	if err != nil {
 		log.Fatalf("save workflow instance %+v failed with %+v", startWF, err)
 	}
@@ -342,33 +358,42 @@ func (h *beeStorage) startWF(shard uint64, req *raftcmdpb.Request) (uint64, int6
 	return writtenBytes, changedBytes, resp
 }
 
-func (h *beeStorage) removeWF(shard uint64, req *raftcmdpb.Request) (uint64, int64, *raftcmdpb.Response) {
+func (h *beeStorage) startedInstance(shard uint64, req *raftcmdpb.Request) (uint64, int64, *raftcmdpb.Response) {
 	resp := pb.AcquireResponse()
-	removeWF := rpcpb.RemoveWFRequest{}
-	protoc.MustUnmarshal(&removeWF, req.Cmd)
+	startedWF := rpcpb.StartedInstanceRequest{}
+	protoc.MustUnmarshal(&startedWF, req.Cmd)
 
-	customResp := rpcpb.AcquireRemoveWFResponse()
-	customResp.ID = removeWF.ID
+	customResp := rpcpb.AcquireStartedInstanceResponse()
+	customResp.ID = startedWF.ID
 	resp.Value = protoc.MustMarshal(customResp)
-	rpcpb.ReleaseRemoveWFResponse(customResp)
+	rpcpb.ReleaseStartedInstanceResponse(customResp)
 
-	err := h.getStore(shard).Delete(req.Key)
+	value, err := h.getValueWithPrefix(shard, req.Key)
 	if err != nil {
-		log.Fatalf("remove workflow instance %d failed with %+v", removeWF.ID, err)
+		log.Fatalf("get workflow instance %d failed with %+v", startedWF.ID, err)
+	}
+	if len(value) == 0 {
+		log.Fatalf("missing workflow instance %d", startedWF.ID)
 	}
 
-	return uint64(len(req.Key)), -int64(len(req.Key)), resp
+	value[0] = instanceStartedType
+	err = h.getStore(shard).Set(req.Key, value)
+	if err != nil {
+		log.Fatalf("set workflow instance %d started failed with %+v", startedWF.ID, err)
+	}
+
+	return uint64(len(req.Key) + len(value)), 0, resp
 }
 
 func (h *beeStorage) createState(shard uint64, req *raftcmdpb.Request) (uint64, int64, *raftcmdpb.Response) {
 	resp := pb.AcquireResponse()
-	createState := rpcpb.CreateStateRequest{}
+	createState := rpcpb.CreateInstanceStateShardRequest{}
 	protoc.MustUnmarshal(&createState, req.Cmd)
 
-	customResp := rpcpb.AcquireCreateStateResponse()
+	customResp := rpcpb.AcquireCreateInstanceStateShardResponse()
 	customResp.ID = createState.ID
 	resp.Value = protoc.MustMarshal(customResp)
-	rpcpb.ReleaseCreateStateResponse(customResp)
+	rpcpb.ReleaseCreateInstanceStateShardResponse(customResp)
 
 	value, err := h.getValue(shard, req.Key)
 	if err != nil {
@@ -398,13 +423,13 @@ func (h *beeStorage) createState(shard uint64, req *raftcmdpb.Request) (uint64, 
 
 func (h *beeStorage) updateState(shard uint64, req *raftcmdpb.Request) (uint64, int64, *raftcmdpb.Response) {
 	resp := pb.AcquireResponse()
-	updateState := rpcpb.UpdateStateRequest{}
+	updateState := rpcpb.UpdateInstanceStateShardRequest{}
 	protoc.MustUnmarshal(&updateState, req.Cmd)
 
-	customResp := rpcpb.AcquireUpdateStateResponse()
+	customResp := rpcpb.AcquireUpdateInstanceStateShardResponse()
 	customResp.ID = updateState.ID
 	resp.Value = protoc.MustMarshal(customResp)
-	rpcpb.ReleaseUpdateStateResponse(customResp)
+	rpcpb.ReleaseUpdateInstanceStateShardResponse(customResp)
 
 	value, err := h.getValue(shard, req.Key)
 	if err != nil {
@@ -426,13 +451,6 @@ func (h *beeStorage) updateState(shard uint64, req *raftcmdpb.Request) (uint64, 
 		log.Fatalf("update workflow instance state %+v failed with %+v", updateState, err)
 	}
 
-	if h.store.MaybeLeader(shard) {
-		h.eventC <- Event{
-			EventType: InstanceStateUpdatedEvent,
-			Data:      updateState.State,
-		}
-	}
-
 	writtenBytes := uint64(len(req.Key) + len(req.Cmd))
 	changedBytes := int64(writtenBytes)
 	return writtenBytes, changedBytes, resp
@@ -440,13 +458,13 @@ func (h *beeStorage) updateState(shard uint64, req *raftcmdpb.Request) (uint64, 
 
 func (h *beeStorage) removeState(shard uint64, req *raftcmdpb.Request) (uint64, int64, *raftcmdpb.Response) {
 	resp := pb.AcquireResponse()
-	removeState := rpcpb.RemoveStateRequest{}
+	removeState := rpcpb.RemoveInstanceStateShardRequest{}
 	protoc.MustUnmarshal(&removeState, req.Cmd)
 
-	customResp := rpcpb.AcquireRemoveStateResponse()
+	customResp := rpcpb.AcquireRemoveInstanceStateShardResponse()
 	customResp.ID = removeState.ID
 	resp.Value = protoc.MustMarshal(customResp)
-	rpcpb.ReleaseRemoveStateResponse(customResp)
+	rpcpb.ReleaseRemoveInstanceStateShardResponse(customResp)
 
 	err := h.getStore(shard).Delete(req.Key)
 	if err != nil {
@@ -537,5 +555,19 @@ func (h *beeStorage) getValue(shard uint64, key []byte) ([]byte, error) {
 	if len(value) == 0 {
 		return nil, nil
 	}
+
 	return value[1:], nil
+}
+
+func (h *beeStorage) getValueWithPrefix(shard uint64, key []byte) ([]byte, error) {
+	value, err := h.getStore(shard).Get(key)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(value) == 0 {
+		return nil, nil
+	}
+
+	return value, nil
 }

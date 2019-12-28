@@ -26,7 +26,7 @@ func (b *executionbatch) next() {
 		TenantID:   b.event.TenantID,
 		WorkflowID: b.event.WorkflowID,
 		InstanceID: b.event.InstanceID,
-		Step:       b.from,
+		Step:       b.to,
 	}
 	if b.crowd != nil {
 		value.Crowd = util.MustMarshalBM(b.crowd)

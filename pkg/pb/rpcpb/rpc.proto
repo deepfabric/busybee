@@ -3,6 +3,7 @@ package rpcpb;
 
 import "github.com/gogo/protobuf/gogoproto/gogo.proto";
 import "github.com/deepfabric/busybee/pkg/pb/metapb/meta.proto";
+import "github.com/deepfabric/busybee/pkg/pb/metapb/api.proto";
 
 option (gogoproto.marshaler_all) = true;
 option (gogoproto.sizer_all) = true;
@@ -23,11 +24,12 @@ enum Type {
     BMCount       = 106;
     BMRange       = 107;
 
-    StartWF       = 200;
-    RemoveWF      = 201;
-    CreateState   = 202;
-    UpdateState   = 203;
-    RemoveState   = 204;
+    StartingInstance         = 200;
+    StartedInstance          = 201;
+    CreateInstanceStateShard = 202;
+    UpdateInstanceStateShard = 203;
+    RemoveInstanceStateShard = 204;
+    StepInstanceStateShard   = 205;
 
     QueueAdd      = 300;
     QueueFetch    = 301;
@@ -166,61 +168,61 @@ message BMRangeResponse {
     repeated uint32 values = 3;
 }
 
-// StartWFRequest start a workflow
-message StartWFRequest {
+// StartingInstanceRequest start a workflow
+message StartingInstanceRequest {
     bytes                   id         = 1 [(gogoproto.customname) = "ID"];
     metapb.WorkflowInstance instance   = 2 [(gogoproto.nullable) = false];
 }
 
-// StartWFResponse response
-message StartWFResponse {
+// StartingInstanceResponse response
+message StartingInstanceResponse {
     bytes id = 1 [(gogoproto.customname) = "ID"];
 }
 
 
-// RemoveWFRequest remove a workflow
-message RemoveWFRequest {
+// StartedInstanceRequest remove a workflow
+message StartedInstanceRequest {
     bytes  id         = 1 [(gogoproto.customname) = "ID"];
     uint64 instanceID = 2;
 }
 
-// RemoveWFResponse response
-message RemoveWFResponse {
+// StartedInstanceResponse response
+message StartedInstanceResponse {
     bytes id = 1 [(gogoproto.customname) = "ID"];
 }
 
-// CreateStateRequest create a instance state
-message CreateStateRequest {
+// CreateInstanceStateShardRequest create a instance state
+message CreateInstanceStateShardRequest {
     bytes                        id    = 1 [(gogoproto.customname) = "ID"];
     metapb.WorkflowInstanceState state = 2 [(gogoproto.nullable) = false];
 }
 
-// CreateStateResponse response
-message CreateStateResponse {
+// CreateInstanceStateShardResponse response
+message CreateInstanceStateShardResponse {
     bytes id = 1 [(gogoproto.customname) = "ID"];
 }
 
-// UpdateStateRequest update a instance state
-message UpdateStateRequest {
+// UpdateInstanceStateShardRequest update a instance state
+message UpdateInstanceStateShardRequest {
     bytes                        id    = 1 [(gogoproto.customname) = "ID"];
     metapb.WorkflowInstanceState state = 2 [(gogoproto.nullable) = false];
 }
 
-// UpdateStateResponse response
-message UpdateStateResponse {
+// UpdateInstanceStateShardResponse response
+message UpdateInstanceStateShardResponse {
     bytes id = 1 [(gogoproto.customname) = "ID"];
 }
 
-// RemoveStateRequest remove a instance state
-message RemoveStateRequest {
+// RemoveInstanceStateShardRequest remove a instance state
+message RemoveInstanceStateShardRequest {
     bytes id          = 1 [(gogoproto.customname) = "ID"];
     uint64 instanceID = 2;
     uint32 start      = 3;
     uint32 end        = 4;
 }
 
-// RemoveStateResponse response
-message RemoveStateResponse {
+// RemoveInstanceStateShardResponse response
+message RemoveInstanceStateShardResponse {
     bytes id = 1 [(gogoproto.customname) = "ID"];
 }
 
@@ -251,4 +253,15 @@ message QueueFetchResponse {
     bytes          id         = 1 [(gogoproto.customname) = "ID"];
     repeated bytes items      = 2;
     uint64         lastOffset = 3;
+}
+
+message StepInstanceStateShardRequest {
+    bytes        id    = 1 [(gogoproto.customname) = "ID"];
+    metapb.Event event = 2 [(gogoproto.nullable) = false];
+    uint32       start = 3;
+    uint32       end   = 4;
+}
+
+message StepInstanceStateShardResponse {
+    bytes        id    = 1 [(gogoproto.customname) = "ID"];
 }

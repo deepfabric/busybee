@@ -21,7 +21,6 @@ const (
 	stopAction = iota
 	timerAction
 	eventAction
-	updateStateAction
 )
 
 type item struct {
@@ -41,7 +40,7 @@ type stateWorker struct {
 	queue      *task.Queue
 }
 
-func newStateWorker(key string, state metapb.WorkflowInstanceState) (*stateWorker, error) {
+func newStateWorker(key string, state metapb.WorkflowInstanceState, eng Engine) (*stateWorker, error) {
 	var stepCrowds []*roaring.Bitmap
 	for _, state := range state.States {
 		stepCrowds = append(stepCrowds, bbutil.MustParseBM(state.Crowd))
@@ -50,6 +49,7 @@ func newStateWorker(key string, state metapb.WorkflowInstanceState) (*stateWorke
 	w := &stateWorker{
 		key:        key,
 		state:      state,
+		eng:        eng,
 		stepCrowds: stepCrowds,
 		steps:      make(map[string]excution),
 		queue:      task.New(1024),
@@ -105,17 +105,8 @@ func (w *stateWorker) run() {
 				case timerAction:
 					w.doStepTimer(batch)
 				case eventAction:
-					select {
-					case <-value.cb.ctx.Done():
-						value.cb.c <- ErrTimeout
-						releaseCB(value.cb)
-					default:
-						batch.cbs = append(batch.cbs, value.cb)
-						w.doStepEvent(value.value.(metapb.Event), batch)
-					}
-				case updateStateAction:
-					w.execBatch(batch)
-					w.doInstanceStateUpdated(value.value.(metapb.WorkflowInstanceState))
+					batch.cbs = append(batch.cbs, value.cb)
+					w.doStepEvent(value.value.(metapb.Event), batch)
 				}
 			}
 
@@ -131,7 +122,7 @@ func (w *stateWorker) execBatch(batch *executionbatch) {
 			log.Fatalf("instance state notify failed with %+v", err)
 		}
 
-		req := rpcpb.AcquireUpdateStateRequest()
+		req := rpcpb.AcquireUpdateInstanceStateShardRequest()
 		req.State = w.state
 		_, err = w.eng.Storage().ExecCommand(req)
 		if err != nil {
@@ -146,16 +137,16 @@ func (w *stateWorker) execBatch(batch *executionbatch) {
 }
 
 func (w *stateWorker) stepChanged(batch *executionbatch) error {
-	for idx, state := range w.state.States {
+	for idx := range w.state.States {
 		changed := false
-		if state.Step.Name == batch.from {
+		if w.state.States[idx].Step.Name == batch.from {
 			changed = true
 			if nil != batch.crowd {
 				w.stepCrowds[idx] = bbutil.BMXOr(w.stepCrowds[idx], batch.crowd)
 			} else {
 				w.stepCrowds[idx].Remove(batch.event.UserID)
 			}
-		} else if state.Step.Name == batch.to {
+		} else if w.state.States[idx].Step.Name == batch.to {
 			changed = true
 			if nil != batch.crowd {
 				w.stepCrowds[idx] = bbutil.BMOr(w.stepCrowds[idx], batch.crowd)
@@ -174,30 +165,12 @@ func (w *stateWorker) stepChanged(batch *executionbatch) error {
 	return nil
 }
 
-func (w *stateWorker) instanceStateUpdated(state metapb.WorkflowInstanceState) {
-	w.queue.Put(item{
-		action: updateStateAction,
-		value:  state,
-	})
-}
-
 func (w *stateWorker) step(event metapb.Event, cb *stepCB) {
 	w.queue.Put(item{
 		action: eventAction,
 		value:  event,
 		cb:     cb,
 	})
-}
-
-func (w *stateWorker) doInstanceStateUpdated(state metapb.WorkflowInstanceState) {
-	if w.state.Version >= state.Version {
-		log.Infof("ignore state, %d >= %d", w.state.Version, state.Version)
-		return
-	}
-
-	for idx, s := range state.States {
-		w.stepCrowds[idx] = bbutil.MustParseBM(s.Crowd)
-	}
 }
 
 func (w *stateWorker) doStepEvent(event metapb.Event, batch *executionbatch) {

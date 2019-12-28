@@ -7,8 +7,6 @@ const (
 	InstanceRemovedEvent
 	// InstanceStateLoadedEvent load a new instance state event
 	InstanceStateLoadedEvent
-	// InstanceStateUpdatedEvent a new instance state updated event
-	InstanceStateUpdatedEvent
 	// InstanceStateRemovedEvent instance state removed to another node event
 	InstanceStateRemovedEvent
 )

@@ -45,11 +45,6 @@ func main() {
 		log.Fatalf("create storage failed with %+v", err)
 	}
 
-	err = store.Start()
-	if err != nil {
-		log.Fatalf("start storage failed with %+v", err)
-	}
-
 	notifier := notify.NewQueueBasedNotifier(store)
 	engine, err := core.NewEngine(store, notifier)
 	if err != nil {

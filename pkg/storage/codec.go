@@ -49,16 +49,18 @@ func (c *codec) Decode(in *goetty.ByteBuf) (bool, interface{}, error) {
 		msg = rpcpb.AcquireBMCountRequest()
 	case rpcpb.BMRange:
 		msg = rpcpb.AcquireBMRangeRequest()
-	case rpcpb.StartWF:
-		msg = rpcpb.AcquireStartWFRequest()
-	case rpcpb.RemoveWF:
-		msg = rpcpb.AcquireRemoveWFRequest()
-	case rpcpb.CreateState:
-		msg = rpcpb.AcquireCreateStateRequest()
-	case rpcpb.UpdateState:
-		msg = rpcpb.AcquireUpdateStateRequest()
-	case rpcpb.RemoveState:
-		msg = rpcpb.AcquireRemoveStateRequest()
+	case rpcpb.StartingInstance:
+		msg = rpcpb.AcquireStartingInstanceRequest()
+	case rpcpb.StartedInstance:
+		msg = rpcpb.AcquireStartedInstanceRequest()
+	case rpcpb.CreateInstanceStateShard:
+		msg = rpcpb.AcquireCreateInstanceStateShardRequest()
+	case rpcpb.UpdateInstanceStateShard:
+		msg = rpcpb.AcquireUpdateInstanceStateShardRequest()
+	case rpcpb.RemoveInstanceStateShard:
+		msg = rpcpb.AcquireRemoveInstanceStateShardRequest()
+	case rpcpb.StepInstanceStateShard:
+		msg = rpcpb.AcquireStepInstanceStateShardRequest()
 	case rpcpb.QueueAdd:
 		msg = rpcpb.AcquireQueueAddRequest()
 	case rpcpb.QueueFetch:
@@ -97,16 +99,18 @@ func (c *codec) Encode(data interface{}, out *goetty.ByteBuf) error {
 		t = rpcpb.BMCount
 	case *rpcpb.BMRangeResponse:
 		t = rpcpb.BMRange
-	case *rpcpb.StartWFResponse:
-		t = rpcpb.StartWF
-	case *rpcpb.RemoveWFResponse:
-		t = rpcpb.RemoveWF
-	case *rpcpb.CreateStateResponse:
-		t = rpcpb.CreateState
-	case *rpcpb.UpdateStateResponse:
-		t = rpcpb.UpdateState
-	case *rpcpb.RemoveStateResponse:
-		t = rpcpb.RemoveState
+	case *rpcpb.StartingInstanceResponse:
+		t = rpcpb.StartingInstance
+	case *rpcpb.StartedInstanceResponse:
+		t = rpcpb.StartedInstance
+	case *rpcpb.CreateInstanceStateShardResponse:
+		t = rpcpb.CreateInstanceStateShard
+	case *rpcpb.UpdateInstanceStateShardResponse:
+		t = rpcpb.UpdateInstanceStateShard
+	case *rpcpb.RemoveInstanceStateShardResponse:
+		t = rpcpb.RemoveInstanceStateShard
+	case *rpcpb.StepInstanceStateShardResponse:
+		t = rpcpb.StepInstanceStateShard
 	case *rpcpb.QueueAddResponse:
 		t = rpcpb.QueueAdd
 	case *rpcpb.QueueFetchResponse:

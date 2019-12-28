@@ -26,7 +26,7 @@ const (
 // Storage storage
 type Storage interface {
 	// Start the storage
-	Start() error
+	Start(raftstore.LocalCommandFunc) error
 	// Close close the storage
 	Close()
 	// WatchInstance watch instance
@@ -79,8 +79,8 @@ func NewStorage(addr string, dataPath string,
 	return h, nil
 }
 
-func (h *beeStorage) Start() error {
-	h.init()
+func (h *beeStorage) Start(stepFunc raftstore.LocalCommandFunc) error {
+	h.init(stepFunc)
 
 	app := server.NewApplication(server.Cfg{
 		Addr:    h.addr,

@@ -27,6 +27,12 @@ type Client interface {
 	DeleteInstance(uint64) error
 	// StartInstance start the instance
 	StartInstance(uint64) error
+	// StepInstance step instance
+	StepInstance(metapb.Event) error
+	// InstanceCount return count info of all steps
+	InstanceCountState(uint64) (metapb.InstanceCountState, error)
+	// InstanceStep return count info of all steps
+	InstanceStepState(uint64, string) (metapb.StepState, error)
 
 	// CreateEventQueue create event queue
 	CreateEventQueue(id uint64) error
@@ -147,6 +153,38 @@ func (c *httpClient) StartInstance(instanceID uint64) error {
 	}
 
 	return readEmptyResult(resp)
+}
+
+func (c *httpClient) StepInstance(event metapb.Event) error {
+	data, err := json.Marshal(&event)
+	if err != nil {
+		return err
+	}
+
+	resp, err := c.doPut(fmt.Sprintf("%s/workflows/instance/%d/step", c.addr, event.InstanceID), data)
+	if err != nil {
+		return err
+	}
+
+	return readEmptyResult(resp)
+}
+
+func (c *httpClient) InstanceCountState(id uint64) (metapb.InstanceCountState, error) {
+	resp, err := c.cli.Get(fmt.Sprintf("%s/workflows/instance/%d/state/count", c.addr, id))
+	if err != nil {
+		return metapb.InstanceCountState{}, err
+	}
+
+	return readInstanceCountStateResultResult(resp)
+}
+
+func (c *httpClient) InstanceStepState(id uint64, step string) (metapb.StepState, error) {
+	resp, err := c.cli.Get(fmt.Sprintf("%s/workflows/instance/%d/state/step/%s", c.addr, id, step))
+	if err != nil {
+		return metapb.StepState{}, err
+	}
+
+	return readInstanceStepStateResultResult(resp)
 }
 
 func (c *httpClient) CreateEventQueue(id uint64) error {

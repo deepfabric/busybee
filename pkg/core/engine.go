@@ -8,6 +8,8 @@ import (
 	"sync"
 
 	"github.com/RoaringBitmap/roaring"
+	"github.com/deepfabric/beehive/pb"
+	"github.com/deepfabric/beehive/pb/raftcmdpb"
 	"github.com/deepfabric/beehive/util"
 	"github.com/deepfabric/busybee/pkg/notify"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
@@ -52,7 +54,7 @@ type Engine interface {
 	// InstanceStepState returns instance step state
 	InstanceStepState(id uint64, name string) (metapb.StepState, error)
 	// Step drivers the workflow instance
-	Step(context.Context, metapb.Event) error
+	Step(metapb.Event) error
 	// Notifier returns notifier
 	Notifier() notify.Notifier
 	// Storage returns storage
@@ -81,9 +83,16 @@ type engine struct {
 	eventC                 chan storage.Event
 	retryNewInstanceC      chan metapb.WorkflowInstance
 	retryCompleteInstanceC chan uint64
+
+	rangeCache sync.Map // instanceID -> []uint32{start, end}
 }
 
 func (eng *engine) Start() error {
+	err := eng.store.Start(eng.doStep)
+	if err != nil {
+		return err
+	}
+
 	eng.runner.RunCancelableTask(eng.handleEvent)
 	return nil
 }
@@ -149,7 +158,7 @@ func (eng *engine) DeleteInstance(id uint64) error {
 	}
 
 	req := rpcpb.AcquireDeleteRequest()
-	req.Key = key
+	req.Key = uint64Key(id)
 	_, err = eng.store.ExecCommand(req)
 	rpcpb.ReleaseDeleteRequest(req)
 	return err
@@ -175,10 +184,11 @@ func (eng *engine) StartInstance(id uint64) error {
 	instance := metapb.WorkflowInstance{}
 	protoc.MustUnmarshal(&instance, value)
 
-	req := rpcpb.AcquireStartWFRequest()
+	req := rpcpb.AcquireStartingInstanceRequest()
 	req.Instance = instance
 	_, err = eng.store.ExecCommand(req)
-	rpcpb.ReleaseStartWFRequest(req)
+	rpcpb.ReleaseStartingInstanceRequest(req)
+
 	return err
 }
 
@@ -277,17 +287,49 @@ func (eng *engine) InstanceStepState(id uint64, name string) (metapb.StepState, 
 	}, nil
 }
 
-func (eng *engine) Step(ctx context.Context, event metapb.Event) error {
+func (eng *engine) Step(event metapb.Event) error {
+	ranges, err := eng.maybeLoadInstanceStateShardRanges(event.InstanceID)
+	if err != nil {
+		return err
+	}
+
+	var start uint32
+	var end uint32
+	for _, r := range ranges {
+		if event.UserID >= r[0] && event.UserID < r[1] {
+			start = r[0]
+			end = r[1]
+			break
+		}
+	}
+
+	if start == 0 && end == 0 {
+		return fmt.Errorf("instance state range not found by user %d", event.InstanceID)
+	}
+
+	req := rpcpb.AcquireStepInstanceStateShardRequest()
+	req.Event = event
+	req.Start = start
+	req.End = end
+
+	_, err = eng.store.ExecCommand(req)
+	rpcpb.ReleaseStepInstanceStateShardRequest(req)
+	return err
+}
+
+func (eng *engine) doStep(id uint64, req *raftcmdpb.Request) (*raftcmdpb.Response, error) {
+	customReq := rpcpb.StepInstanceStateShardRequest{}
+	protoc.MustUnmarshal(&customReq, req.Cmd)
+
 	var cb *stepCB
 	found := false
 	eng.workers.Range(func(key, value interface{}) bool {
 		w := value.(*stateWorker)
-		if w.matches(event.InstanceID, event.UserID) {
+		if w.matches(customReq.Event.InstanceID, customReq.Event.UserID) {
 			found = true
 			cb = acquireCB()
-			cb.ctx = ctx
-			cb.c = make(chan error)
-			w.step(event, cb)
+			cb.c = make(chan struct{})
+			w.step(customReq.Event, cb)
 			return false
 		}
 
@@ -295,10 +337,52 @@ func (eng *engine) Step(ctx context.Context, event metapb.Event) error {
 	})
 
 	if !found {
-		return ErrWorkerNotFound
+		return nil, errWorkerNotFound
 	}
 
-	return cb.wait()
+	cb.wait()
+
+	customResp := rpcpb.AcquireStepInstanceStateShardResponse()
+	customResp.ID = customReq.ID
+	resp := pb.AcquireResponse()
+	resp.Value = protoc.MustMarshal(customResp)
+	rpcpb.ReleaseStepInstanceStateShardResponse(customResp)
+	return resp, nil
+}
+
+func (eng *engine) maybeLoadInstanceStateShardRanges(id uint64) ([][]uint32, error) {
+	if ranges, ok := eng.rangeCache.Load(id); ok {
+		return ranges.([][]uint32), nil
+	}
+
+	value, err := eng.get(storage.InstanceStartKey(id))
+	if err != nil {
+		return nil, err
+	}
+
+	if len(value) == 0 {
+		return nil, fmt.Errorf("instance %d not started", id)
+	}
+
+	instance := metapb.WorkflowInstance{}
+	protoc.MustUnmarshal(&instance, value)
+
+	bm := bbutil.MustParseBM(instance.Crowd)
+	shards := bbutil.BMSplit(bm, instance.MaxPerShard)
+	return eng.addShardRangesToCache(instance.ID, shards), nil
+}
+
+func (eng *engine) addShardRangesToCache(id uint64, shards []*roaring.Bitmap) [][]uint32 {
+	if ranges, ok := eng.rangeCache.Load(id); ok {
+		return ranges.([][]uint32)
+	}
+
+	var ranges [][]uint32
+	for _, shard := range shards {
+		ranges = append(ranges, []uint32{shard.Minimum(), shard.Maximum() + 1})
+	}
+	eng.rangeCache.Store(id, ranges)
+	return ranges
 }
 
 func (eng *engine) Notifier() notify.Notifier {
@@ -354,7 +438,7 @@ func (eng *engine) handleEvent(ctx context.Context) {
 			}
 		case id, ok := <-eng.retryCompleteInstanceC:
 			if ok {
-				eng.doCreateInstanceComplete(id)
+				eng.doCreateInstanceStateShardComplete(id)
 			}
 		}
 	}
@@ -366,8 +450,6 @@ func (eng *engine) doEvent(event storage.Event) {
 		eng.doStartInstance(event.Data.(metapb.WorkflowInstance))
 	case storage.InstanceStateLoadedEvent:
 		eng.doStartInstanceState(event.Data.(metapb.WorkflowInstanceState))
-	case storage.InstanceStateUpdatedEvent:
-		eng.doUpdateInstanceState(event.Data.(metapb.WorkflowInstanceState))
 	case storage.InstanceStateRemovedEvent:
 		eng.doStopInstanceState(event.Data.(metapb.WorkflowInstanceState))
 	}
@@ -379,7 +461,7 @@ func (eng *engine) doStartInstanceState(state metapb.WorkflowInstanceState) {
 		log.Fatalf("BUG: start a exists state worker")
 	}
 
-	w, err := newStateWorker(key, state)
+	w, err := newStateWorker(key, state, eng)
 	if err != nil {
 		log.Errorf("create worker for state %+v failed with %+v",
 			state,
@@ -389,17 +471,6 @@ func (eng *engine) doStartInstanceState(state metapb.WorkflowInstanceState) {
 
 	eng.workers.Store(w.key, w)
 	w.run()
-}
-
-func (eng *engine) doUpdateInstanceState(state metapb.WorkflowInstanceState) {
-	key := workerKey(state)
-	w, ok := eng.workers.Load(key)
-	if !ok {
-		eng.doStartInstanceState(state)
-		return
-	}
-
-	w.(*stateWorker).instanceStateUpdated(state)
 }
 
 func (eng *engine) doStopInstanceState(state metapb.WorkflowInstanceState) {
@@ -413,6 +484,8 @@ func (eng *engine) doStopInstanceState(state metapb.WorkflowInstanceState) {
 func (eng *engine) doStartInstance(instance metapb.WorkflowInstance) {
 	bm := bbutil.MustParseBM(instance.Crowd)
 	shards := bbutil.BMSplit(bm, instance.MaxPerShard)
+	eng.addShardRangesToCache(instance.ID, shards)
+
 	for _, shard := range shards {
 		state := metapb.WorkflowInstanceState{}
 		state.TenantID = instance.Snapshot.TenantID
@@ -434,11 +507,11 @@ func (eng *engine) doStartInstance(instance metapb.WorkflowInstance) {
 		}
 	}
 
-	eng.doCreateInstanceComplete(instance.ID)
+	eng.doCreateInstanceStateShardComplete(instance.ID)
 }
 
 func (eng *engine) doCreateInstanceState(instance metapb.WorkflowInstance, state metapb.WorkflowInstanceState) bool {
-	_, err := eng.store.ExecCommand(&rpcpb.CreateStateRequest{
+	_, err := eng.store.ExecCommand(&rpcpb.CreateInstanceStateShardRequest{
 		State: state,
 	})
 	if err != nil {
@@ -450,8 +523,8 @@ func (eng *engine) doCreateInstanceState(instance metapb.WorkflowInstance, state
 	return true
 }
 
-func (eng *engine) doCreateInstanceComplete(id uint64) {
-	_, err := eng.store.ExecCommand(&rpcpb.RemoveWFRequest{
+func (eng *engine) doCreateInstanceStateShardComplete(id uint64) {
+	_, err := eng.store.ExecCommand(&rpcpb.StartedInstanceRequest{
 		InstanceID: id,
 	})
 	if err != nil {

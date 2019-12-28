@@ -75,16 +75,15 @@ func (h *beeStorage) doLoadEvent(shard beehivemetapb.Shard, remove bool) {
 		}
 
 		switch value[0] {
-		case instanceType:
+		case instanceStartingType:
+			if !remove {
+				break
+			}
+
 			instance := metapb.WorkflowInstance{}
 			protoc.MustUnmarshal(&instance, value[1:])
-
-			et := InstanceLoadedEvent
-			if remove {
-				et = InstanceRemovedEvent
-			}
 			h.eventC <- Event{
-				EventType: et,
+				EventType: InstanceLoadedEvent,
 				Data:      instance,
 			}
 		case stateType:

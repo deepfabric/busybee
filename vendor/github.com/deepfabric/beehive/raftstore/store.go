@@ -62,6 +62,9 @@ type ReadCommandFunc func(uint64, *raftcmdpb.Request) *raftcmdpb.Response
 // that used to modify the size of the current shard
 type WriteCommandFunc func(uint64, *raftcmdpb.Request) (uint64, int64, *raftcmdpb.Response)
 
+// LocalCommandFunc directly exec on local func
+type LocalCommandFunc func(uint64, *raftcmdpb.Request) (*raftcmdpb.Response, error)
+
 // Store manage a set of raft group
 type Store interface {
 	// Start the raft store
@@ -76,6 +79,8 @@ type Store interface {
 	RegisterReadFunc(uint64, ReadCommandFunc)
 	// RegisterWriteFunc register write command handler
 	RegisterWriteFunc(uint64, WriteCommandFunc)
+	// RegisterLocalFunc register local command handler
+	RegisterLocalFunc(uint64, LocalCommandFunc)
 	// OnRequest receive a request, and call cb while the request is completed
 	OnRequest(*raftcmdpb.Request, func(*raftcmdpb.RaftCMDResponse)) error
 	// MetadataStorage returns a MetadataStorage of the shard
@@ -89,6 +94,8 @@ type Store interface {
 	AddShard(metapb.Shard) error
 	// AllocID returns a uint64 id, panic if has a error
 	MustAllocID() uint64
+	// Prophet return current prophet instance
+	Prophet() prophet.Prophet
 }
 
 const (
@@ -126,6 +133,7 @@ type store struct {
 
 	readHandlers  map[uint64]ReadCommandFunc
 	writeHandlers map[uint64]WriteCommandFunc
+	localHandlers map[uint64]LocalCommandFunc
 
 	keyConvertFunc keyConvertFunc
 
@@ -174,6 +182,7 @@ func NewStore(cfg Cfg, opts ...Option) Store {
 
 	s.readHandlers = make(map[uint64]ReadCommandFunc)
 	s.writeHandlers = make(map[uint64]WriteCommandFunc)
+	s.localHandlers = make(map[uint64]LocalCommandFunc)
 	s.runner = task.NewRunner()
 	s.initWorkers()
 	return s
@@ -239,6 +248,10 @@ func (s *store) RegisterWriteFunc(ct uint64, handler WriteCommandFunc) {
 	s.writeHandlers[ct] = handler
 }
 
+func (s *store) RegisterLocalFunc(ct uint64, handler LocalCommandFunc) {
+	s.localHandlers[ct] = handler
+}
+
 func (s *store) OnRequest(req *raftcmdpb.Request, cb func(*raftcmdpb.RaftCMDResponse)) error {
 	if logger.DebugEnabled() {
 		logger.Debugf("received %s", formatRequest(req))
@@ -252,6 +265,16 @@ func (s *store) OnRequest(req *raftcmdpb.Request, cb func(*raftcmdpb.RaftCMDResp
 		}
 
 		return err
+	}
+
+	if h, ok := s.localHandlers[req.CustemType]; ok {
+		rsp, err := h(pr.shardID, req)
+		if err != nil {
+			respWithRetry(req, cb)
+		} else {
+			resp(req, rsp, cb)
+		}
+		return nil
 	}
 
 	return pr.onReq(req, cb)
@@ -300,6 +323,10 @@ func (s *store) MustAllocID() uint64 {
 	}
 
 	return id
+}
+
+func (s *store) Prophet() prophet.Prophet {
+	return s.pd
 }
 
 func (s *store) initWorkers() {

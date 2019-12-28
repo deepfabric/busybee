@@ -1,5 +1,9 @@
 package client
 
+import (
+	"github.com/deepfabric/busybee/pkg/pb/metapb"
+)
+
 type result interface {
 	GetCode() int
 	GetError() string
@@ -26,4 +30,14 @@ type uint64Result struct {
 type bytesResult struct {
 	codeResult
 	Value []byte `json:"value"`
+}
+
+type instanceCountStateResult struct {
+	codeResult
+	Value metapb.InstanceCountState `json:"value"`
+}
+
+type instanceStepStateResult struct {
+	codeResult
+	Value metapb.StepState `json:"value"`
 }
