@@ -16,6 +16,8 @@ github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973/go.mod h1:Dwedo/Wpr24
 github.com/beorn7/perks v1.0.0/go.mod h1:KWe93zE9D1o94FZ5RNwFwVgaQK1VOXiVxmqh+CedLV8=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
 github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=
+github.com/buger/jsonparser v0.0.0-20191204142016-1a29609e0929 h1:MW/JDk68Rny52yI0M0N+P8lySNgB+NhpI/uAmhgOhUM=
+github.com/buger/jsonparser v0.0.0-20191204142016-1a29609e0929/go.mod h1:tgcrVJ81GPSF0mz+0nu1Xaz0fazGPrmmJfJtxjbHhUQ=
 github.com/cespare/xxhash/v2 v2.1.0 h1:yTUvW7Vhb89inJ+8irsUqiWjh8iT6sQPZiQzI6ReGkA=
 github.com/cespare/xxhash/v2 v2.1.0/go.mod h1:dgIUBU3pDso/gPgZ1osOZ0iQf77oPR28Tjxl5dIMyVM=
 github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDkc90ppPyw=
@@ -33,12 +35,6 @@ github.com/cpuguy83/go-md2man v1.0.10/go.mod h1:SmD6nW6nTyfqj6ABTjUi3V3JVMnlJmwc
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/deepfabric/beehive v0.0.0-20191218015628-258b24a154b5 h1:hMWjxNn4wNZl7oWW/dLcZqfIFESW6FdwVbYFc6TYyZo=
-github.com/deepfabric/beehive v0.0.0-20191218015628-258b24a154b5/go.mod h1:G1KtBPn3AgVGwhJlQqBuyYckvBhczNs4n5V6GG1QAbc=
-github.com/deepfabric/beehive v0.0.0-20191220073544-b4be866eb8de h1:jh/lTMWC25r8B/jInCGvgtNBduaw44HIPPx7IbyDu7Y=
-github.com/deepfabric/beehive v0.0.0-20191220073544-b4be866eb8de/go.mod h1:G1KtBPn3AgVGwhJlQqBuyYckvBhczNs4n5V6GG1QAbc=
-github.com/deepfabric/beehive v0.0.0-20191225075505-d3438b121174 h1:PVeeTfOPvkfvH7cyopepd9jR9XMFrjb9DCO76kZNShY=
-github.com/deepfabric/beehive v0.0.0-20191225075505-d3438b121174/go.mod h1:G1KtBPn3AgVGwhJlQqBuyYckvBhczNs4n5V6GG1QAbc=
 github.com/deepfabric/beehive v0.0.0-20191228081930-9b585edfb0fe h1:xbLl2UpNKzuBb9VXo0zb1AR9e989LbfTnLC4uu7FX0Y=
 github.com/deepfabric/beehive v0.0.0-20191228081930-9b585edfb0fe/go.mod h1:G1KtBPn3AgVGwhJlQqBuyYckvBhczNs4n5V6GG1QAbc=
 github.com/deepfabric/c-nemo v0.0.0-20190419083223-23fa413d9df4 h1:r5nY1MRVgtskrh+F4ZXzG1/zgekyJfAI+twMWpfvh04=
