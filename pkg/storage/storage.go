@@ -31,6 +31,12 @@ type Storage interface {
 	Close()
 	// WatchInstance watch instance
 	WatchEvent() chan Event
+	// Set set key value
+	Set([]byte, []byte) error
+	// Get returns the value of key
+	Get([]byte) ([]byte, error)
+	// Delete remove the key from the store
+	Delete([]byte) error
 	// ExecCommand exec command
 	ExecCommand(cmd interface{}) ([]byte, error)
 	// CreateEventQueue create a queue to serve a workflow instance events.
@@ -102,6 +108,39 @@ func (h *beeStorage) Close() {
 	close(h.shardC)
 	close(h.eventC)
 	h.store.Stop()
+}
+
+func (h *beeStorage) Set(key, value []byte) error {
+	req := rpcpb.AcquireSetRequest()
+	req.Key = key
+	req.Value = value
+	_, err := h.ExecCommand(req)
+	rpcpb.ReleaseSetRequest(req)
+	return err
+}
+
+func (h *beeStorage) Get(key []byte) ([]byte, error) {
+	req := rpcpb.AcquireGetRequest()
+	req.Key = key
+	value, err := h.ExecCommand(req)
+	rpcpb.ReleaseGetRequest(req)
+
+	if err != nil {
+		return nil, err
+	}
+
+	resp := rpcpb.GetResponse{}
+	protoc.MustUnmarshal(&resp, value)
+	return resp.Value, nil
+}
+
+func (h *beeStorage) Delete(key []byte) error {
+	req := rpcpb.AcquireDeleteRequest()
+	req.Key = key
+
+	_, err := h.ExecCommand(req)
+	rpcpb.ReleaseDeleteRequest(req)
+	return err
 }
 
 func (h *beeStorage) ExecCommand(cmd interface{}) ([]byte, error) {

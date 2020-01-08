@@ -12,6 +12,7 @@ import (
 	"github.com/deepfabric/beehive/storage/nemo"
 	"github.com/deepfabric/busybee/pkg/api"
 	"github.com/deepfabric/busybee/pkg/core"
+	"github.com/deepfabric/busybee/pkg/crm"
 	"github.com/deepfabric/busybee/pkg/notify"
 	"github.com/deepfabric/busybee/pkg/storage"
 	"github.com/deepfabric/prophet"
@@ -56,7 +57,7 @@ func main() {
 		log.Fatalf("start core engine failed with %+v", err)
 	}
 
-	apiServer, err := api.NewHTTPServer(*apiAddr, engine)
+	apiServer, err := api.NewHTTPServer(*apiAddr, engine, crm.NewService(store))
 	if err != nil {
 		log.Fatalf("start api server failed with %+v", err)
 	}
