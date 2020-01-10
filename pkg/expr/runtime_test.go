@@ -601,3 +601,51 @@ func TestDynamicVar(t *testing.T) {
 	assert.Nil(t, value, "TestDynamicVar failed")
 	assert.True(t, ok, "TestDynamicVar failed")
 }
+
+func TestDynamicVarWithEvent(t *testing.T) {
+	ctx := newTestCtx()
+	ctx.setEventKV("key1", "event-key1")
+	ctx.kvs["prev_event-key1"] = "abc"
+
+	rt, err := NewRuntime(metapb.Expr{
+		Value: []byte("{dyna.prev_%s.event.key1} == abc"),
+	})
+	assert.NoError(t, err, "TestDynamicVarWithEvent failed")
+
+	ok, value, err := rt.Exec(ctx)
+	assert.NoError(t, err, "TestDynamicVarWithEvent failed")
+	assert.Nil(t, value, "TestDynamicVarWithEvent failed")
+	assert.True(t, ok, "TestDynamicVarWithEvent failed")
+}
+
+func TestDynamicVarWithProfile(t *testing.T) {
+	ctx := newTestCtx()
+	ctx.kvs["key1"] = "profile"
+	ctx.kvs["profile_profile"] = "abc"
+
+	rt, err := NewRuntime(metapb.Expr{
+		Value: []byte("{dyna.profile_%s.profile.key1} == abc"),
+	})
+	assert.NoError(t, err, "TestDynamicVarWithProfile failed")
+
+	ok, value, err := rt.Exec(ctx)
+	assert.NoError(t, err, "TestDynamicVarWithProfile failed")
+	assert.Nil(t, value, "TestDynamicVarWithProfile failed")
+	assert.True(t, ok, "TestDynamicVarWithProfile failed")
+}
+
+func TestDynamicVarWithKV(t *testing.T) {
+	ctx := newTestCtx()
+	ctx.kvs["key1"] = "profile"
+	ctx.kvs["kv_profile"] = "abc"
+
+	rt, err := NewRuntime(metapb.Expr{
+		Value: []byte("{dyna.kv_%s.kv.key1} == abc"),
+	})
+	assert.NoError(t, err, "TestDynamicVarWithKV failed")
+
+	ok, value, err := rt.Exec(ctx)
+	assert.NoError(t, err, "TestDynamicVarWithKV failed")
+	assert.Nil(t, value, "TestDynamicVarWithKV failed")
+	assert.True(t, ok, "TestDynamicVarWithKV failed")
+}

@@ -63,11 +63,11 @@ func varExprFactory(data []byte, valueType string) (engine.Expr, error) {
 
 		return newKVVar([]byte(values[1]), valueType), nil
 	case dynaKVVarType:
-		if len(values[1:]) != 2 {
+		if len(values[1:]) < 2 {
 			return nil, fmt.Errorf("dyna var expect dyna.pattern.[year|month|day]")
 		}
 
-		return newDynamicKVVar(values[1], values[2], valueType)
+		return newDynamicKVVar(values[1], values[2:], valueType)
 	case funcVarType:
 		if len(values[1:]) != 1 {
 			return nil, fmt.Errorf("func var expect dyna.pattern.[year|month|day]")
