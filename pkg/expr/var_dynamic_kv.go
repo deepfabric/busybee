@@ -79,13 +79,13 @@ func (v *dynamicKVVar) Exec(data interface{}) (interface{}, error) {
 }
 
 func (v *dynamicKVVar) getCurrentYearKey() []byte {
-	return hack.StringToSlice(fmt.Sprintf(v.dynamic, time.Now().Year()))
+	return hack.StringToSlice(fmt.Sprintf(v.pattern, time.Now().Year()))
 }
 
 func (v *dynamicKVVar) getCurrentMonthKey() []byte {
-	return hack.StringToSlice(fmt.Sprintf(v.dynamic, time.Now().Month()))
+	return hack.StringToSlice(fmt.Sprintf(v.pattern, time.Now().Month()))
 }
 
 func (v *dynamicKVVar) getCurrentDayKey() []byte {
-	return hack.StringToSlice(fmt.Sprintf(v.dynamic, time.Now().Day()))
+	return hack.StringToSlice(fmt.Sprintf(v.pattern, time.Now().Day()))
 }

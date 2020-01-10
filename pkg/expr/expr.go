@@ -15,6 +15,7 @@ const (
 	profileVarType = "profile"
 	kvVarType      = "kv"
 	dynaKVVarType  = "dyna"
+	funcVarType    = "func"
 )
 
 var parser engine.Parser
@@ -67,6 +68,12 @@ func varExprFactory(data []byte, valueType string) (engine.Expr, error) {
 		}
 
 		return newDynamicKVVar(values[1], values[2], valueType)
+	case funcVarType:
+		if len(values[1:]) != 1 {
+			return nil, fmt.Errorf("func var expect dyna.pattern.[year|month|day]")
+		}
+
+		return newFuncVar(values[1], valueType)
 	}
 
 	return nil, fmt.Errorf("%s var not support", values[0])

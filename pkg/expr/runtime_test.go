@@ -1,11 +1,13 @@
 package expr
 
 import (
+	"fmt"
 	"github.com/RoaringBitmap/roaring"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/util"
 	"github.com/stretchr/testify/assert"
 	"testing"
+	"time"
 )
 
 type testCtx struct {
@@ -542,4 +544,60 @@ func TestXor(t *testing.T) {
 	assert.NotNil(t, value, "TestXor failed")
 	assert.True(t, ok, "TestXor failed")
 	assert.Equal(t, uint64(4), value.(*roaring.Bitmap).GetCardinality(), "TestXor failed")
+}
+
+func TestFuncVar(t *testing.T) {
+	ctx := newTestCtx()
+
+	now := time.Now()
+	year := now.Year()
+	rt, err := NewRuntime(metapb.Expr{
+		Value: []byte(fmt.Sprintf("{func.year}==%d", year)),
+	})
+	assert.NoError(t, err, "TestFuncVar failed")
+
+	ok, value, err := rt.Exec(ctx)
+	assert.NoError(t, err, "TestFuncVar failed")
+	assert.Nil(t, value, "TestFuncVar failed")
+	assert.True(t, ok, "TestFuncVar failed")
+
+	month := now.Month()
+	rt, err = NewRuntime(metapb.Expr{
+		Value: []byte(fmt.Sprintf("{func.month}==%d", month)),
+	})
+	assert.NoError(t, err, "TestFuncVar failed")
+
+	ok, value, err = rt.Exec(ctx)
+	assert.NoError(t, err, "TestFuncVar failed")
+	assert.Nil(t, value, "TestFuncVar failed")
+	assert.True(t, ok, "TestFuncVar failed")
+
+	day := now.Day()
+	rt, err = NewRuntime(metapb.Expr{
+		Value: []byte(fmt.Sprintf("{func.day}==%d", day)),
+	})
+	assert.NoError(t, err, "TestFuncVar failed")
+
+	ok, value, err = rt.Exec(ctx)
+	assert.NoError(t, err, "TestFuncVar failed")
+	assert.Nil(t, value, "TestFuncVar failed")
+	assert.True(t, ok, "TestFuncVar failed")
+}
+
+func TestDynamicVar(t *testing.T) {
+	now := time.Now()
+	ctx := newTestCtx()
+	ctx.kvs[fmt.Sprintf("cur_%d", now.Year())] = "123"
+	ctx.kvs[fmt.Sprintf("cur_%d", now.Month())] = "456"
+	ctx.kvs[fmt.Sprintf("cur_%d", now.Day())] = "789"
+
+	rt, err := NewRuntime(metapb.Expr{
+		Value: []byte("({dyna.cur_%d.year}==123) && ({dyna.cur_%d.month}==456) && ({dyna.cur_%d.day}==789)"),
+	})
+	assert.NoError(t, err, "TestDynamicVar failed")
+
+	ok, value, err := rt.Exec(ctx)
+	assert.NoError(t, err, "TestDynamicVar failed")
+	assert.Nil(t, value, "TestDynamicVar failed")
+	assert.True(t, ok, "TestDynamicVar failed")
 }
