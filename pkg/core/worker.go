@@ -5,11 +5,13 @@ import (
 
 	"github.com/RoaringBitmap/roaring"
 	"github.com/deepfabric/beehive/util"
+	"github.com/deepfabric/busybee/pkg/expr"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	bbutil "github.com/deepfabric/busybee/pkg/util"
 	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/log"
+	"github.com/fagongzi/util/hack"
 	"github.com/fagongzi/util/task"
 )
 
@@ -59,7 +61,7 @@ func newStateWorker(key string, state metapb.WorkflowInstanceState, eng Engine) 
 	}
 
 	for _, stepState := range state.States {
-		exec, err := newExcution(stepState.Step.Name, stepState.Step.Execution, w)
+		exec, err := newExcution(stepState.Step.Name, stepState.Step.Execution)
 		if err != nil {
 			return nil, err
 		}
@@ -176,7 +178,8 @@ func (w *stateWorker) step(event metapb.Event, cb *stepCB) {
 func (w *stateWorker) doStepEvent(event metapb.Event, batch *executionbatch) {
 	for idx, crowd := range w.stepCrowds {
 		if crowd.Contains(event.UserID) {
-			err := w.steps[w.state.States[idx].Step.Name].Execute(event, w.stepChanged, batch)
+			err := w.steps[w.state.States[idx].Step.Name].Execute(newExprCtx(event, w.eng),
+				w.stepChanged, batch)
 			if err != nil {
 				log.Errorf("step event %+v failed with %+v", event, err)
 			}
@@ -186,11 +189,14 @@ func (w *stateWorker) doStepEvent(event metapb.Event, batch *executionbatch) {
 }
 
 func (w *stateWorker) doStepTimer(batch *executionbatch) {
-	err := w.steps[w.state.States[0].Step.Name].Execute(metapb.Event{
+	event := metapb.Event{
 		TenantID:   w.state.TenantID,
 		InstanceID: w.state.InstanceID,
 		WorkflowID: w.state.WorkflowID,
-	}, w.stepChanged, batch)
+	}
+
+	err := w.steps[w.state.States[0].Step.Name].Execute(newExprCtx(event, w.eng),
+		w.stepChanged, batch)
 	if err != nil {
 		log.Errorf("worker trigger timer failed with %+v", err)
 	}
@@ -211,17 +217,35 @@ func (w *stateWorker) doTimeout(arg interface{}) {
 	})
 }
 
-func (w *stateWorker) Bitmap(key []byte) (*roaring.Bitmap, error) {
-	req := rpcpb.AcquireGetRequest()
-	req.Key = key
-	value, err := w.eng.Storage().ExecCommand(req)
+type exprCtx struct {
+	event metapb.Event
+	eng   Engine
+}
+
+func newExprCtx(event metapb.Event, eng Engine) expr.Ctx {
+	return &exprCtx{
+		event: event,
+		eng:   eng,
+	}
+}
+
+func (c *exprCtx) Event() metapb.Event {
+	return c.event
+}
+
+func (c *exprCtx) Profile(key []byte) ([]byte, error) {
+	values, err := c.eng.Service().GetProfileField(c.event.TenantID, c.event.UserID, hack.SliceToString(key))
 	if err != nil {
 		return nil, err
 	}
 
-	if len(value) == 0 {
-		return bbutil.AcquireBitmap(), nil
+	if len(values) == 0 {
+		return nil, nil
 	}
 
-	return bbutil.MustParseBM(value), nil
+	return hack.StringToSlice(values[0]), nil
+}
+
+func (c *exprCtx) KV(key []byte) ([]byte, error) {
+	return c.eng.Storage().Get(key)
 }

@@ -32,7 +32,7 @@ func (s *httpServer) updateMapping(c echo.Context) error {
 		})
 	}
 
-	err = s.service.UpdateMapping(tid, values)
+	err = s.engine.Service().UpdateMapping(tid, values)
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
 			Code:  codeFailed,
@@ -76,7 +76,7 @@ func (s *httpServer) getMapping(c echo.Context) error {
 		})
 	}
 
-	value, err := s.service.GetIDValue(tid, metapb.IDValue{
+	value, err := s.engine.Service().GetIDValue(tid, metapb.IDValue{
 		Value: fromValue,
 		Type:  uint32(fromType),
 	}, uint32(toType))
@@ -120,7 +120,7 @@ func (s *httpServer) updateProfile(c echo.Context) error {
 		})
 	}
 
-	err = s.service.UpdateProfile(tid, uint32(uid), value)
+	err = s.engine.Service().UpdateProfile(tid, uint32(uid), value)
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
 			Code:  codeFailed,

@@ -110,47 +110,14 @@ message ConditionExecution {
     string    nextStep  = 3;
 }
 
-// ExprParmeterType
-enum ExprParmeterType {
-    String = 0;
-    Number = 1;
-    Bitmap = 2;
-}
-
-// ExprCMP expr cmp operation
-enum ExprCMP {
-    Equal     = 0;
-    LT        = 1;
-    LE        = 2;
-    GT        = 3;
-    GE        = 4;
-    Match     = 5;
-}
-
-// ExprOp operation with sources
-enum ExprOp {
-    Empty    = 0;
-    BMAnd    = 1;
-    BMOr     = 2;
-    BMXor    = 3;
-    BMAndNot = 4;
-}
-
-// ExprFunc operation func
-enum ExprFunc {
-    First = 0;
-    Max   = 1;
-    Min   = 2;
-    Count = 3;
-    Avg   = 4;
+// ExprResultType expr execute type
+enum ExprResultType {
+    BoolResult = 0;
+    BMResult   = 1;
 }
 
 // Expr expr
 message Expr {
-    repeated string  sources = 1;
-    ExprOp           op      = 2;
-    ExprFunc         func    = 3;
-    ExprCMP          cmp     = 4;
-    string           expect  = 5;
-    ExprParmeterType type    = 6;
+    bytes          value = 1;
+    ExprResultType type  = 2;
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/deepfabric/beehive/pb"
 	"github.com/deepfabric/beehive/pb/raftcmdpb"
 	"github.com/deepfabric/beehive/util"
+	"github.com/deepfabric/busybee/pkg/crm"
 	"github.com/deepfabric/busybee/pkg/notify"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
@@ -59,6 +60,8 @@ type Engine interface {
 	Notifier() notify.Notifier
 	// Storage returns storage
 	Storage() storage.Storage
+	// Service returns a crm service
+	Service() crm.Service
 }
 
 // NewEngine returns a engine
@@ -70,12 +73,14 @@ func NewEngine(store storage.Storage, notifier notify.Notifier) (Engine, error) 
 		retryNewInstanceC:      make(chan metapb.WorkflowInstance, 1024),
 		retryCompleteInstanceC: make(chan uint64, 1024),
 		runner:                 task.NewRunner(),
+		service:                crm.NewService(store),
 	}, nil
 }
 
 type engine struct {
 	opts     options
 	store    storage.Storage
+	service  crm.Service
 	notifier notify.Notifier
 	runner   *task.Runner
 
@@ -391,6 +396,10 @@ func (eng *engine) Notifier() notify.Notifier {
 
 func (eng *engine) Storage() storage.Storage {
 	return eng.store
+}
+
+func (eng *engine) Service() crm.Service {
+	return eng.service
 }
 
 func uint64Key(id uint64) []byte {

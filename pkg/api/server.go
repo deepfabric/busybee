@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/deepfabric/busybee/pkg/core"
-	"github.com/deepfabric/busybee/pkg/crm"
 	"github.com/fagongzi/log"
 	"github.com/labstack/echo"
 )
@@ -21,19 +20,17 @@ type Server interface {
 }
 
 type httpServer struct {
-	addr    string
-	http    *echo.Echo
-	engine  core.Engine
-	service crm.Service
+	addr   string
+	http   *echo.Echo
+	engine core.Engine
 }
 
 // NewHTTPServer create a http restful server
-func NewHTTPServer(addr string, engine core.Engine, service crm.Service) (Server, error) {
+func NewHTTPServer(addr string, engine core.Engine) (Server, error) {
 	return &httpServer{
-		addr:    addr,
-		http:    echo.New(),
-		engine:  engine,
-		service: service,
+		addr:   addr,
+		http:   echo.New(),
+		engine: engine,
 	}, nil
 }
 

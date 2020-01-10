@@ -9,12 +9,10 @@ import (
 type stepChangedFunc func(batch *executionbatch) error
 
 type excution interface {
-	Execute(metapb.Event, stepChangedFunc, *executionbatch) error
+	Execute(expr.Ctx, stepChangedFunc, *executionbatch) error
 }
 
-func newExcution(currentStep string,
-	exec metapb.Execution,
-	fetcher expr.ValueFetcher) (excution, error) {
+func newExcution(currentStep string, exec metapb.Execution) (excution, error) {
 	switch exec.Type {
 	case metapb.Direct:
 		return &directExecution{
@@ -24,7 +22,7 @@ func newExcution(currentStep string,
 	case metapb.Timer:
 		var exprRuntime expr.Runtime
 		if exec.Timer.Condition != nil {
-			r, err := expr.NewRuntime(*exec.Timer.Condition, fetcher)
+			r, err := expr.NewRuntime(*exec.Timer.Condition)
 			if err != nil {
 				return nil, err
 			}
@@ -41,12 +39,12 @@ func newExcution(currentStep string,
 	case metapb.Branch:
 		value := &branchExecution{}
 		for _, branch := range exec.Branches {
-			r, err := expr.NewRuntime(branch.Condition, fetcher)
+			r, err := expr.NewRuntime(branch.Condition)
 			if err != nil {
 				return nil, err
 			}
 
-			exec, err := newExcution(currentStep, branch.Execution, fetcher)
+			exec, err := newExcution(currentStep, branch.Execution)
 			if err != nil {
 				return nil, err
 			}
@@ -64,7 +62,7 @@ func newExcution(currentStep string,
 			nextStep: exec.Parallel.NextStep,
 		}
 		for _, parallel := range exec.Parallel.Parallels {
-			exec, err := newExcution(currentStep, parallel, fetcher)
+			exec, err := newExcution(currentStep, parallel)
 			if err != nil {
 				return nil, err
 			}
@@ -83,8 +81,8 @@ type directExecution struct {
 	nextStep string
 }
 
-func (e *directExecution) Execute(event metapb.Event, cb stepChangedFunc, batch *executionbatch) error {
-	batch.event = event
+func (e *directExecution) Execute(ctx expr.Ctx, cb stepChangedFunc, batch *executionbatch) error {
+	batch.event = ctx.Event()
 	batch.from = e.step
 	batch.to = e.nextStep
 	return cb(batch)
@@ -95,9 +93,9 @@ type conditionExecution struct {
 	exec          excution
 }
 
-func (e *conditionExecution) Execute(event metapb.Event, cb stepChangedFunc, batch *executionbatch) error {
+func (e *conditionExecution) Execute(ctx expr.Ctx, cb stepChangedFunc, batch *executionbatch) error {
 	if e.conditionExpr != nil {
-		matches, value, err := e.conditionExpr.Exec(&event)
+		matches, value, err := e.conditionExpr.Exec(ctx)
 		if err != nil {
 			return err
 		}
@@ -108,20 +106,20 @@ func (e *conditionExecution) Execute(event metapb.Event, cb stepChangedFunc, bat
 
 		if bm, ok := value.(*roaring.Bitmap); ok {
 			batch.crowd = bm
-			return e.exec.Execute(event, cb, batch)
+			return e.exec.Execute(ctx, cb, batch)
 		}
 	}
 
-	return e.exec.Execute(event, cb, batch)
+	return e.exec.Execute(ctx, cb, batch)
 }
 
 type branchExecution struct {
 	branches []excution
 }
 
-func (e *branchExecution) Execute(event metapb.Event, cb stepChangedFunc, batch *executionbatch) error {
+func (e *branchExecution) Execute(ctx expr.Ctx, cb stepChangedFunc, batch *executionbatch) error {
 	for _, exec := range e.branches {
-		err := exec.Execute(event, cb, batch)
+		err := exec.Execute(ctx, cb, batch)
 		if err != nil {
 			return err
 		}
@@ -136,16 +134,16 @@ type parallelExecution struct {
 	exectuors []excution
 }
 
-func (e *parallelExecution) Execute(event metapb.Event, cb stepChangedFunc, batch *executionbatch) error {
+func (e *parallelExecution) Execute(ctx expr.Ctx, cb stepChangedFunc, batch *executionbatch) error {
 	for _, exec := range e.exectuors {
-		err := exec.Execute(event, cb, batch)
+		err := exec.Execute(ctx, cb, batch)
 		if err != nil {
 			return err
 		}
 
 	}
 
-	batch.event = event
+	batch.event = ctx.Event()
 	batch.from = e.step
 	batch.to = e.nextStep
 	return cb(batch)
