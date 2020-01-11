@@ -10,11 +10,11 @@ import (
 
 // func.name
 type funcVar struct {
-	valueType string
+	valueType engine.VarType
 	dynaFunc  func() interface{}
 }
 
-func newFuncVar(name string, valueType string) (engine.Expr, error) {
+func newFuncVar(name string, valueType engine.VarType) (engine.Expr, error) {
 	expr := &funcVar{
 		valueType: valueType,
 	}
@@ -39,15 +39,7 @@ func (v *funcVar) Exec(data interface{}) (interface{}, error) {
 		log.Fatalf("BUG: invalid expr ctx type %T", ctx)
 	}
 
-	value := v.dynaFunc()
-	switch v.valueType {
-	case stringVar:
-		return toString(value)
-	case int64Var:
-		return toInt64(value)
-	default:
-		return nil, fmt.Errorf("not support var type %s", v.valueType)
-	}
+	return convertByType(v.dynaFunc(), v.valueType)
 }
 
 func yearFunc() interface{} {

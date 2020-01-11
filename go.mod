@@ -7,7 +7,7 @@ require (
 	github.com/buger/jsonparser v0.0.0-20191204142016-1a29609e0929
 	github.com/deepfabric/beehive v0.0.0-20191228081930-9b585edfb0fe
 	github.com/deepfabric/prophet v0.0.0-20191202055442-cec7351ee5cf
-	github.com/fagongzi/expr v0.0.0-20200110083857-42290a13b2df
+	github.com/fagongzi/expr v0.0.0-20200111075459-07c398caf2cb
 	github.com/fagongzi/goetty v1.3.2
 	github.com/fagongzi/log v0.0.0-20191122063922-293b75312445
 	github.com/fagongzi/util v0.0.0-20191031020235-c0f29a56724d

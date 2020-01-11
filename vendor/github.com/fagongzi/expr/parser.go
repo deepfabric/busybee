@@ -2,23 +2,36 @@ package expr
 
 import (
 	"fmt"
+	"regexp"
 
 	"github.com/fagongzi/util/format"
 )
 
 const (
 	tokenUnknown    = 10000
-	tokenLeftParen  = 1 // (
-	tokenRightParen = 2 // )
-	tokenVarStart   = 3 // {
-	tokenVarEnd     = 4 // }
-	tokenLiteral    = 5 // "
+	tokenLeftParen  = 1
+	tokenRightParen = 2
+	tokenVarStart   = 3
+	tokenVarEnd     = 4
+	tokenLiteral    = 5
+	tokenRegexp     = 6
 	tokenCustom     = 100
 
 	slash                    = '\\'
 	quotation                = '"'
+	vertical                 = '|'
 	quotationConversion byte = 0x00
 	slashConversion     byte = 0x01
+	verticalConversion  byte = 0x02
+)
+
+var (
+	symbolLeftParen  = []byte("(")
+	symbolRightParen = []byte(")")
+	symbolVarStart   = []byte("{")
+	symbolVarEnd     = []byte("}")
+	symbolLiteral    = []byte{quotation}
+	symbolRegexp     = []byte{vertical}
 )
 
 // CalcFunc a calc function returns a result
@@ -26,8 +39,6 @@ type CalcFunc func(interface{}, Expr, interface{}) (interface{}, error)
 
 // Parser expr parser
 type Parser interface {
-	AddOP(string, CalcFunc)
-	ValueType(...string)
 	Parse([]byte) (Expr, error)
 }
 
@@ -40,65 +51,88 @@ type parser struct {
 }
 
 type parserTemplate struct {
+	opts             *options
 	startToken       int
 	startConversion  byte
 	opsTokens        map[int]string
 	opsFunc          map[int]CalcFunc
-	valueTypes       map[int]string
-	defaultValueType string
+	varTypes         map[int]VarType
+	varTokens        map[int]string
+	defaultValueType VarType
 	factory          VarExprFactory
 }
 
 // NewParser returns a expr parser
-func NewParser(factory VarExprFactory) Parser {
+func NewParser(factory VarExprFactory, opts ...Option) Parser {
 	p := &parserTemplate{
+		opts:       newOptions(),
 		factory:    factory,
 		opsTokens:  make(map[int]string),
 		opsFunc:    make(map[int]CalcFunc),
-		valueTypes: make(map[int]string),
+		varTypes:   make(map[int]VarType),
+		varTokens:  make(map[int]string),
 		startToken: tokenCustom,
 	}
 
+	for _, opt := range opts {
+		opt(p.opts)
+	}
+
+	p.init()
 	return p
 }
 
-func (p *parserTemplate) AddOP(op string, calcFunc CalcFunc) {
+func (p *parserTemplate) init() {
+	for op, opFunc := range p.opts.ops {
+		p.addOP(op, opFunc)
+	}
+
+	for symbol, valueType := range p.opts.typs {
+		p.addVarType(symbol, valueType)
+	}
+}
+
+func (p *parserTemplate) addOP(op string, calcFunc CalcFunc) {
 	p.startToken++
 	p.opsTokens[p.startToken] = op
 	p.opsFunc[p.startToken] = calcFunc
 }
 
-func (p *parserTemplate) ValueType(types ...string) {
-	if len(types) == 0 {
-		return
+func (p *parserTemplate) addVarType(symbol string, varType VarType) {
+	if len(p.varTypes) == 0 {
+		p.defaultValueType = varType
 	}
 
-	p.defaultValueType = types[0]
-	for _, t := range types {
-		p.startToken++
-		p.valueTypes[p.startToken] = t
-	}
+	p.startToken++
+	p.varTokens[p.startToken] = symbol
+	p.varTypes[p.startToken] = varType
 }
 
 func (p *parserTemplate) Parse(input []byte) (Expr, error) {
 	return p.newParser(input).parse()
 }
 
-func (p *parserTemplate) newParser(input []byte) *parser {
-	lexer := NewScanner(conversion(input))
-	lexer.AddSymbol([]byte("("), tokenLeftParen)
-	lexer.AddSymbol([]byte(")"), tokenRightParen)
-	lexer.AddSymbol([]byte("{"), tokenVarStart)
-	lexer.AddSymbol([]byte("}"), tokenVarEnd)
-	lexer.AddSymbol([]byte("\""), tokenLiteral)
+func (p *parserTemplate) registerInternal(lexer Lexer) {
+	lexer.AddSymbol(symbolLeftParen, tokenLeftParen)
+	lexer.AddSymbol(symbolRightParen, tokenRightParen)
+	lexer.AddSymbol(symbolVarStart, tokenVarStart)
+	lexer.AddSymbol(symbolVarEnd, tokenVarEnd)
+	lexer.AddSymbol(symbolLiteral, tokenLiteral)
+	lexer.AddSymbol(symbolRegexp, tokenRegexp)
 
 	for tokenValue, token := range p.opsTokens {
 		lexer.AddSymbol([]byte(token), tokenValue)
 	}
 
-	for tokenValue, token := range p.valueTypes {
+	for tokenValue, token := range p.varTokens {
+		p.startToken++
 		lexer.AddSymbol([]byte(token), tokenValue)
 	}
+}
+
+func (p *parserTemplate) newParser(input []byte) *parser {
+	lexer := NewScanner(conversion(input))
+	p.registerInternal(lexer)
 
 	return &parser{
 		expr:      &node{},
@@ -123,11 +157,13 @@ func (p *parser) parse() (Expr, error) {
 			err = p.doVarStart()
 		} else if token == tokenLiteral {
 			err = p.doLiteral()
+		} else if token == tokenRegexp {
+			err = p.doRegexp()
 		} else if token == tokenVarEnd {
 			err = p.doVarEnd()
 		} else if _, ok := p.template.opsTokens[token]; ok {
 			err = p.doOp()
-		} else if _, ok := p.template.valueTypes[token]; ok {
+		} else if _, ok := p.template.varTypes[token]; ok {
 			err = p.doVarType()
 		} else if token == TokenEOI {
 			err = p.doEOI()
@@ -142,7 +178,7 @@ func (p *parser) parse() (Expr, error) {
 			return nil, err
 		}
 
-		if token != tokenLiteral {
+		if token != tokenLiteral && token != tokenRegexp {
 			p.prevToken = token
 		}
 	}
@@ -171,7 +207,11 @@ func (p *parser) doRightParen() error {
 		p.stack.pop()
 		p.lexer.SkipString()
 	} else if fn, ok := p.template.opsFunc[p.prevToken]; ok { // (a + b)
-		p.stack.current().appendWithOP(fn, newConstExpr(p.lexer.ScanString()))
+		expr, err := newConstExpr(p.lexer.ScanString())
+		if err != nil {
+			return err
+		}
+		p.stack.current().appendWithOP(fn, expr)
 		p.stack.pop()
 	} else {
 		return fmt.Errorf("unexpect token <%s> before %d",
@@ -218,11 +258,30 @@ func (p *parser) doLiteral() error {
 	return nil
 }
 
+func (p *parser) doRegexp() error {
+	if _, ok := p.template.opsFunc[p.prevToken]; ok { // a + /
+		for {
+			p.lexer.NextToken()
+			if p.lexer.Token() == TokenEOI {
+				return fmt.Errorf("missing /")
+			} else if p.lexer.Token() == tokenRegexp {
+				break
+			}
+		}
+	} else {
+		return fmt.Errorf("unexpect token <%s> before %d",
+			p.lexer.TokenSymbol(p.prevToken),
+			p.lexer.TokenIndex())
+	}
+
+	return nil
+}
+
 func (p *parser) doVarEnd() error {
 	varType := p.template.defaultValueType
 	if p.prevToken == tokenVarStart { // {a}
 
-	} else if t, ok := p.template.valueTypes[p.prevToken]; ok {
+	} else if t, ok := p.template.varTypes[p.prevToken]; ok {
 		varType = t
 	} else {
 		return fmt.Errorf("unexpect token <%s> before %d",
@@ -243,13 +302,25 @@ func (p *parser) doVarEnd() error {
 func (p *parser) doOp() error {
 	var err error
 	if p.prevToken == tokenUnknown { // 1 +
-		p.stack.current().append(newConstExpr(p.lexer.ScanString()))
+		expr, err := newConstExpr(p.lexer.ScanString())
+		if err != nil {
+			return err
+		}
+		p.stack.current().append(expr)
 	} else if p.prevToken == tokenLeftParen { // (a+
-		p.stack.current().append(newConstExpr(p.lexer.ScanString()))
+		expr, err := newConstExpr(p.lexer.ScanString())
+		if err != nil {
+			return err
+		}
+		p.stack.current().append(expr)
 	} else if p.prevToken == tokenRightParen { // (a+1) +
 		p.lexer.SkipString()
 	} else if fn, ok := p.template.opsFunc[p.prevToken]; ok { // a + b +
-		p.stack.current().appendWithOP(fn, newConstExpr(p.lexer.ScanString()))
+		expr, err := newConstExpr(p.lexer.ScanString())
+		if err != nil {
+			return err
+		}
+		p.stack.current().appendWithOP(fn, expr)
 	} else if p.prevToken == tokenVarEnd { // {a} +
 		p.lexer.SkipString()
 	} else {
@@ -278,7 +349,11 @@ func (p *parser) doEOI() error {
 	if p.prevToken == tokenRightParen || p.prevToken == tokenVarEnd { // (a+b)
 
 	} else if fn, ok := p.template.opsFunc[p.prevToken]; ok { // a + b
-		p.stack.current().appendWithOP(fn, newConstExpr(p.lexer.ScanString()))
+		expr, err := newConstExpr(p.lexer.ScanString())
+		if err != nil {
+			return err
+		}
+		p.stack.current().appendWithOP(fn, expr)
 	} else {
 		return fmt.Errorf("unexpect token <%s> before %d",
 			p.lexer.TokenSymbol(p.prevToken),
@@ -288,11 +363,22 @@ func (p *parser) doEOI() error {
 	return nil
 }
 
-func newConstExpr(value []byte) Expr {
+func newConstExpr(value []byte) (Expr, error) {
 	if len(value) >= 2 && value[0] == quotation && value[len(value)-1] == quotation {
 		return &constString{
 			value: string(revertConversion(value[1 : len(value)-1])),
+		}, nil
+	}
+
+	if len(value) >= 2 && value[0] == vertical && value[len(value)-1] == vertical {
+		pattern, err := regexp.Compile(string(revertConversion(value[1 : len(value)-1])))
+		if err != nil {
+			return nil, err
 		}
+
+		return &constRegexp{
+			value: pattern,
+		}, nil
 	}
 
 	strValue := string(value)
@@ -300,12 +386,12 @@ func newConstExpr(value []byte) Expr {
 	if err != nil {
 		return &constString{
 			value: strValue,
-		}
+		}, nil
 	}
 
 	return &constInt64{
 		value: int64Value,
-	}
+	}, nil
 }
 
 func revertConversion(src []byte) []byte {
@@ -315,6 +401,8 @@ func revertConversion(src []byte) []byte {
 			dst = append(dst, slash)
 		} else if v == quotationConversion {
 			dst = append(dst, quotation)
+		} else if v == verticalConversion {
+			dst = append(dst, vertical)
 		} else {
 			dst = append(dst, v)
 		}
@@ -326,6 +414,7 @@ func revertConversion(src []byte) []byte {
 func conversion(src []byte) []byte {
 	// \" -> 0x00
 	// \\ -> \
+	// \/ -> 0x01
 	var dst []byte
 	for {
 		if len(src) == 0 {
@@ -345,6 +434,8 @@ func conversion(src []byte) []byte {
 			dst = append(dst, slashConversion)
 		} else if src[0] == slash && src[1] == quotation {
 			dst = append(dst, quotationConversion)
+		} else if src[0] == slash && src[1] == vertical {
+			dst = append(dst, verticalConversion)
 		} else {
 			dst = append(dst, src[0:2]...)
 		}

@@ -18,30 +18,38 @@ const (
 	funcVarType    = "func"
 )
 
+var (
+	bmType = engine.VarType(3)
+)
+
 var parser engine.Parser
 
 func init() {
-	parser = engine.NewParser(varExprFactory)
-	parser.AddOP("+", add)
-	parser.AddOP("-", minus)
-	parser.AddOP("*", multiplication)
-	parser.AddOP("/", division)
-	parser.AddOP(">", gt)
-	parser.AddOP(">=", ge)
-	parser.AddOP("<", lt)
-	parser.AddOP("<=", le)
-	parser.AddOP("==", equal)
-	parser.AddOP("!=", notEqual)
-	parser.AddOP("~", match)
-	parser.AddOP("!~", notMatch)
-	parser.AddOP("&&", logicAnd)
-	parser.AddOP("||", logicOr)
-	parser.AddOP("!&&", andnot)
-	parser.AddOP("^||", xor)
-	parser.ValueType("str:", "num:", "bm:")
+	parser = engine.NewParser(varExprFactory,
+		engine.WithOp("+", add),
+		engine.WithOp("-", minus),
+		engine.WithOp("*", multiplication),
+		engine.WithOp("/", division),
+		engine.WithOp(">", gt),
+		engine.WithOp(">=", ge),
+		engine.WithOp("<", lt),
+		engine.WithOp("<=", le),
+		engine.WithOp("==", equal),
+		engine.WithOp("!=", notEqual),
+		engine.WithOp("~", match),
+		engine.WithOp("!~", notMatch),
+		engine.WithOp("&&", logicAnd),
+		engine.WithOp("||", logicOr),
+		engine.WithOp("!&", andnot),
+		engine.WithOp("^|", xor),
+		engine.WithVarType("str:", engine.Str),
+		engine.WithVarType("num:", engine.Num),
+		engine.WithVarType("reg:", engine.Regexp),
+		engine.WithVarType("bm:", bmType),
+	)
 }
 
-func varExprFactory(data []byte, valueType string) (engine.Expr, error) {
+func varExprFactory(data []byte, valueType engine.VarType) (engine.Expr, error) {
 	values := strings.Split(string(data), ".")
 	switch values[0] {
 	case eventVarType:

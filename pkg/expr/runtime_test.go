@@ -425,6 +425,16 @@ func TestMatch(t *testing.T) {
 	assert.NoError(t, err, "TestMatch failed")
 	assert.Nil(t, value, "TestMatch failed")
 	assert.True(t, ok, "TestMatch failed")
+
+	rt, err = NewRuntime(metapb.Expr{
+		Value: []byte(`{kv.key1} ~ |^[0-9]*$|`),
+	})
+	assert.NoError(t, err, "TestMatch failed")
+
+	ok, value, err = rt.Exec(ctx)
+	assert.NoError(t, err, "TestMatch failed")
+	assert.Nil(t, value, "TestMatch failed")
+	assert.True(t, ok, "TestMatch failed")
 }
 
 func TestNotMatch(t *testing.T) {
@@ -534,7 +544,7 @@ func TestXor(t *testing.T) {
 	ctx.kvs["key2"] = string(util.MustMarshalBM(roaring.BitmapOf(3, 4, 5)))
 
 	rt, err := NewRuntime(metapb.Expr{
-		Value: []byte(`{bm:kv.key1} ^|| {bm:kv.key2}`),
+		Value: []byte(`{bm:kv.key1} ^| {bm:kv.key2}`),
 		Type:  metapb.BMResult,
 	})
 	assert.NoError(t, err, "TestXor failed")

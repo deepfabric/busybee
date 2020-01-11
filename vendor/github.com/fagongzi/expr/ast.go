@@ -1,32 +1,6 @@
 package expr
 
-type valueType int
-type cmp int
-type logic int
-
-var (
-	stringValue = valueType(0)
-	numberValue = valueType(1)
-	regexpValue = valueType(2)
-)
-
-var (
-	equal    = cmp(0) // ==
-	notEqual = cmp(1) // !=
-	gt       = cmp(2) // >
-	ge       = cmp(3) // >=
-	lt       = cmp(4) // <
-	le       = cmp(5) // <=
-	in       = cmp(6) // in
-	notIn    = cmp(7) // !in
-	match    = cmp(8) // ~
-	notMatch = cmp(9) // !~
-)
-
-var (
-	and = logic(0)
-	or  = logic(1)
-)
+import "regexp"
 
 // Expr expr
 type Expr interface {
@@ -34,7 +8,7 @@ type Expr interface {
 }
 
 // VarExprFactory factory method
-type VarExprFactory func([]byte, string) (Expr, error)
+type VarExprFactory func([]byte, VarType) (Expr, error)
 
 type stack struct {
 	nodes []*node
@@ -113,5 +87,13 @@ type constInt64 struct {
 }
 
 func (expr *constInt64) Exec(ctx interface{}) (interface{}, error) {
+	return expr.value, nil
+}
+
+type constRegexp struct {
+	value *regexp.Regexp
+}
+
+func (expr *constRegexp) Exec(ctx interface{}) (interface{}, error) {
 	return expr.value, nil
 }

@@ -2,56 +2,36 @@ package expr
 
 import (
 	"bytes"
-	"fmt"
 	engine "github.com/fagongzi/expr"
 	"github.com/fagongzi/log"
-	"github.com/fagongzi/util/format"
-	"github.com/fagongzi/util/hack"
 )
 
 type eventVar struct {
 	attr      []byte
-	valueType string
+	valueType engine.VarType
 }
 
-func newEventVar(attr []byte, valueType string) engine.Expr {
+func newEventVar(attr []byte, valueType engine.VarType) engine.Expr {
 	return &eventVar{
 		attr:      attr,
 		valueType: valueType,
 	}
 }
 
-func (v *eventVar) Exec(value interface{}) (interface{}, error) {
-	ctx, ok := value.(Ctx)
+func (v *eventVar) Exec(data interface{}) (interface{}, error) {
+	ctx, ok := data.(Ctx)
 	if !ok {
 		log.Fatalf("BUG: invalid expr ctx type %T", ctx)
 	}
 
-	valueIndex := -1
+	var value []byte
 	src := ctx.Event()
-	for idx, kv := range src.Data {
-		if bytes.Compare(kv.Key, v.attr) == 0 {
-			valueIndex = idx
+	for idx := range src.Data {
+		if bytes.Compare(src.Data[idx].Key, v.attr) == 0 {
+			value = src.Data[idx].Value
 			break
 		}
 	}
 
-	switch v.valueType {
-	case stringVar:
-		if valueIndex == -1 {
-			return "", nil
-		}
-
-		return hack.SliceToString(src.Data[valueIndex].Value), nil
-	case int64Var:
-		if valueIndex == -1 {
-			return 0, nil
-		}
-
-		return format.ParseStrInt64(hack.SliceToString(src.Data[valueIndex].Value))
-	case bitmapVar:
-		return nil, fmt.Errorf("bitmap can not with event var")
-	default:
-		return nil, fmt.Errorf("not support var type %s", v.valueType)
-	}
+	return byValueType(value, v.valueType)
 }

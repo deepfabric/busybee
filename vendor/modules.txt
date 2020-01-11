@@ -116,7 +116,7 @@ github.com/deepfabric/go-nemo
 github.com/deepfabric/prophet
 # github.com/dgrijalva/jwt-go v3.2.0+incompatible
 github.com/dgrijalva/jwt-go
-# github.com/fagongzi/expr v0.0.0-20200110083857-42290a13b2df
+# github.com/fagongzi/expr v0.0.0-20200111075459-07c398caf2cb
 github.com/fagongzi/expr
 # github.com/fagongzi/goetty v1.3.2
 github.com/fagongzi/goetty

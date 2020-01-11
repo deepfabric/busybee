@@ -5,8 +5,6 @@ import (
 	"github.com/RoaringBitmap/roaring"
 	"github.com/deepfabric/busybee/pkg/util"
 	engine "github.com/fagongzi/expr"
-	"github.com/fagongzi/util/format"
-	"github.com/fagongzi/util/hack"
 	"regexp"
 )
 
@@ -223,17 +221,12 @@ func match(left interface{}, right engine.Expr, ctx interface{}) (interface{}, e
 	}
 
 	if v1, ok := left.(string); ok {
-		v2, err := toString(value)
+		v2, err := toRegexp(value)
 		if err != nil {
 			return nil, err
 		}
 
-		pattern, err := regexp.Compile(v2)
-		if err != nil {
-			return nil, err
-		}
-
-		return pattern.MatchString(v1), nil
+		return v2.MatchString(v1), nil
 	}
 
 	return nil, fmt.Errorf("~ not support var type %T", left)
@@ -398,30 +391,4 @@ func logicOr(left interface{}, right engine.Expr, ctx interface{}) (interface{},
 	}
 
 	return nil, fmt.Errorf("|| not support var type %T", left)
-}
-
-func toString(value interface{}) (string, error) {
-	if v, ok := value.(string); ok {
-		return v, nil
-	} else if v, ok := value.(int64); ok {
-		return hack.SliceToString(format.Int64ToString(v)), nil
-	}
-
-	return "", fmt.Errorf("expect string but %T", value)
-}
-
-func toInt64(value interface{}) (int64, error) {
-	if v, ok := value.(int64); ok {
-		return v, nil
-	}
-
-	return 0, fmt.Errorf("expect int64 but %T", value)
-}
-
-func toBitmap(value interface{}) (*roaring.Bitmap, error) {
-	if v, ok := value.(*roaring.Bitmap); ok {
-		return v, nil
-	}
-
-	return nil, fmt.Errorf("expect bitmap but %T", value)
 }
