@@ -8,6 +8,24 @@ import (
 	"regexp"
 )
 
+func mod(left interface{}, right engine.Expr, ctx interface{}) (interface{}, error) {
+	if v1, ok := left.(int64); ok {
+		value, err := right.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		v2, err := toInt64(value)
+		if err != nil {
+			return nil, err
+		}
+
+		return v1 % v2, nil
+	}
+
+	return nil, fmt.Errorf("mod not support value type %T", left)
+}
+
 func add(left interface{}, right engine.Expr, ctx interface{}) (interface{}, error) {
 	value, err := right.Exec(ctx)
 	if err != nil {

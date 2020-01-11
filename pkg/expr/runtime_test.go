@@ -220,6 +220,35 @@ func TestDivision(t *testing.T) {
 
 }
 
+func TestMod(t *testing.T) {
+	ctx := newTestCtx()
+	ctx.kvs["key1"] = "3"
+	ctx.kvs["key2"] = "2"
+
+	rt, err := NewRuntime(metapb.Expr{
+		Value: []byte("{num: kv.key1}%{num: kv.key2}==1"),
+	})
+	assert.NoError(t, err, "TestMod failed")
+
+	ok, value, err := rt.Exec(ctx)
+	assert.NoError(t, err, "TestMod failed")
+	assert.Nil(t, value, "TestMod failed")
+	assert.True(t, ok, "TestMod failed")
+
+	ctx.kvs["key1"] = "1"
+	ctx.kvs["key2"] = "2"
+	rt, err = NewRuntime(metapb.Expr{
+		Value: []byte("{num: kv.key1}/{num: kv.key2}==0"),
+	})
+	assert.NoError(t, err, "TestDivision failed")
+
+	ok, value, err = rt.Exec(ctx)
+	assert.NoError(t, err, "TestDivision failed")
+	assert.Nil(t, value, "TestDivision failed")
+	assert.True(t, ok, "TestDivision failed")
+
+}
+
 func TestLTWithNumber(t *testing.T) {
 	ctx := newTestCtx()
 	ctx.kvs["key1"] = "1"

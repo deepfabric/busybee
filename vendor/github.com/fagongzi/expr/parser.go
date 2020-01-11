@@ -51,15 +51,14 @@ type parser struct {
 }
 
 type parserTemplate struct {
-	opts             *options
-	startToken       int
-	startConversion  byte
-	opsTokens        map[int]string
-	opsFunc          map[int]CalcFunc
-	varTypes         map[int]VarType
-	varTokens        map[int]string
-	defaultValueType VarType
-	factory          VarExprFactory
+	opts            *options
+	startToken      int
+	startConversion byte
+	opsTokens       map[int]string
+	opsFunc         map[int]CalcFunc
+	varTypes        map[int]VarType
+	varTokens       map[int]string
+	factory         VarExprFactory
 }
 
 // NewParser returns a expr parser
@@ -99,10 +98,6 @@ func (p *parserTemplate) addOP(op string, calcFunc CalcFunc) {
 }
 
 func (p *parserTemplate) addVarType(symbol string, varType VarType) {
-	if len(p.varTypes) == 0 {
-		p.defaultValueType = varType
-	}
-
 	p.startToken++
 	p.varTokens[p.startToken] = symbol
 	p.varTypes[p.startToken] = varType
@@ -155,12 +150,11 @@ func (p *parser) parse() (Expr, error) {
 			err = p.doRightParen()
 		} else if token == tokenVarStart {
 			err = p.doVarStart()
+			token = tokenVarEnd
 		} else if token == tokenLiteral {
 			err = p.doLiteral()
 		} else if token == tokenRegexp {
 			err = p.doRegexp()
-		} else if token == tokenVarEnd {
-			err = p.doVarEnd()
 		} else if _, ok := p.template.opsTokens[token]; ok {
 			err = p.doOp()
 		} else if _, ok := p.template.varTypes[token]; ok {
@@ -236,6 +230,28 @@ func (p *parser) doVarStart() error {
 	}
 
 	p.lexer.SkipString()
+
+	varType := p.template.opts.defaultType
+	for {
+		p.lexer.NextToken()
+		token := p.lexer.Token()
+		if token == TokenEOI {
+			return fmt.Errorf("missing }")
+		} else if t, ok := p.template.varTypes[token]; ok {
+			varType = t
+			p.lexer.SkipString()
+		} else if p.lexer.Token() == tokenVarEnd {
+			break
+		}
+	}
+
+	varExpr, err := p.template.factory(p.lexer.ScanString(), varType)
+	if err != nil {
+		return err
+	}
+
+	p.stack.current().append(varExpr)
+	p.stack.pop()
 	return nil
 }
 
@@ -278,7 +294,7 @@ func (p *parser) doRegexp() error {
 }
 
 func (p *parser) doVarEnd() error {
-	varType := p.template.defaultValueType
+	varType := p.template.opts.defaultType
 	if p.prevToken == tokenVarStart { // {a}
 
 	} else if t, ok := p.template.varTypes[p.prevToken]; ok {

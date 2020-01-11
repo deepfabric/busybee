@@ -30,6 +30,7 @@ func init() {
 		engine.WithOp("-", minus),
 		engine.WithOp("*", multiplication),
 		engine.WithOp("/", division),
+		engine.WithOp("%", mod),
 		engine.WithOp(">", gt),
 		engine.WithOp(">=", ge),
 		engine.WithOp("<", lt),
@@ -46,6 +47,7 @@ func init() {
 		engine.WithVarType("num:", engine.Num),
 		engine.WithVarType("reg:", engine.Regexp),
 		engine.WithVarType("bm:", bmType),
+		engine.WithDefaultVarType(engine.Str),
 	)
 }
 

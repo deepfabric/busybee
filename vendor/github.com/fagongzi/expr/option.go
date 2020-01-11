@@ -4,14 +4,16 @@ package expr
 type Option func(*options)
 
 type options struct {
-	ops  map[string]CalcFunc
-	typs map[string]VarType
+	ops         map[string]CalcFunc
+	typs        map[string]VarType
+	defaultType VarType
 }
 
 func newOptions() *options {
 	return &options{
-		ops:  make(map[string]CalcFunc),
-		typs: make(map[string]VarType),
+		ops:         make(map[string]CalcFunc),
+		typs:        make(map[string]VarType),
+		defaultType: Str,
 	}
 }
 
@@ -26,5 +28,12 @@ func WithOp(symbol string, opFunc CalcFunc) Option {
 func WithVarType(symbol string, value VarType) Option {
 	return func(opts *options) {
 		opts.typs[symbol] = value
+	}
+}
+
+// WithDefaultVarType set default var type
+func WithDefaultVarType(value VarType) Option {
+	return func(opts *options) {
+		opts.defaultType = value
 	}
 }
