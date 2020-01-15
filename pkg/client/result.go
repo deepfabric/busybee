@@ -1,6 +1,7 @@
 package client
 
 import (
+	"github.com/deepfabric/busybee/pkg/api"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 )
 
@@ -40,4 +41,9 @@ type instanceCountStateResult struct {
 type instanceStepStateResult struct {
 	codeResult
 	Value metapb.StepState `json:"value"`
+}
+
+type queueFetchResult struct {
+	codeResult
+	Value api.QueueFetchResult `json:"value"`
 }

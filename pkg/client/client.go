@@ -9,6 +9,7 @@ import (
 
 	"github.com/deepfabric/busybee/pkg/api"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
+	"github.com/deepfabric/busybee/pkg/storage"
 )
 
 const (
@@ -59,6 +60,9 @@ type Client interface {
 	BMClear(key []byte) error
 	// BMRange returns a []uint32 from the bitmap that >= start
 	BMRange(key []byte, start uint32, limit uint64) ([]uint32, error)
+
+	// ConsumeQueue consumer the queue
+	ConsumeQueue(uint64, uint64, func([]byte) error) error
 }
 
 type httpClient struct {
@@ -310,4 +314,45 @@ func (c *httpClient) BMRange(key []byte, start uint32, limit uint64) ([]uint32, 
 	}
 
 	return api.DecodeUint32Slice(value)
+}
+
+func (c *httpClient) ConsumeQueue(id uint64, group uint64, fn func([]byte) error) error {
+	var url string
+	switch group {
+	case storage.EventQueueGroup:
+		url = fmt.Sprintf("%s/queues/%d/event/fetch",
+			c.addr,
+			id)
+	case storage.NotifyQueueGroup:
+		url = fmt.Sprintf("%s/queues/%d/notify/fetch",
+			c.addr,
+			id)
+	default:
+		return fmt.Errorf("not support queue group %d", group)
+	}
+
+	fetch := api.QueueFetch{
+		LastOffset: 0,
+		Count:      16,
+	}
+	for {
+		value, _ := json.Marshal(&fetch)
+		resp, err := c.doPut(url, value)
+		if err != nil {
+			return err
+		}
+
+		fetchResp, err := readQueueFetchResult(resp)
+		if err != nil {
+			return err
+		}
+
+		fetch.LastOffset = fetchResp.LastOffset
+		for _, item := range fetchResp.Items {
+			err = fn(item)
+			if err != nil {
+				return err
+			}
+		}
+	}
 }

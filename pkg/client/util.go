@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net/http"
 
+	"github.com/deepfabric/busybee/pkg/api"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 )
 
@@ -55,6 +56,16 @@ func readBytesResult(resp *http.Response) ([]byte, error) {
 	err := readResult(resp, result)
 	if err != nil {
 		return nil, err
+	}
+
+	return result.Value, nil
+}
+
+func readQueueFetchResult(resp *http.Response) (api.QueueFetchResult, error) {
+	result := &queueFetchResult{}
+	err := readResult(resp, result)
+	if err != nil {
+		return api.QueueFetchResult{}, err
 	}
 
 	return result.Value, nil

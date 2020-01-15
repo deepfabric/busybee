@@ -6,8 +6,10 @@ import (
 
 	"github.com/deepfabric/busybee/pkg/client"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
+	"github.com/deepfabric/busybee/pkg/storage"
 	"github.com/deepfabric/busybee/pkg/util"
 	"github.com/fagongzi/log"
+	"github.com/fagongzi/util/protoc"
 )
 
 var (
@@ -27,6 +29,15 @@ func main() {
 	}
 
 	time.Sleep(time.Second * 10)
+
+	go func() {
+		log.Fatalf("consumer queue failed with %+v", cli.ConsumeQueue(instanceID, storage.NotifyQueueGroup, func(value []byte) error {
+			nt := metapb.Notify{}
+			protoc.MustUnmarshal(&nt, value)
+			log.Infof("notify: %+v", nt)
+			return nil
+		}))
+	}()
 
 	startInstance(instanceID, cli)
 	log.Infof("workflow instance %d started", instanceID)
@@ -99,6 +110,8 @@ func createWorkflow(cli client.Client) uint64 {
 						},
 					},
 				},
+				EnterAction: "into step_0",
+				LeaveAction: "leave step_0",
 			},
 			metapb.Step{
 				Name: "step_1_end",
@@ -106,6 +119,8 @@ func createWorkflow(cli client.Client) uint64 {
 					Type:   metapb.Direct,
 					Direct: &metapb.DirectExecution{},
 				},
+				EnterAction: "into step_1_end",
+				LeaveAction: "leave step_1_end",
 			},
 			metapb.Step{
 				Name: "step_2_end",
@@ -113,6 +128,8 @@ func createWorkflow(cli client.Client) uint64 {
 					Type:   metapb.Direct,
 					Direct: &metapb.DirectExecution{},
 				},
+				EnterAction: "into step_2_end",
+				LeaveAction: "leave step_2_end",
 			},
 		},
 	}
