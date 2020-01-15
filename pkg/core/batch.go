@@ -7,11 +7,10 @@ import (
 )
 
 type executionbatch struct {
-	event metapb.Event
-	from  string
-	to    string
-	crowd *roaring.Bitmap
-
+	event    metapb.Event
+	from     string
+	to       string
+	crowd    *roaring.Bitmap
 	notifies []metapb.Notify
 	cbs      []*stepCB
 }
@@ -26,7 +25,8 @@ func (b *executionbatch) next() {
 		TenantID:   b.event.TenantID,
 		WorkflowID: b.event.WorkflowID,
 		InstanceID: b.event.InstanceID,
-		Step:       b.to,
+		FromStep:   b.from,
+		ToStep:     b.to,
 	}
 	if b.crowd != nil {
 		value.Crowd = util.MustMarshalBM(b.crowd)

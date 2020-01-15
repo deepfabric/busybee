@@ -79,10 +79,7 @@ func createWorkflow(cli client.Client) uint64 {
 					Branches: []metapb.ConditionExecution{
 						metapb.ConditionExecution{
 							Condition: metapb.Expr{
-								Type:    metapb.Number,
-								Sources: []string{"uid"},
-								Cmp:     metapb.Equal,
-								Expect:  "1",
+								Value: []byte("{num: event.uid} == 1"),
 							},
 							Execution: metapb.Execution{
 								Direct: &metapb.DirectExecution{
@@ -92,10 +89,7 @@ func createWorkflow(cli client.Client) uint64 {
 						},
 						metapb.ConditionExecution{
 							Condition: metapb.Expr{
-								Type:    metapb.Number,
-								Sources: []string{"uid"},
-								Cmp:     metapb.Equal,
-								Expect:  "2",
+								Value: []byte("{num: event.uid} == 2"),
 							},
 							Execution: metapb.Execution{
 								Direct: &metapb.DirectExecution{

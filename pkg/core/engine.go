@@ -109,7 +109,7 @@ func (eng *engine) Stop() error {
 func (eng *engine) Create(meta metapb.Workflow) (uint64, error) {
 	id := eng.store.RaftStore().MustAllocID()
 	meta.ID = id
-	err := eng.set(uint64Key(id), protoc.MustMarshal(&meta))
+	err := eng.store.Set(uint64Key(id), protoc.MustMarshal(&meta))
 	if err != nil {
 		return 0, err
 	}
@@ -122,11 +122,11 @@ func (eng *engine) Update(meta metapb.Workflow) error {
 		return errors.New("missing workflow id")
 	}
 
-	return eng.set(uint64Key(meta.ID), protoc.MustMarshal(&meta))
+	return eng.store.Set(uint64Key(meta.ID), protoc.MustMarshal(&meta))
 }
 
 func (eng *engine) CreateInstance(workflowID uint64, crow []byte, maxPerShard uint64) (uint64, error) {
-	value, err := eng.get(uint64Key(workflowID))
+	value, err := eng.store.Get(uint64Key(workflowID))
 	if err != nil {
 		return 0, err
 	}
@@ -144,7 +144,7 @@ func (eng *engine) CreateInstance(workflowID uint64, crow []byte, maxPerShard ui
 		MaxPerShard: maxPerShard,
 	}
 
-	err = eng.set(uint64Key(instance.ID), protoc.MustMarshal(&instance))
+	err = eng.store.Set(uint64Key(instance.ID), protoc.MustMarshal(&instance))
 	if err != nil {
 		return 0, err
 	}
@@ -154,7 +154,7 @@ func (eng *engine) CreateInstance(workflowID uint64, crow []byte, maxPerShard ui
 
 func (eng *engine) DeleteInstance(id uint64) error {
 	key := storage.InstanceStartKey(id)
-	value, err := eng.get(key)
+	value, err := eng.store.Get(key)
 	if err != nil {
 		return err
 	}
@@ -170,7 +170,7 @@ func (eng *engine) DeleteInstance(id uint64) error {
 }
 
 func (eng *engine) StartInstance(id uint64) error {
-	value, err := eng.get(storage.InstanceStartKey(id))
+	value, err := eng.store.Get(storage.InstanceStartKey(id))
 	if err != nil {
 		return err
 	}
@@ -178,7 +178,7 @@ func (eng *engine) StartInstance(id uint64) error {
 		return nil
 	}
 
-	value, err = eng.get(uint64Key(id))
+	value, err = eng.store.Get(uint64Key(id))
 	if err != nil {
 		return err
 	}
@@ -198,7 +198,7 @@ func (eng *engine) StartInstance(id uint64) error {
 }
 
 func (eng *engine) InstanceCountState(id uint64) (metapb.InstanceCountState, error) {
-	value, err := eng.get(storage.InstanceStartKey(id))
+	value, err := eng.store.Get(storage.InstanceStartKey(id))
 	if err != nil {
 		return metapb.InstanceCountState{}, err
 	}
@@ -226,7 +226,7 @@ func (eng *engine) InstanceCountState(id uint64) (metapb.InstanceCountState, err
 	for _, shard := range shards {
 		key := storage.InstanceStateKey(instance.ID, shard.Minimum(), shard.Maximum()+1)
 		stepState := metapb.WorkflowInstanceState{}
-		value, err = eng.get(key)
+		value, err = eng.store.Get(key)
 		if err != nil {
 			return metapb.InstanceCountState{}, err
 		}
@@ -249,7 +249,7 @@ func (eng *engine) InstanceCountState(id uint64) (metapb.InstanceCountState, err
 }
 
 func (eng *engine) InstanceStepState(id uint64, name string) (metapb.StepState, error) {
-	value, err := eng.get(storage.InstanceStartKey(id))
+	value, err := eng.store.Get(storage.InstanceStartKey(id))
 	if err != nil {
 		return metapb.StepState{}, err
 	}
@@ -268,7 +268,7 @@ func (eng *engine) InstanceStepState(id uint64, name string) (metapb.StepState, 
 	for _, shard := range shards {
 		key := storage.InstanceStateKey(instance.ID, shard.Minimum(), shard.Maximum()+1)
 		stepState := metapb.WorkflowInstanceState{}
-		value, err = eng.get(key)
+		value, err = eng.store.Get(key)
 		if err != nil {
 			return metapb.StepState{}, err
 		}
@@ -360,7 +360,7 @@ func (eng *engine) maybeLoadInstanceStateShardRanges(id uint64) ([][]uint32, err
 		return ranges.([][]uint32), nil
 	}
 
-	value, err := eng.get(storage.InstanceStartKey(id))
+	value, err := eng.store.Get(storage.InstanceStartKey(id))
 	if err != nil {
 		return nil, err
 	}
@@ -404,31 +404,6 @@ func (eng *engine) Service() crm.Service {
 
 func uint64Key(id uint64) []byte {
 	return goetty.Uint64ToBytes(id)
-}
-
-func (eng *engine) get(key []byte) ([]byte, error) {
-	req := rpcpb.AcquireGetRequest()
-	req.Key = key
-
-	value, err := eng.store.ExecCommand(req)
-	rpcpb.ReleaseGetRequest(req)
-	if err != nil {
-		return nil, err
-	}
-
-	resp := rpcpb.GetResponse{}
-	protoc.MustUnmarshal(&resp, value)
-	return resp.Value, err
-}
-
-func (eng *engine) set(key, value []byte) error {
-	req := rpcpb.AcquireSetRequest()
-	req.Key = key
-	req.Value = value
-
-	_, err := eng.store.ExecCommand(req)
-	rpcpb.ReleaseSetRequest(req)
-	return err
 }
 
 func (eng *engine) handleEvent(ctx context.Context) {

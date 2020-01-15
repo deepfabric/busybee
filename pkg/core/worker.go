@@ -32,14 +32,16 @@ type item struct {
 }
 
 type stateWorker struct {
-	key        string
-	eng        Engine
-	state      metapb.WorkflowInstanceState
-	stepCrowds []*roaring.Bitmap
-	timeout    goetty.Timeout
-	interval   time.Duration
-	steps      map[string]excution
-	queue      *task.Queue
+	key          string
+	eng          Engine
+	state        metapb.WorkflowInstanceState
+	stepCrowds   []*roaring.Bitmap
+	timeout      goetty.Timeout
+	interval     time.Duration
+	steps        map[string]excution
+	entryActions map[string]string
+	leaveActions map[string]string
+	queue        *task.Queue
 }
 
 func newStateWorker(key string, state metapb.WorkflowInstanceState, eng Engine) (*stateWorker, error) {
@@ -49,12 +51,14 @@ func newStateWorker(key string, state metapb.WorkflowInstanceState, eng Engine) 
 	}
 
 	w := &stateWorker{
-		key:        key,
-		state:      state,
-		eng:        eng,
-		stepCrowds: stepCrowds,
-		steps:      make(map[string]excution),
-		queue:      task.New(1024),
+		key:          key,
+		state:        state,
+		eng:          eng,
+		stepCrowds:   stepCrowds,
+		steps:        make(map[string]excution),
+		queue:        task.New(1024),
+		entryActions: make(map[string]string),
+		leaveActions: make(map[string]string),
 	}
 	if state.States[0].Step.Execution.Type == metapb.Timer {
 		w.interval = time.Second * time.Duration(state.States[0].Step.Execution.Timer.Interval)
@@ -67,6 +71,8 @@ func newStateWorker(key string, state metapb.WorkflowInstanceState, eng Engine) 
 		}
 
 		w.steps[stepState.Step.Name] = exec
+		w.entryActions[stepState.Step.Name] = stepState.Step.EnterAction
+		w.leaveActions[stepState.Step.Name] = stepState.Step.LeaveAction
 	}
 
 	return w, nil
@@ -119,6 +125,11 @@ func (w *stateWorker) run() {
 
 func (w *stateWorker) execBatch(batch *executionbatch) {
 	if len(batch.notifies) > 0 {
+		for idx := range batch.notifies {
+			batch.notifies[idx].FromAction = w.leaveActions[batch.notifies[idx].FromStep]
+			batch.notifies[idx].ToAction = w.entryActions[batch.notifies[idx].ToStep]
+		}
+
 		err := w.eng.Notifier().Notify(w.state.InstanceID, batch.notifies...)
 		if err != nil {
 			log.Fatalf("instance state notify failed with %+v", err)

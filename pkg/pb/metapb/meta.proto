@@ -56,8 +56,10 @@ message StepState {
 
 // Step is a step of the work flow
 message Step {
-    string    name       = 1;
-    Execution execution  = 2 [(gogoproto.nullable) = false];
+    string    name        = 1;
+    Execution execution   = 2 [(gogoproto.nullable) = false];
+    string    enterAction = 3;
+    string    leaveAction = 4;
 }
 
 // ExectuionType is is the type of a execution operation

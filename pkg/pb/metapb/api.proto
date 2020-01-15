@@ -30,5 +30,8 @@ message Notify {
     uint64 tenantID   = 3;
     uint64 workflowID = 4;
     uint64 instanceID = 5;
-    string step       = 6;
+    string fromStep   = 6;
+    string fromAction = 7;
+    string toStep     = 8;
+    string toAction   = 9;
 }
