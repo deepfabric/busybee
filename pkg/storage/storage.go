@@ -8,6 +8,7 @@ import (
 	"github.com/deepfabric/beehive/raftstore"
 	"github.com/deepfabric/beehive/server"
 	beehiveStorage "github.com/deepfabric/beehive/storage"
+	meta "github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/util/protoc"
@@ -16,11 +17,6 @@ import (
 
 const (
 	defaultRPCTimeout = time.Second * 10
-
-	// EventQueueGroup queue group
-	EventQueueGroup uint64 = 1
-	// NotifyQueueGroup queue group
-	NotifyQueueGroup uint64 = 2
 )
 
 // Storage storage
@@ -39,14 +35,12 @@ type Storage interface {
 	Delete([]byte) error
 	// ExecCommand exec command
 	ExecCommand(cmd interface{}) ([]byte, error)
-	// CreateEventQueue create a queue to serve a workflow instance events.
-	CreateEventQueue(id uint64) error
-	// CreateNotifyQueue create a queue to serve a workflow instance notifies.
-	CreateNotifyQueue(id uint64) error
+	// CreateQueue create a queue to serve a workflow instance events.
+	CreateQueue(id uint64, group meta.Group) error
 	// QueueAdd add items to work flow instance queue
-	QueueAdd(id uint64, group uint64, items ...[]byte) (uint64, error)
+	QueueAdd(id uint64, group meta.Group, items ...[]byte) (uint64, error)
 	// QueueFetch add items to work flow instance queue
-	QueueFetch(id uint64, group uint64, afterOffset uint64, count uint64) (uint64, [][]byte, error)
+	QueueFetch(id uint64, group meta.Group, afterOffset uint64, count uint64) (uint64, [][]byte, error)
 	// RaftStore returns the raft store
 	RaftStore() raftstore.Store
 }
@@ -151,30 +145,21 @@ func (h *beeStorage) WatchEvent() chan Event {
 	return h.eventC
 }
 
-func (h *beeStorage) CreateEventQueue(id uint64) error {
+func (h *beeStorage) CreateQueue(id uint64, group meta.Group) error {
 	return h.store.AddShard(metapb.Shard{
 		Start:        goetty.Uint64ToBytes(id),
 		End:          goetty.Uint64ToBytes(id + 1),
 		DisableSplit: true,
-		Group:        EventQueueGroup,
+		Group:        uint64(group),
 	})
 }
 
-func (h *beeStorage) CreateNotifyQueue(id uint64) error {
-	return h.store.AddShard(metapb.Shard{
-		Start:        goetty.Uint64ToBytes(id),
-		End:          goetty.Uint64ToBytes(id + 1),
-		DisableSplit: true,
-		Group:        NotifyQueueGroup,
-	})
-}
-
-func (h *beeStorage) QueueAdd(id uint64, group uint64, items ...[]byte) (uint64, error) {
+func (h *beeStorage) QueueAdd(id uint64, group meta.Group, items ...[]byte) (uint64, error) {
 	req := rpcpb.AcquireQueueAddRequest()
 	req.Items = items
 	req.Key = goetty.Uint64ToBytes(id)
 
-	data, err := h.app.ExecWithGroup(req, group, defaultRPCTimeout)
+	data, err := h.app.ExecWithGroup(req, uint64(group), defaultRPCTimeout)
 	if err != nil {
 		return 0, err
 	}
@@ -187,14 +172,14 @@ func (h *beeStorage) QueueAdd(id uint64, group uint64, items ...[]byte) (uint64,
 	return offset, nil
 }
 
-func (h *beeStorage) QueueFetch(id uint64, group uint64, afterOffset uint64, count uint64) (uint64, [][]byte, error) {
+func (h *beeStorage) QueueFetch(id uint64, group meta.Group, afterOffset uint64, count uint64) (uint64, [][]byte, error) {
 	req := rpcpb.AcquireQueueFetchRequest()
 	req.Count = count
 	req.Key = goetty.Uint64ToBytes(id)
 	req.AfterOffset = afterOffset
 	req.Key = goetty.Uint64ToBytes(id)
 
-	data, err := h.app.ExecWithGroup(req, group, defaultRPCTimeout)
+	data, err := h.app.ExecWithGroup(req, uint64(group), defaultRPCTimeout)
 	if err != nil {
 		return 0, nil, err
 	}

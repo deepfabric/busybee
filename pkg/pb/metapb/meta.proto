@@ -8,6 +8,14 @@ option (gogoproto.sizer_all) = true;
 option (gogoproto.unmarshaler_all) = true;
 option (gogoproto.goproto_enum_prefix_all) = false;
 
+// Group shard group
+enum Group {
+    DefaultGroup = 0;
+    EventGroup   = 1;
+    NotifyGroup  = 2;
+    TenantGroup  = 3;
+}
+
 // Workflow is process definition
 message Workflow {
     uint64         id        = 1 [(gogoproto.customname) = "ID"];

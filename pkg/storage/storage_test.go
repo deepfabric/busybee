@@ -512,43 +512,43 @@ func TestQueue(t *testing.T) {
 	defer store.Close()
 
 	instanceID := uint64(101)
-	err = store.CreateEventQueue(instanceID)
+	err = store.CreateQueue(instanceID, metapb.EventGroup)
 	assert.NoError(t, err, "TestQueue failed")
 
-	err = store.CreateNotifyQueue(instanceID)
+	err = store.CreateQueue(instanceID, metapb.NotifyGroup)
 	assert.NoError(t, err, "TestQueue failed")
 
 	time.Sleep(time.Second)
-	offset, items, err := store.QueueFetch(instanceID, EventQueueGroup, 0, 1)
+	offset, items, err := store.QueueFetch(instanceID, metapb.EventGroup, 0, 1)
 	assert.NoError(t, err, "TestQueue failed")
 	assert.Equal(t, uint64(0), offset, "TestQueue failed")
 	assert.Equal(t, 0, len(items), "TestQueue failed")
 
-	offset, err = store.QueueAdd(instanceID, EventQueueGroup, []byte("item0"))
+	offset, err = store.QueueAdd(instanceID, metapb.EventGroup, []byte("item0"))
 	assert.NoError(t, err, "TestQueue failed")
 	assert.Equal(t, uint64(1), offset, "TestQueue failed")
 
-	offset, items, err = store.QueueFetch(instanceID, NotifyQueueGroup, 0, 1)
+	offset, items, err = store.QueueFetch(instanceID, metapb.NotifyGroup, 0, 1)
 	assert.NoError(t, err, "TestQueue failed")
 	assert.Equal(t, uint64(0), offset, "TestQueue failed")
 	assert.Equal(t, 0, len(items), "TestQueue failed")
 
-	offset, items, err = store.QueueFetch(instanceID, EventQueueGroup, 0, 1)
+	offset, items, err = store.QueueFetch(instanceID, metapb.EventGroup, 0, 1)
 	assert.NoError(t, err, "TestQueue failed")
 	assert.Equal(t, uint64(1), offset, "TestQueue failed")
 	assert.Equal(t, 1, len(items), "TestQueue failed")
 	assert.Equal(t, "item0", string(items[0]), "TestQueue failed")
 
-	offset, items, err = store.QueueFetch(instanceID, EventQueueGroup, offset, 1)
+	offset, items, err = store.QueueFetch(instanceID, metapb.EventGroup, offset, 1)
 	assert.NoError(t, err, "TestQueue failed")
 	assert.Equal(t, uint64(1), offset, "TestQueue failed")
 	assert.Equal(t, 0, len(items), "TestQueue failed")
 
-	offset, err = store.QueueAdd(instanceID, EventQueueGroup, []byte("item1"))
+	offset, err = store.QueueAdd(instanceID, metapb.EventGroup, []byte("item1"))
 	assert.NoError(t, err, "TestQueue failed")
 	assert.Equal(t, uint64(2), offset, "TestQueue failed")
 
-	offset, items, err = store.QueueFetch(instanceID, EventQueueGroup, 1, 1)
+	offset, items, err = store.QueueFetch(instanceID, metapb.EventGroup, 1, 1)
 	assert.NoError(t, err, "TestQueue failed")
 	assert.Equal(t, uint64(2), offset, "TestQueue failed")
 	assert.Equal(t, 1, len(items), "TestQueue failed")

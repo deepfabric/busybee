@@ -6,7 +6,6 @@ import (
 
 	"github.com/deepfabric/busybee/pkg/client"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
-	"github.com/deepfabric/busybee/pkg/storage"
 	"github.com/deepfabric/busybee/pkg/util"
 	"github.com/fagongzi/log"
 	"github.com/fagongzi/util/protoc"
@@ -23,7 +22,7 @@ func main() {
 	instanceID := createInstance(wid, cli)
 	log.Infof("workflow instance %d created", instanceID)
 
-	err := cli.CreateNotifyQueue(instanceID)
+	err := cli.CreateQueue(instanceID, metapb.NotifyGroup)
 	if err != nil {
 		log.Fatalf("create instance notify queue failed with %+v", err)
 	}
@@ -31,7 +30,7 @@ func main() {
 	time.Sleep(time.Second * 10)
 
 	go func() {
-		log.Fatalf("consumer queue failed with %+v", cli.ConsumeQueue(instanceID, storage.NotifyQueueGroup, func(value []byte) error {
+		log.Fatalf("consumer queue failed with %+v", cli.ConsumeQueue(instanceID, metapb.NotifyGroup, func(value []byte) error {
 			nt := metapb.Notify{}
 			protoc.MustUnmarshal(&nt, value)
 			log.Infof("notify: %+v", nt)

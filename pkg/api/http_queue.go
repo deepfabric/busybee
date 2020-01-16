@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/deepfabric/busybee/pkg/storage"
+	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/fagongzi/util/format"
 	"github.com/labstack/echo"
 )
@@ -67,51 +67,54 @@ type QueueFetchResult struct {
 }
 
 func (s *httpServer) initQueueAPI() {
+	s.http.POST("/queues/:id/tenant", s.queueTenantCreate)
 	s.http.POST("/queues/:id/event", s.queueEventCreate)
 	s.http.POST("/queues/:id/notify", s.queueNotifyCreate)
+	s.http.PUT("/queues/:id/tenant/add", s.queueTenantAdd)
 	s.http.PUT("/queues/:id/event/add", s.queueEventAdd)
 	s.http.PUT("/queues/:id/notify/add", s.queueNotifyAdd)
+	s.http.PUT("/queues/:id/tenant/fetch", s.queueTenantFetch)
 	s.http.PUT("/queues/:id/event/fetch", s.queueEventFetch)
 	s.http.PUT("/queues/:id/notify/fetch", s.queueNotifyFetch)
 }
 
+func (s *httpServer) queueTenantAdd(c echo.Context) error {
+	return s.doQueueAdd(metapb.TenantGroup, c)
+}
+
 func (s *httpServer) queueEventAdd(c echo.Context) error {
-	return s.doQueueAdd(storage.EventQueueGroup, c)
+	return s.doQueueAdd(metapb.EventGroup, c)
+}
+
+func (s *httpServer) queueTenantFetch(c echo.Context) error {
+	return s.doQueueFetch(metapb.TenantGroup, c)
 }
 
 func (s *httpServer) queueEventFetch(c echo.Context) error {
-	return s.doQueueFetch(storage.EventQueueGroup, c)
+	return s.doQueueFetch(metapb.EventGroup, c)
 }
 
 func (s *httpServer) queueNotifyAdd(c echo.Context) error {
-	return s.doQueueAdd(storage.NotifyQueueGroup, c)
+	return s.doQueueAdd(metapb.NotifyGroup, c)
 }
 
 func (s *httpServer) queueNotifyFetch(c echo.Context) error {
-	return s.doQueueFetch(storage.NotifyQueueGroup, c)
+	return s.doQueueFetch(metapb.NotifyGroup, c)
+}
+
+func (s *httpServer) queueTenantCreate(c echo.Context) error {
+	return s.doQueueCreate(metapb.TenantGroup, c)
 }
 
 func (s *httpServer) queueEventCreate(c echo.Context) error {
-	id, err := format.ParseStrUInt64(c.Param("id"))
-	if err != nil {
-		return c.JSON(http.StatusOK, &JSONResult{
-			Code:  codeFailed,
-			Error: err.Error(),
-		})
-	}
-
-	err = s.engine.Storage().CreateEventQueue(id)
-	if err != nil {
-		return c.JSON(http.StatusOK, &JSONResult{
-			Code:  codeFailed,
-			Error: err.Error(),
-		})
-	}
-
-	return c.JSON(http.StatusOK, &JSONResult{})
+	return s.doQueueCreate(metapb.EventGroup, c)
 }
 
 func (s *httpServer) queueNotifyCreate(c echo.Context) error {
+	return s.doQueueCreate(metapb.NotifyGroup, c)
+}
+
+func (s *httpServer) doQueueCreate(group metapb.Group, c echo.Context) error {
 	id, err := format.ParseStrUInt64(c.Param("id"))
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
@@ -120,7 +123,7 @@ func (s *httpServer) queueNotifyCreate(c echo.Context) error {
 		})
 	}
 
-	err = s.engine.Storage().CreateNotifyQueue(id)
+	err = s.engine.Storage().CreateQueue(id, group)
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
 			Code:  codeFailed,
@@ -131,7 +134,7 @@ func (s *httpServer) queueNotifyCreate(c echo.Context) error {
 	return c.JSON(http.StatusOK, &JSONResult{})
 }
 
-func (s *httpServer) doQueueAdd(group uint64, c echo.Context) error {
+func (s *httpServer) doQueueAdd(group metapb.Group, c echo.Context) error {
 	id, err := format.ParseStrUInt64(c.Param("id"))
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
@@ -164,7 +167,7 @@ func (s *httpServer) doQueueAdd(group uint64, c echo.Context) error {
 	})
 }
 
-func (s *httpServer) doQueueFetch(group uint64, c echo.Context) error {
+func (s *httpServer) doQueueFetch(group metapb.Group, c echo.Context) error {
 	id, err := format.ParseStrUInt64(c.Param("id"))
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{

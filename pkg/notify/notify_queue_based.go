@@ -24,7 +24,7 @@ func (n *queueNotifier) Notify(id uint64, notifies ...metapb.Notify) error {
 		items = append(items, protoc.MustMarshal(&nt))
 	}
 
-	offset, err := n.store.QueueAdd(id, storage.NotifyQueueGroup, items...)
+	offset, err := n.store.QueueAdd(id, metapb.NotifyGroup, items...)
 	if err != nil {
 		return err
 	}

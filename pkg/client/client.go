@@ -9,7 +9,6 @@ import (
 
 	"github.com/deepfabric/busybee/pkg/api"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
-	"github.com/deepfabric/busybee/pkg/storage"
 )
 
 const (
@@ -35,14 +34,11 @@ type Client interface {
 	// InstanceStep return count info of all steps
 	InstanceStepState(uint64, string) (metapb.StepState, error)
 
-	// CreateEventQueue create event queue
-	CreateEventQueue(id uint64) error
-	// CreateNotifyQueue create notify queue
-	CreateNotifyQueue(id uint64) error
+	CreateQueue(id uint64, group metapb.Group) error
 	// AddToEventQueue Adds the item to the queue and returns the last offset
-	AddToEventQueue(id uint64, items [][]byte) (uint64, error)
-	// AddToNotifyQueue Adds the item to the queue and returns the last offset
-	AddToNotifyQueue(id uint64, items [][]byte) (uint64, error)
+	AddToQueue(id uint64, group metapb.Group, items [][]byte) (uint64, error)
+	// ConsumeQueue consumer the queue
+	ConsumeQueue(id uint64, group metapb.Group, fn func([]byte) error) error
 
 	// Set put a key, value paire to the store
 	Set(key, value []byte) error
@@ -60,9 +56,6 @@ type Client interface {
 	BMClear(key []byte) error
 	// BMRange returns a []uint32 from the bitmap that >= start
 	BMRange(key []byte, start uint32, limit uint64) ([]uint32, error)
-
-	// ConsumeQueue consumer the queue
-	ConsumeQueue(uint64, uint64, func([]byte) error) error
 }
 
 type httpClient struct {
@@ -191,8 +184,26 @@ func (c *httpClient) InstanceStepState(id uint64, step string) (metapb.StepState
 	return readInstanceStepStateResultResult(resp)
 }
 
-func (c *httpClient) CreateEventQueue(id uint64) error {
-	resp, err := c.doPost(fmt.Sprintf("%s/queues/%d/event", c.addr, id), nil)
+func (c *httpClient) CreateQueue(id uint64, group metapb.Group) error {
+	var url string
+	switch group {
+	case metapb.EventGroup:
+		url = fmt.Sprintf("%s/queues/%d/event",
+			c.addr,
+			id)
+	case metapb.NotifyGroup:
+		url = fmt.Sprintf("%s/queues/%d/notify",
+			c.addr,
+			id)
+	case metapb.TenantGroup:
+		url = fmt.Sprintf("%s/queues/%d/tenant",
+			c.addr,
+			id)
+	default:
+		return fmt.Errorf("not support queue group %d", group)
+	}
+
+	resp, err := c.doPost(url, nil)
 	if err != nil {
 		return err
 	}
@@ -200,21 +211,30 @@ func (c *httpClient) CreateEventQueue(id uint64) error {
 	return readEmptyResult(resp)
 }
 
-func (c *httpClient) CreateNotifyQueue(id uint64) error {
-	resp, err := c.doPost(fmt.Sprintf("%s/queues/%d/notify", c.addr, id), nil)
-	if err != nil {
-		return err
+func (c *httpClient) AddToQueue(id uint64, group metapb.Group, items [][]byte) (uint64, error) {
+	var url string
+	switch group {
+	case metapb.EventGroup:
+		url = fmt.Sprintf("%s/queues/%d/event/add",
+			c.addr,
+			id)
+	case metapb.NotifyGroup:
+		url = fmt.Sprintf("%s/queues/%d/notify/add",
+			c.addr,
+			id)
+	case metapb.TenantGroup:
+		url = fmt.Sprintf("%s/queues/%d/tenant/add",
+			c.addr,
+			id)
+	default:
+		return 0, fmt.Errorf("not support queue group %d", group)
 	}
 
-	return readEmptyResult(resp)
-}
-
-func (c *httpClient) AddToEventQueue(id uint64, items [][]byte) (uint64, error) {
 	value, _ := json.Marshal(&api.QueueAdd{
 		Items: items,
 	})
 
-	resp, err := c.doPut(fmt.Sprintf("%s/queues/%d/event/add", c.addr, id), value)
+	resp, err := c.doPut(url, value)
 	if err != nil {
 		return 0, err
 	}
@@ -222,17 +242,49 @@ func (c *httpClient) AddToEventQueue(id uint64, items [][]byte) (uint64, error) 
 	return readUint64Result(resp)
 }
 
-func (c *httpClient) AddToNotifyQueue(id uint64, items [][]byte) (uint64, error) {
-	value, _ := json.Marshal(&api.QueueAdd{
-		Items: items,
-	})
-
-	resp, err := c.doPut(fmt.Sprintf("%s/queues/%d/notify/add", c.addr, id), value)
-	if err != nil {
-		return 0, err
+func (c *httpClient) ConsumeQueue(id uint64, group metapb.Group, fn func([]byte) error) error {
+	var url string
+	switch group {
+	case metapb.EventGroup:
+		url = fmt.Sprintf("%s/queues/%d/event/fetch",
+			c.addr,
+			id)
+	case metapb.NotifyGroup:
+		url = fmt.Sprintf("%s/queues/%d/notify/fetch",
+			c.addr,
+			id)
+	case metapb.TenantGroup:
+		url = fmt.Sprintf("%s/queues/%d/tenant/fetch",
+			c.addr,
+			id)
+	default:
+		return fmt.Errorf("not support queue group %d", group)
 	}
 
-	return readUint64Result(resp)
+	fetch := api.QueueFetch{
+		LastOffset: 0,
+		Count:      16,
+	}
+	for {
+		value, _ := json.Marshal(&fetch)
+		resp, err := c.doPut(url, value)
+		if err != nil {
+			return err
+		}
+
+		fetchResp, err := readQueueFetchResult(resp)
+		if err != nil {
+			return err
+		}
+
+		fetch.LastOffset = fetchResp.LastOffset
+		for _, item := range fetchResp.Items {
+			err = fn(item)
+			if err != nil {
+				return err
+			}
+		}
+	}
 }
 
 func (c *httpClient) Set(key, value []byte) error {
@@ -314,45 +366,4 @@ func (c *httpClient) BMRange(key []byte, start uint32, limit uint64) ([]uint32, 
 	}
 
 	return api.DecodeUint32Slice(value)
-}
-
-func (c *httpClient) ConsumeQueue(id uint64, group uint64, fn func([]byte) error) error {
-	var url string
-	switch group {
-	case storage.EventQueueGroup:
-		url = fmt.Sprintf("%s/queues/%d/event/fetch",
-			c.addr,
-			id)
-	case storage.NotifyQueueGroup:
-		url = fmt.Sprintf("%s/queues/%d/notify/fetch",
-			c.addr,
-			id)
-	default:
-		return fmt.Errorf("not support queue group %d", group)
-	}
-
-	fetch := api.QueueFetch{
-		LastOffset: 0,
-		Count:      16,
-	}
-	for {
-		value, _ := json.Marshal(&fetch)
-		resp, err := c.doPut(url, value)
-		if err != nil {
-			return err
-		}
-
-		fetchResp, err := readQueueFetchResult(resp)
-		if err != nil {
-			return err
-		}
-
-		fetch.LastOffset = fetchResp.LastOffset
-		for _, item := range fetchResp.Items {
-			err = fn(item)
-			if err != nil {
-				return err
-			}
-		}
-	}
 }
