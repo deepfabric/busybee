@@ -4,7 +4,8 @@ var (
 	kvType               byte = 0x00
 	instanceStartingType byte = 0x01
 	instanceStartedType  byte = 0x02
-	stateType            byte = 0x03
+	instanceStoppedType  byte = 0x03
+	stateType            byte = 0x04
 )
 
 func appendPrefix(value []byte, prefix byte) []byte {

@@ -18,6 +18,7 @@ var (
 	bmRangeRequestPool                  sync.Pool
 	startingInstanceRequestPool         sync.Pool
 	startedInstanceRequestPool          sync.Pool
+	stopInstanceRequestPool             sync.Pool
 	createInstanceStateShardRequestPool sync.Pool
 	updateInstanceStateShardRequestPool sync.Pool
 	removeInstanceStateShardRequestPool sync.Pool
@@ -38,6 +39,7 @@ var (
 	bmRangeResponsePool                  sync.Pool
 	startingInstanceResponsePool         sync.Pool
 	startedInstanceResponsePool          sync.Pool
+	stopInstanceResponsePool             sync.Pool
 	createInstanceStateShardResponsePool sync.Pool
 	updateInstanceStateShardResponsePool sync.Pool
 	removeInstanceStateShardResponsePool sync.Pool
@@ -436,6 +438,21 @@ func ReleaseStartedInstanceRequest(value *StartedInstanceRequest) {
 	startedInstanceRequestPool.Put(value)
 }
 
+// AcquireStopInstanceRequest returns value from pool
+func AcquireStopInstanceRequest() *StopInstanceRequest {
+	value := stopInstanceRequestPool.Get()
+	if value == nil {
+		return &StopInstanceRequest{}
+	}
+	return value.(*StopInstanceRequest)
+}
+
+// ReleaseStopInstanceRequest returns the value to pool
+func ReleaseStopInstanceRequest(value *StopInstanceRequest) {
+	value.Reset()
+	stopInstanceRequestPool.Put(value)
+}
+
 // AcquireStartingInstanceResponse returns value from pool
 func AcquireStartingInstanceResponse() *StartingInstanceResponse {
 	value := startingInstanceResponsePool.Get()
@@ -464,6 +481,21 @@ func AcquireStartedInstanceResponse() *StartedInstanceResponse {
 func ReleaseStartedInstanceResponse(value *StartedInstanceResponse) {
 	value.Reset()
 	startedInstanceResponsePool.Put(value)
+}
+
+// AcquireStopInstanceResponse returns value from pool
+func AcquireStopInstanceResponse() *StopInstanceResponse {
+	value := stopInstanceResponsePool.Get()
+	if value == nil {
+		return &StopInstanceResponse{}
+	}
+	return value.(*StopInstanceResponse)
+}
+
+// ReleaseStopInstanceResponse returns the value to pool
+func ReleaseStopInstanceResponse(value *StopInstanceResponse) {
+	value.Reset()
+	stopInstanceResponsePool.Put(value)
 }
 
 // AcquireCreateInstanceStateShardRequest returns value from pool

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/RoaringBitmap/roaring"
 	"github.com/deepfabric/beehive/pb"
@@ -24,8 +25,9 @@ import (
 )
 
 var (
-	emptyBMData = bytes.NewBuffer(nil)
-	initBM      = roaring.NewBitmap()
+	emptyBMData  = bytes.NewBuffer(nil)
+	initBM       = roaring.NewBitmap()
+	stoppedRange [][]uint32
 )
 
 func init() {
@@ -72,6 +74,7 @@ func NewEngine(store storage.Storage, notifier notify.Notifier) (Engine, error) 
 		eventC:                 store.WatchEvent(),
 		retryNewInstanceC:      make(chan metapb.WorkflowInstance, 1024),
 		retryCompleteInstanceC: make(chan uint64, 1024),
+		stopInstanceC:          make(chan uint64, 1024),
 		runner:                 task.NewRunner(),
 		service:                crm.NewService(store),
 	}, nil
@@ -88,8 +91,9 @@ type engine struct {
 	eventC                 chan storage.Event
 	retryNewInstanceC      chan metapb.WorkflowInstance
 	retryCompleteInstanceC chan uint64
+	stopInstanceC          chan uint64
 
-	rangeCache sync.Map // instanceID -> []uint32{start, end}
+	rangeCache sync.Map // instanceID -> [][]uint32{start, end}
 }
 
 func (eng *engine) Start() error {
@@ -298,6 +302,11 @@ func (eng *engine) Step(event metapb.Event) error {
 		return err
 	}
 
+	// instance stopped
+	if len(ranges) == 0 {
+		return nil
+	}
+
 	var start uint32
 	var end uint32
 	for _, r := range ranges {
@@ -424,6 +433,10 @@ func (eng *engine) handleEvent(ctx context.Context) {
 			if ok {
 				eng.doCreateInstanceStateShardComplete(id)
 			}
+		case id, ok := <-eng.stopInstanceC:
+			if ok {
+				eng.doStopInstance(id)
+			}
 		}
 	}
 }
@@ -436,6 +449,8 @@ func (eng *engine) doEvent(event storage.Event) {
 		eng.doStartInstanceState(event.Data.(metapb.WorkflowInstanceState))
 	case storage.InstanceStateRemovedEvent:
 		eng.doStopInstanceState(event.Data.(metapb.WorkflowInstanceState))
+	case storage.InstanceStartedEvent:
+		eng.doStartedInstance(event.Data.(metapb.WorkflowInstance))
 	}
 }
 
@@ -443,6 +458,11 @@ func (eng *engine) doStartInstanceState(state metapb.WorkflowInstanceState) {
 	key := workerKey(state)
 	if _, ok := eng.workers.Load(key); ok {
 		log.Fatalf("BUG: start a exists state worker")
+	}
+
+	now := time.Now().Unix()
+	if state.StopAt != 0 && now >= state.StopAt {
+		return
 	}
 
 	w, err := newStateWorker(key, state, eng)
@@ -455,6 +475,18 @@ func (eng *engine) doStartInstanceState(state metapb.WorkflowInstanceState) {
 
 	eng.workers.Store(w.key, w)
 	w.run()
+
+	if state.StopAt != 0 {
+		after := time.Second * time.Duration(state.StopAt-now)
+		util.DefaultTimeoutWheel().Schedule(after, eng.stopWorker, w)
+	}
+}
+
+func (eng *engine) stopWorker(arg interface{}) {
+	w := arg.(*stateWorker)
+	eng.workers.Delete(w.key)
+	w.stop()
+	eng.rangeCache.Store(w.state.InstanceID, stoppedRange)
 }
 
 func (eng *engine) doStopInstanceState(state metapb.WorkflowInstanceState) {
@@ -466,6 +498,11 @@ func (eng *engine) doStopInstanceState(state metapb.WorkflowInstanceState) {
 }
 
 func (eng *engine) doStartInstance(instance metapb.WorkflowInstance) {
+	var stopAt int64
+	if instance.Snapshot.Duration > 0 {
+		stopAt = time.Now().Add(time.Second * time.Duration(instance.Snapshot.Duration)).Unix()
+	}
+
 	bm := bbutil.MustParseBM(instance.Crowd)
 	shards := bbutil.BMSplit(bm, instance.MaxPerShard)
 	eng.addShardRangesToCache(instance.ID, shards)
@@ -477,6 +514,7 @@ func (eng *engine) doStartInstance(instance metapb.WorkflowInstance) {
 		state.InstanceID = instance.ID
 		state.Start = shard.Minimum()
 		state.End = shard.Maximum() + 1
+		state.StopAt = stopAt
 
 		for _, step := range instance.Snapshot.Steps {
 			state.States = append(state.States, metapb.StepState{
@@ -492,6 +530,20 @@ func (eng *engine) doStartInstance(instance metapb.WorkflowInstance) {
 	}
 
 	eng.doCreateInstanceStateShardComplete(instance.ID)
+}
+
+func (eng *engine) doStartedInstance(instance metapb.WorkflowInstance) {
+	if instance.Snapshot.Duration == 0 {
+		return
+	}
+
+	now := time.Now().Unix()
+	after := instance.Snapshot.Duration - (now - instance.StartedAt)
+	if after <= 0 {
+		eng.addToInstanceStop(instance.ID)
+	} else {
+		util.DefaultTimeoutWheel().Schedule(time.Second*time.Duration(after), eng.addToInstanceStop, instance.ID)
+	}
 }
 
 func (eng *engine) doCreateInstanceState(instance metapb.WorkflowInstance, state metapb.WorkflowInstanceState) bool {
@@ -512,9 +564,25 @@ func (eng *engine) doCreateInstanceStateShardComplete(id uint64) {
 		InstanceID: id,
 	})
 	if err != nil {
-		log.Errorf("delete workflow instance failed with %+v, retry later", err)
+		log.Errorf("set workflow instance %d started failed with %+v, retry later", id, err)
 		util.DefaultTimeoutWheel().Schedule(eng.opts.retryInterval, eng.addToRetryCompleteInstance, id)
+		return
 	}
+
+	log.Infof("workflow instance %d started ", id)
+}
+
+func (eng *engine) doStopInstance(id uint64) {
+	_, err := eng.store.ExecCommand(&rpcpb.StopInstanceRequest{
+		InstanceID: id,
+	})
+	if err != nil {
+		log.Errorf("stop workflow instance %d failed with %+v, retry later", id, err)
+		util.DefaultTimeoutWheel().Schedule(eng.opts.retryInterval, eng.addToInstanceStop, id)
+		return
+	}
+
+	log.Infof("workflow instance %d stopped ", id)
 }
 
 func (eng *engine) addToRetryNewInstance(arg interface{}) {
@@ -523,6 +591,10 @@ func (eng *engine) addToRetryNewInstance(arg interface{}) {
 
 func (eng *engine) addToRetryCompleteInstance(arg interface{}) {
 	eng.retryCompleteInstanceC <- arg.(uint64)
+}
+
+func (eng *engine) addToInstanceStop(id interface{}) {
+	eng.stopInstanceC <- id.(uint64)
 }
 
 func workerKey(state metapb.WorkflowInstanceState) string {

@@ -3,6 +3,8 @@ package storage
 const (
 	// InstanceLoadedEvent  load a new instance event
 	InstanceLoadedEvent = iota
+	// InstanceStartedEvent instance started event
+	InstanceStartedEvent
 	// InstanceRemovedEvent instance removed to another node event
 	InstanceRemovedEvent
 	// InstanceStateLoadedEvent load a new instance state event

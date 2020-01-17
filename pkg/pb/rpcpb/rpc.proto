@@ -26,10 +26,11 @@ enum Type {
 
     StartingInstance         = 200;
     StartedInstance          = 201;
-    CreateInstanceStateShard = 202;
-    UpdateInstanceStateShard = 203;
-    RemoveInstanceStateShard = 204;
-    StepInstanceStateShard   = 205;
+    StopInstance             = 202;
+    CreateInstanceStateShard = 203;
+    UpdateInstanceStateShard = 204;
+    RemoveInstanceStateShard = 205;
+    StepInstanceStateShard   = 206;
 
     QueueAdd      = 300;
     QueueFetch    = 301;
@@ -188,6 +189,17 @@ message StartedInstanceRequest {
 
 // StartedInstanceResponse response
 message StartedInstanceResponse {
+    bytes id = 1 [(gogoproto.customname) = "ID"];
+}
+
+// StopInstanceRequest remove a workflow
+message StopInstanceRequest {
+    bytes  id         = 1 [(gogoproto.customname) = "ID"];
+    uint64 instanceID = 2;
+}
+
+// StopInstanceResponse response
+message StopInstanceResponse {
     bytes id = 1 [(gogoproto.customname) = "ID"];
 }
 

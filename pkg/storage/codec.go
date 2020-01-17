@@ -53,6 +53,8 @@ func (c *codec) Decode(in *goetty.ByteBuf) (bool, interface{}, error) {
 		msg = rpcpb.AcquireStartingInstanceRequest()
 	case rpcpb.StartedInstance:
 		msg = rpcpb.AcquireStartedInstanceRequest()
+	case rpcpb.StopInstance:
+		msg = rpcpb.AcquireStopInstanceRequest()
 	case rpcpb.CreateInstanceStateShard:
 		msg = rpcpb.AcquireCreateInstanceStateShardRequest()
 	case rpcpb.UpdateInstanceStateShard:
@@ -103,6 +105,8 @@ func (c *codec) Encode(data interface{}, out *goetty.ByteBuf) error {
 		t = rpcpb.StartingInstance
 	case *rpcpb.StartedInstanceResponse:
 		t = rpcpb.StartedInstance
+	case *rpcpb.StopInstanceResponse:
+		t = rpcpb.StopInstance
 	case *rpcpb.CreateInstanceStateShardResponse:
 		t = rpcpb.CreateInstanceStateShard
 	case *rpcpb.UpdateInstanceStateShardResponse:

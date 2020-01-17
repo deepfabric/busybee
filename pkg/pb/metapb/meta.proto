@@ -22,6 +22,7 @@ message Workflow {
     uint64         tenantID  = 2;
     string         name      = 3;
     repeated Step  steps     = 4 [(gogoproto.nullable) = false];
+    int64          duration  = 5;
 }
 
 // WorkflowInstance workflow instance
@@ -30,6 +31,7 @@ message WorkflowInstance {
     Workflow snapshot    = 2 [(gogoproto.nullable) = false];
     bytes    crowd       = 3;
     uint64   maxPerShard = 4;
+    int64    startedAt   = 5;
 }
 
 // WorkflowInstanceState workflow instance state, uid in [start,end). instance : instanceState = 1 : N
@@ -41,6 +43,7 @@ message WorkflowInstanceState {
     uint32             end        = 5;
     repeated StepState states     = 6 [(gogoproto.nullable) = false];
     uint64             version    = 7;
+    int64              stopAt     = 8;
 }
 
 // CountState step count state

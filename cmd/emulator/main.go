@@ -40,6 +40,7 @@ func main() {
 
 	startInstance(instanceID, cli)
 	log.Infof("workflow instance %d started", instanceID)
+	time.Sleep(time.Second * 8)
 	err = cli.StepInstance(metapb.Event{
 		UserID:     1,
 		TenantID:   10000,
@@ -81,6 +82,7 @@ func createWorkflow(cli client.Client) uint64 {
 	wf := metapb.Workflow{
 		TenantID: 10000,
 		Name:     "test_wf",
+		Duration: 5,
 		Steps: []metapb.Step{
 			metapb.Step{
 				Name: "step_0",

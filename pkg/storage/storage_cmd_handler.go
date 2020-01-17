@@ -10,6 +10,7 @@ import (
 	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/log"
 	"github.com/fagongzi/util/protoc"
+	"time"
 )
 
 func (h *beeStorage) init(stepFunc raftstore.LocalCommandFunc) {
@@ -20,6 +21,7 @@ func (h *beeStorage) init(stepFunc raftstore.LocalCommandFunc) {
 
 	h.AddWriteFunc("starting-instance", uint64(rpcpb.StartingInstance), h.startingInstance)
 	h.AddWriteFunc("started-instance", uint64(rpcpb.StartedInstance), h.startedInstance)
+	h.AddWriteFunc("stop-instance", uint64(rpcpb.StopInstance), h.stopInstance)
 	h.AddWriteFunc("create-state", uint64(rpcpb.CreateInstanceStateShard), h.createState)
 	h.AddWriteFunc("update-state", uint64(rpcpb.UpdateInstanceStateShard), h.updateState)
 	h.AddWriteFunc("remove-state", uint64(rpcpb.RemoveInstanceStateShard), h.removeState)
@@ -139,6 +141,14 @@ func (h *beeStorage) BuildRequest(req *raftcmdpb.Request, cmd interface{}) error
 		req.Type = raftcmdpb.Write
 		req.Cmd = protoc.MustMarshal(msg)
 		rpcpb.ReleaseStartedInstanceRequest(msg)
+	case *rpcpb.StopInstanceRequest:
+		msg := cmd.(*rpcpb.StopInstanceRequest)
+		msg.ID = req.ID
+		req.Key = InstanceStartKey(msg.InstanceID)
+		req.CustemType = uint64(rpcpb.StopInstance)
+		req.Type = raftcmdpb.Write
+		req.Cmd = protoc.MustMarshal(msg)
+		rpcpb.ReleaseStopInstanceRequest(msg)
 	case *rpcpb.CreateInstanceStateShardRequest:
 		msg := cmd.(*rpcpb.CreateInstanceStateShardRequest)
 		msg.ID = req.ID
@@ -376,10 +386,62 @@ func (h *beeStorage) startedInstance(shard uint64, req *raftcmdpb.Request) (uint
 		log.Fatalf("missing workflow instance %d", startedWF.ID)
 	}
 
-	value[0] = instanceStartedType
-	err = h.getStore(shard).Set(req.Key, value)
+	switch value[0] {
+	case instanceStoppedType:
+		return 0, 0, resp
+	case instanceStartedType:
+		return 0, 0, resp
+	}
+
+	instance := metapb.WorkflowInstance{}
+	protoc.MustUnmarshal(&instance, value[1:])
+	instance.StartedAt = time.Now().Unix()
+
+	err = h.getStore(shard).Set(req.Key, appendPrefix(protoc.MustMarshal(&instance), instanceStartedType))
 	if err != nil {
 		log.Fatalf("set workflow instance %d started failed with %+v", startedWF.ID, err)
+	}
+
+	if h.store.MaybeLeader(shard) {
+		h.eventC <- Event{
+			EventType: InstanceStartedEvent,
+			Data:      instance,
+		}
+	}
+
+	return uint64(len(req.Key) + len(value)), 0, resp
+}
+
+func (h *beeStorage) stopInstance(shard uint64, req *raftcmdpb.Request) (uint64, int64, *raftcmdpb.Response) {
+	resp := pb.AcquireResponse()
+	stopInstance := rpcpb.StopInstanceRequest{}
+	protoc.MustUnmarshal(&stopInstance, req.Cmd)
+
+	customResp := rpcpb.AcquireStopInstanceResponse()
+	customResp.ID = stopInstance.ID
+	resp.Value = protoc.MustMarshal(customResp)
+	rpcpb.ReleaseStopInstanceResponse(customResp)
+
+	value, err := h.getValueWithPrefix(shard, req.Key)
+	if err != nil {
+		log.Fatalf("get workflow instance %d failed with %+v", stopInstance.ID, err)
+	}
+	if len(value) == 0 {
+		log.Fatalf("missing workflow instance %d", stopInstance.ID)
+	}
+
+	switch value[0] {
+	case instanceStoppedType:
+		return 0, 0, resp
+	}
+
+	instance := metapb.WorkflowInstance{}
+	protoc.MustUnmarshal(&instance, value[1:])
+	instance.StartedAt = time.Now().Unix()
+
+	err = h.getStore(shard).Set(req.Key, appendPrefix(protoc.MustMarshal(&instance), instanceStoppedType))
+	if err != nil {
+		log.Fatalf("set workflow instance %d stopped failed with %+v", stopInstance.ID, err)
 	}
 
 	return uint64(len(req.Key) + len(value)), 0, resp
