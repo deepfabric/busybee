@@ -1,6 +1,8 @@
 package storage
 
 import (
+	"time"
+
 	"github.com/deepfabric/beehive/pb"
 	"github.com/deepfabric/beehive/pb/raftcmdpb"
 	"github.com/deepfabric/beehive/raftstore"
@@ -10,7 +12,6 @@ import (
 	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/log"
 	"github.com/fagongzi/util/protoc"
-	"time"
 )
 
 func (h *beeStorage) init(stepFunc raftstore.LocalCommandFunc) {

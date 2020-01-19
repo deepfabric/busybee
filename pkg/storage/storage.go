@@ -109,7 +109,6 @@ func (h *beeStorage) Set(key, value []byte) error {
 	req.Key = key
 	req.Value = value
 	_, err := h.ExecCommand(req)
-	rpcpb.ReleaseSetRequest(req)
 	return err
 }
 
@@ -117,8 +116,6 @@ func (h *beeStorage) Get(key []byte) ([]byte, error) {
 	req := rpcpb.AcquireGetRequest()
 	req.Key = key
 	value, err := h.ExecCommand(req)
-	rpcpb.ReleaseGetRequest(req)
-
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +130,6 @@ func (h *beeStorage) Delete(key []byte) error {
 	req.Key = key
 
 	_, err := h.ExecCommand(req)
-	rpcpb.ReleaseDeleteRequest(req)
 	return err
 }
 

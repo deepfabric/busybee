@@ -22,6 +22,7 @@ import (
 	"github.com/fagongzi/log"
 	"github.com/fagongzi/util/protoc"
 	"github.com/fagongzi/util/task"
+	"github.com/robfig/cron/v3"
 )
 
 var (
@@ -64,6 +65,10 @@ type Engine interface {
 	Storage() storage.Storage
 	// Service returns a crm service
 	Service() crm.Service
+	// AddCronJob add cron job
+	AddCronJob(string, func()) (cron.EntryID, error)
+	// StopCronJob stop the cron job
+	StopCronJob(cron.EntryID)
 }
 
 // NewEngine returns a engine
@@ -76,16 +81,18 @@ func NewEngine(store storage.Storage, notifier notify.Notifier) (Engine, error) 
 		retryCompleteInstanceC: make(chan uint64, 1024),
 		stopInstanceC:          make(chan uint64, 1024),
 		runner:                 task.NewRunner(),
+		cronRunner:             cron.New(cron.WithSeconds()),
 		service:                crm.NewService(store),
 	}, nil
 }
 
 type engine struct {
-	opts     options
-	store    storage.Storage
-	service  crm.Service
-	notifier notify.Notifier
-	runner   *task.Runner
+	opts       options
+	store      storage.Storage
+	service    crm.Service
+	notifier   notify.Notifier
+	runner     *task.Runner
+	cronRunner *cron.Cron
 
 	workers                sync.Map // key -> *worker
 	eventC                 chan storage.Event
@@ -102,11 +109,13 @@ func (eng *engine) Start() error {
 		return err
 	}
 
+	eng.cronRunner.Start()
 	eng.runner.RunCancelableTask(eng.handleEvent)
 	return nil
 }
 
 func (eng *engine) Stop() error {
+	eng.cronRunner.Stop()
 	return eng.runner.Stop()
 }
 
@@ -166,11 +175,7 @@ func (eng *engine) DeleteInstance(id uint64) error {
 		return fmt.Errorf("instance %d already started", id)
 	}
 
-	req := rpcpb.AcquireDeleteRequest()
-	req.Key = uint64Key(id)
-	_, err = eng.store.ExecCommand(req)
-	rpcpb.ReleaseDeleteRequest(req)
-	return err
+	return eng.store.Delete(uint64Key(id))
 }
 
 func (eng *engine) StartInstance(id uint64) error {
@@ -196,8 +201,6 @@ func (eng *engine) StartInstance(id uint64) error {
 	req := rpcpb.AcquireStartingInstanceRequest()
 	req.Instance = instance
 	_, err = eng.store.ExecCommand(req)
-	rpcpb.ReleaseStartingInstanceRequest(req)
-
 	return err
 }
 
@@ -327,7 +330,6 @@ func (eng *engine) Step(event metapb.Event) error {
 	req.End = end
 
 	_, err = eng.store.ExecCommand(req)
-	rpcpb.ReleaseStepInstanceStateShardRequest(req)
 	return err
 }
 
@@ -409,6 +411,14 @@ func (eng *engine) Storage() storage.Storage {
 
 func (eng *engine) Service() crm.Service {
 	return eng.service
+}
+
+func (eng *engine) AddCronJob(cronExpr string, fn func()) (cron.EntryID, error) {
+	return eng.cronRunner.AddFunc(cronExpr, fn)
+}
+
+func (eng *engine) StopCronJob(id cron.EntryID) {
+	eng.cronRunner.Remove(id)
 }
 
 func uint64Key(id uint64) []byte {
@@ -507,7 +517,7 @@ func (eng *engine) doStartInstance(instance metapb.WorkflowInstance) {
 	shards := bbutil.BMSplit(bm, instance.MaxPerShard)
 	eng.addShardRangesToCache(instance.ID, shards)
 
-	for _, shard := range shards {
+	for idx, shard := range shards {
 		state := metapb.WorkflowInstanceState{}
 		state.TenantID = instance.Snapshot.TenantID
 		state.WorkflowID = instance.Snapshot.ID
@@ -515,6 +525,8 @@ func (eng *engine) doStartInstance(instance metapb.WorkflowInstance) {
 		state.Start = shard.Minimum()
 		state.End = shard.Maximum() + 1
 		state.StopAt = stopAt
+		state.Idx = uint64(idx)
+		state.MaxIdx = uint64(len(shards) - 1)
 
 		for _, step := range instance.Snapshot.Steps {
 			state.States = append(state.States, metapb.StepState{
@@ -598,5 +610,9 @@ func (eng *engine) addToInstanceStop(id interface{}) {
 }
 
 func workerKey(state metapb.WorkflowInstanceState) string {
-	return fmt.Sprintf("%d/[%d-%d)", state.InstanceID, state.Start, state.End)
+	return fmt.Sprintf("%d/[%d-%d)/%d",
+		state.InstanceID,
+		state.Start,
+		state.End,
+		state.Idx)
 }

@@ -42,12 +42,7 @@ func (s *httpServer) putKV(c echo.Context) error {
 		})
 	}
 
-	req := rpcpb.AcquireSetRequest()
-	req.Key = key
-	req.Value = value
-
-	_, err = s.engine.Storage().ExecCommand(req)
-	rpcpb.ReleaseSetRequest(req)
+	err = s.engine.Storage().Set(key, value)
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
 			Code:  codeFailed,
@@ -67,11 +62,7 @@ func (s *httpServer) getKV(c echo.Context) error {
 		})
 	}
 
-	req := rpcpb.AcquireGetRequest()
-	req.Key = key
-
-	value, err := s.engine.Storage().ExecCommand(req)
-	rpcpb.ReleaseGetRequest(req)
+	value, err := s.engine.Storage().Get(key)
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
 			Code:  codeFailed,
@@ -100,11 +91,7 @@ func (s *httpServer) deleteKV(c echo.Context) error {
 		})
 	}
 
-	req := rpcpb.AcquireDeleteRequest()
-	req.Key = key
-
-	_, err = s.engine.Storage().ExecCommand(req)
-	rpcpb.ReleaseDeleteRequest(req)
+	err = s.engine.Storage().Delete(key)
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
 			Code:  codeFailed,
@@ -145,7 +132,6 @@ func (s *httpServer) bmCreate(c echo.Context) error {
 	req.Value = value
 
 	_, err = s.engine.Storage().ExecCommand(req)
-	rpcpb.ReleaseBMCreateRequest(req)
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
 			Code:  codeFailed,
@@ -186,7 +172,6 @@ func (s *httpServer) bmAdd(c echo.Context) error {
 	req.Value = value
 
 	_, err = s.engine.Storage().ExecCommand(req)
-	rpcpb.ReleaseBMAddRequest(req)
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
 			Code:  codeFailed,
@@ -227,7 +212,6 @@ func (s *httpServer) bmRemove(c echo.Context) error {
 	req.Value = value
 
 	_, err = s.engine.Storage().ExecCommand(req)
-	rpcpb.ReleaseBMRemoveRequest(req)
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
 			Code:  codeFailed,
@@ -251,7 +235,6 @@ func (s *httpServer) bmClear(c echo.Context) error {
 	req.Key = key
 
 	_, err = s.engine.Storage().ExecCommand(req)
-	rpcpb.ReleaseBMClearRequest(req)
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
 			Code:  codeFailed,
@@ -293,7 +276,6 @@ func (s *httpServer) bmRange(c echo.Context) error {
 	req.Limit = limit
 
 	value, err := s.engine.Storage().ExecCommand(req)
-	rpcpb.ReleaseBMRangeRequest(req)
 	if err != nil {
 		return c.JSON(http.StatusOK, &JSONResult{
 			Code:  codeFailed,
@@ -324,9 +306,9 @@ func DecodeUint32Slice(data []byte) ([]uint32, error) {
 	}
 
 	size := n / 4
-	value := make([]uint32, size, size)
+	value := make([]uint32, 0, size)
 	for i := 0; i < size; i++ {
-		value = append(value, goetty.Byte2UInt32(data[size*4:]))
+		value = append(value, goetty.Byte2UInt32(data[i*4:]))
 	}
 	return value, nil
 }

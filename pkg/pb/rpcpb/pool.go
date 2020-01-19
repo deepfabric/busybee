@@ -200,7 +200,7 @@ func ReleaseBMCountRequest(value *BMCountRequest) {
 
 // AcquireBMRangeRequest returns value from pool
 func AcquireBMRangeRequest() *BMRangeRequest {
-	value := bmCountRequestPool.Get()
+	value := bmRangeRequestPool.Get()
 	if value == nil {
 		return &BMRangeRequest{}
 	}
@@ -210,7 +210,7 @@ func AcquireBMRangeRequest() *BMRangeRequest {
 // ReleaseBMRangeRequest returns the value to pool
 func ReleaseBMRangeRequest(value *BMRangeRequest) {
 	value.Reset()
-	bmCountRequestPool.Put(value)
+	bmRangeRequestPool.Put(value)
 }
 
 // AcquireQueueAddRequest returns value from pool

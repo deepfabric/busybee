@@ -44,6 +44,8 @@ message WorkflowInstanceState {
     repeated StepState states     = 6 [(gogoproto.nullable) = false];
     uint64             version    = 7;
     int64              stopAt     = 8;
+    uint64             idx        = 9;
+    uint64             maxIdx     = 10;
 }
 
 // CountState step count state
@@ -101,7 +103,7 @@ message Execution {
 // TimerExecution is a timer performable operation
 message TimerExecution {
     Expr   condition  = 1;
-    uint64 interval   = 2;
+    string cron       = 2;
     string nextStep   = 3;
 }
 

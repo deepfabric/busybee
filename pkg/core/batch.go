@@ -19,7 +19,7 @@ func newExecutionbatch() *executionbatch {
 	return &executionbatch{}
 }
 
-func (b *executionbatch) next() {
+func (b *executionbatch) notify() {
 	value := metapb.Notify{
 		UserID:     b.event.UserID,
 		TenantID:   b.event.TenantID,
@@ -32,6 +32,12 @@ func (b *executionbatch) next() {
 		value.Crowd = util.MustMarshalBM(b.crowd)
 	}
 	b.notifies = append(b.notifies, value)
+}
+
+func (b *executionbatch) next(notify bool) {
+	if notify {
+		b.notify()
+	}
 
 	b.event = metapb.Event{}
 	b.from = ""

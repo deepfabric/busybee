@@ -53,14 +53,6 @@ github.com/dgryski/go-farm v0.0.0-20190423205320-6a90982ecee2 h1:tdlZCpZ/P9DhczC
 github.com/dgryski/go-farm v0.0.0-20190423205320-6a90982ecee2/go.mod h1:SqUrOPUnsFjfmXRMNPybcSiG0BgUW2AuFH8PAnS2iTw=
 github.com/dustin/go-humanize v1.0.0 h1:VSnTsYCnlFHaM2/igO1h6X3HA71jcobQuxemgkq4zYo=
 github.com/dustin/go-humanize v1.0.0/go.mod h1:HtrtbFcZ19U5GC7JDqmcUSB87Iq5E25KnS6fMYU6eOk=
-github.com/fagongzi/expr v0.0.0-20200110083857-42290a13b2df h1:ZkJJDr38pMEObhgVg8dC+Db+wyGb1SkyDcmCyTGwHwI=
-github.com/fagongzi/expr v0.0.0-20200110083857-42290a13b2df/go.mod h1:8zU9m3Ji8N6hO+OC2C68/9OBWfLfnVtXWg4YDVr349E=
-github.com/fagongzi/expr v0.0.0-20200111062629-e763cb65814c h1:9ROCLNNwvkOZfvsHAugbZlK/M/QbclQn/QunrdDIFnU=
-github.com/fagongzi/expr v0.0.0-20200111062629-e763cb65814c/go.mod h1:8zU9m3Ji8N6hO+OC2C68/9OBWfLfnVtXWg4YDVr349E=
-github.com/fagongzi/expr v0.0.0-20200111075459-07c398caf2cb h1:92m2s0dunoCdHeCkCYHI+emlOkp219sDurvGRuA/G1s=
-github.com/fagongzi/expr v0.0.0-20200111075459-07c398caf2cb/go.mod h1:8zU9m3Ji8N6hO+OC2C68/9OBWfLfnVtXWg4YDVr349E=
-github.com/fagongzi/expr v0.0.0-20200111081439-d838e87a29b2 h1:lngIBme2XNySDQQB8hkrk93hsjR+V2nfz1a95gcGGXg=
-github.com/fagongzi/expr v0.0.0-20200111081439-d838e87a29b2/go.mod h1:8zU9m3Ji8N6hO+OC2C68/9OBWfLfnVtXWg4YDVr349E=
 github.com/fagongzi/expr v0.0.0-20200111083631-9072dbb0af1c h1:sWZHBR0xeqph6kcml/iCl2SrN0hsHUcvRaRUndcNAzY=
 github.com/fagongzi/expr v0.0.0-20200111083631-9072dbb0af1c/go.mod h1:8zU9m3Ji8N6hO+OC2C68/9OBWfLfnVtXWg4YDVr349E=
 github.com/fagongzi/goetty v1.3.1/go.mod h1:lLUyHhtjlOqatxVXgyLocwoI2o359JzLE7EWRGZiGw4=
@@ -194,6 +186,8 @@ github.com/prometheus/procfs v0.0.2/go.mod h1:TjEm7ze935MbeOT/UhFTIMYKhuLP4wbCsT
 github.com/prometheus/procfs v0.0.3/go.mod h1:4A/X28fw3Fc593LaREMrKMqOKvUAntwMDaekg4FpcdQ=
 github.com/prometheus/procfs v0.0.5 h1:3+auTFlqw+ZaQYJARz6ArODtkaIwtvBTx3N2NehQlL8=
 github.com/prometheus/procfs v0.0.5/go.mod h1:4A/X28fw3Fc593LaREMrKMqOKvUAntwMDaekg4FpcdQ=
+github.com/robfig/cron/v3 v3.0.1 h1:WdRxkvbJztn8LMz/QEvLN5sBU+xKpSqwwUO1Pjr4qDs=
+github.com/robfig/cron/v3 v3.0.1/go.mod h1:eQICP3HwyT7UooqI/z+Ov+PtYAWygg1TEWWzGIFLtro=
 github.com/rogpeppe/fastuuid v0.0.0-20150106093220-6724a57986af/go.mod h1:XWv6SoW27p1b0cqNHllgS5HIMJraePCO15w5zCzIWYg=
 github.com/russross/blackfriday v1.5.2/go.mod h1:JO/DiYxRf+HjHt06OyowR9PTA263kcR/rfWxYHBV53g=
 github.com/shirou/gopsutil v2.19.9+incompatible/go.mod h1:5b4v6he4MtMOwMlS0TUMTu2PcXUg8+E1lC7eC3UO/RA=

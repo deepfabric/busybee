@@ -1,18 +1,15 @@
 package core
 
 import (
-	"time"
-
 	"github.com/RoaringBitmap/roaring"
-	"github.com/deepfabric/beehive/util"
 	"github.com/deepfabric/busybee/pkg/expr"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	bbutil "github.com/deepfabric/busybee/pkg/util"
-	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/log"
 	"github.com/fagongzi/util/hack"
 	"github.com/fagongzi/util/task"
+	"github.com/robfig/cron/v3"
 )
 
 var (
@@ -35,13 +32,14 @@ type stateWorker struct {
 	key          string
 	eng          Engine
 	state        metapb.WorkflowInstanceState
+	totalCrowds  *roaring.Bitmap
 	stepCrowds   []*roaring.Bitmap
-	timeout      goetty.Timeout
-	interval     time.Duration
 	steps        map[string]excution
 	entryActions map[string]string
 	leaveActions map[string]string
 	queue        *task.Queue
+
+	cronIDs []cron.EntryID
 }
 
 func newStateWorker(key string, state metapb.WorkflowInstanceState, eng Engine) (*stateWorker, error) {
@@ -55,19 +53,32 @@ func newStateWorker(key string, state metapb.WorkflowInstanceState, eng Engine) 
 		state:        state,
 		eng:          eng,
 		stepCrowds:   stepCrowds,
+		totalCrowds:  bbutil.BMOr(stepCrowds...),
 		steps:        make(map[string]excution),
 		queue:        task.New(1024),
 		entryActions: make(map[string]string),
 		leaveActions: make(map[string]string),
-	}
-	if state.States[0].Step.Execution.Type == metapb.Timer {
-		w.interval = time.Second * time.Duration(state.States[0].Step.Execution.Timer.Interval)
 	}
 
 	for _, stepState := range state.States {
 		exec, err := newExcution(stepState.Step.Name, stepState.Step.Execution)
 		if err != nil {
 			return nil, err
+		}
+
+		if stepState.Step.Execution.Timer != nil {
+			name := stepState.Step.Name
+			id, err := w.eng.AddCronJob(stepState.Step.Execution.Timer.Cron, func() {
+				w.queue.Put(item{
+					action: timerAction,
+					value:  name,
+				})
+			})
+			if err != nil {
+				return nil, err
+			}
+
+			w.cronIDs = append(w.cronIDs, id)
 		}
 
 		w.steps[stepState.Step.Name] = exec
@@ -104,14 +115,16 @@ func (w *stateWorker) run() {
 				value := items[i].(item)
 				if value.action == stopAction {
 					w.queue.Dispose()
-					w.timeout.Stop()
+					for _, id := range w.cronIDs {
+						w.eng.StopCronJob(id)
+					}
 					log.Infof("worker %s stopped", w.key)
 					return
 				}
 
 				switch value.action {
 				case timerAction:
-					w.doStepTimer(batch)
+					w.doStepTimer(batch, value.value.(string))
 				case eventAction:
 					batch.cbs = append(batch.cbs, value.cb)
 					w.doStepEvent(value.value.(metapb.Event), batch)
@@ -132,7 +145,10 @@ func (w *stateWorker) execBatch(batch *executionbatch) {
 
 		err := w.eng.Notifier().Notify(w.state.InstanceID, batch.notifies...)
 		if err != nil {
-			log.Fatalf("instance state notify failed with %+v", err)
+			log.Fatalf("%s instance %d state notify failed with %+v",
+				w.key,
+				w.state.InstanceID,
+				err)
 		}
 
 		req := rpcpb.AcquireUpdateInstanceStateShardRequest()
@@ -150,19 +166,34 @@ func (w *stateWorker) execBatch(batch *executionbatch) {
 }
 
 func (w *stateWorker) stepChanged(batch *executionbatch) error {
+	if batch.crowd != nil {
+		batch.crowd.And(w.totalCrowds)
+	}
+
+	doNotify := false
 	for idx := range w.state.States {
 		changed := false
 		if w.state.States[idx].Step.Name == batch.from {
 			changed = true
 			if nil != batch.crowd {
-				w.stepCrowds[idx] = bbutil.BMXOr(w.stepCrowds[idx], batch.crowd)
+				afterChanged := bbutil.BMAndnot(w.stepCrowds[idx], batch.crowd)
+				if w.stepCrowds[idx].GetCardinality() == afterChanged.GetCardinality() {
+					changed = false
+				} else {
+					w.stepCrowds[idx] = afterChanged
+				}
 			} else {
 				w.stepCrowds[idx].Remove(batch.event.UserID)
 			}
 		} else if w.state.States[idx].Step.Name == batch.to {
 			changed = true
 			if nil != batch.crowd {
-				w.stepCrowds[idx] = bbutil.BMOr(w.stepCrowds[idx], batch.crowd)
+				afterChanged := bbutil.BMOr(w.stepCrowds[idx], batch.crowd)
+				if w.stepCrowds[idx].GetCardinality() == afterChanged.GetCardinality() {
+					changed = false
+				} else {
+					w.stepCrowds[idx] = afterChanged
+				}
 			} else {
 				w.stepCrowds[idx].Add(batch.event.UserID)
 			}
@@ -171,10 +202,11 @@ func (w *stateWorker) stepChanged(batch *executionbatch) error {
 		if changed {
 			w.state.States[idx].Crowd = bbutil.MustMarshalBM(w.stepCrowds[idx])
 			w.state.Version++
+			doNotify = true
 		}
 	}
 
-	batch.next()
+	batch.next(doNotify)
 	return nil
 }
 
@@ -199,33 +231,16 @@ func (w *stateWorker) doStepEvent(event metapb.Event, batch *executionbatch) {
 	}
 }
 
-func (w *stateWorker) doStepTimer(batch *executionbatch) {
-	event := metapb.Event{
+func (w *stateWorker) doStepTimer(batch *executionbatch, name string) {
+	err := w.steps[name].Execute(newExprCtx(metapb.Event{
 		TenantID:   w.state.TenantID,
 		InstanceID: w.state.InstanceID,
 		WorkflowID: w.state.WorkflowID,
-	}
-
-	err := w.steps[w.state.States[0].Step.Name].Execute(newExprCtx(event, w.eng),
+	}, w.eng),
 		w.stepChanged, batch)
 	if err != nil {
 		log.Errorf("worker trigger timer failed with %+v", err)
 	}
-	w.schedule()
-}
-
-func (w *stateWorker) schedule() {
-	if w.interval == 0 {
-		return
-	}
-
-	w.timeout, _ = util.DefaultTimeoutWheel().Schedule(w.interval, w.doTimeout, nil)
-}
-
-func (w *stateWorker) doTimeout(arg interface{}) {
-	w.queue.Put(item{
-		action: timerAction,
-	})
 }
 
 type exprCtx struct {

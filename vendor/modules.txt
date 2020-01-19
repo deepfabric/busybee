@@ -211,6 +211,8 @@ github.com/prometheus/common/model
 github.com/prometheus/procfs
 github.com/prometheus/procfs/internal/fs
 github.com/prometheus/procfs/internal/util
+# github.com/robfig/cron/v3 v3.0.1
+github.com/robfig/cron/v3
 # github.com/shirou/gopsutil v2.19.10+incompatible
 github.com/shirou/gopsutil/disk
 github.com/shirou/gopsutil/internal/common
