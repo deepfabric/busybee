@@ -55,7 +55,6 @@ func main() {
 	err = cli.StepInstance(metapb.Event{
 		UserID:     1,
 		TenantID:   10000,
-		WorkflowID: wid,
 		InstanceID: instanceID,
 		Data: []metapb.KV{
 			metapb.KV{Key: []byte("uid"), Value: []byte("1")},
@@ -68,7 +67,6 @@ func main() {
 	err = cli.StepInstance(metapb.Event{
 		UserID:     2,
 		TenantID:   10000,
-		WorkflowID: wid,
 		InstanceID: instanceID,
 		Data: []metapb.KV{
 			metapb.KV{Key: []byte("uid"), Value: []byte("2")},
@@ -118,7 +116,6 @@ func main1() {
 	err = cli.StepInstance(metapb.Event{
 		UserID:     1,
 		TenantID:   10000,
-		WorkflowID: wid,
 		InstanceID: instanceID,
 		Data: []metapb.KV{
 			metapb.KV{Key: []byte("uid"), Value: []byte("1")},
@@ -131,7 +128,6 @@ func main1() {
 	err = cli.StepInstance(metapb.Event{
 		UserID:     2,
 		TenantID:   10000,
-		WorkflowID: wid,
 		InstanceID: instanceID,
 		Data: []metapb.KV{
 			metapb.KV{Key: []byte("uid"), Value: []byte("2")},

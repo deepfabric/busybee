@@ -53,6 +53,8 @@ type Engine interface {
 	DeleteInstance(instanceID uint64) error
 	// StartInstance start instance
 	StartInstance(id uint64) error
+	// StopInstance stop instance
+	StopInstance(id uint64) error
 	// InstanceCountState returns instance count state
 	InstanceCountState(id uint64) (metapb.InstanceCountState, error)
 	// InstanceStepState returns instance step state
@@ -201,6 +203,29 @@ func (eng *engine) StartInstance(id uint64) error {
 	req := rpcpb.AcquireStartingInstanceRequest()
 	req.Instance = instance
 	_, err = eng.store.ExecCommand(req)
+	return err
+}
+
+func (eng *engine) StopInstance(id uint64) error {
+	value, err := eng.store.Get(uint64Key(id))
+	if err != nil {
+		return err
+	}
+	if len(value) == 0 {
+		return fmt.Errorf("instance %d not create", id)
+	}
+
+	value, err = eng.store.Get(storage.InstanceStartKey(id))
+	if err != nil {
+		return err
+	}
+	if len(value) == 0 {
+		return fmt.Errorf("instance %d not started", id)
+	}
+
+	_, err = eng.store.ExecCommand(&rpcpb.StopInstanceRequest{
+		InstanceID: id,
+	})
 	return err
 }
 
@@ -437,7 +462,7 @@ func (eng *engine) handleEvent(ctx context.Context) {
 			}
 		case instance, ok := <-eng.retryNewInstanceC:
 			if ok {
-				eng.doStartInstance(instance)
+				eng.doStartInstanceEvent(instance)
 			}
 		case id, ok := <-eng.retryCompleteInstanceC:
 			if ok {
@@ -454,17 +479,19 @@ func (eng *engine) handleEvent(ctx context.Context) {
 func (eng *engine) doEvent(event storage.Event) {
 	switch event.EventType {
 	case storage.InstanceLoadedEvent:
-		eng.doStartInstance(event.Data.(metapb.WorkflowInstance))
+		eng.doStartInstanceEvent(event.Data.(metapb.WorkflowInstance))
 	case storage.InstanceStateLoadedEvent:
-		eng.doStartInstanceState(event.Data.(metapb.WorkflowInstanceState))
+		eng.doStartInstanceStateEvent(event.Data.(metapb.WorkflowInstanceState))
 	case storage.InstanceStateRemovedEvent:
-		eng.doStopInstanceState(event.Data.(metapb.WorkflowInstanceState))
+		eng.doStopInstanceStateEvent(event.Data.(metapb.WorkflowInstanceState))
 	case storage.InstanceStartedEvent:
-		eng.doStartedInstance(event.Data.(metapb.WorkflowInstance))
+		eng.doStartedInstanceEvent(event.Data.(metapb.WorkflowInstance))
+	case storage.InstanceStoppedEvent:
+		eng.doStoppedInstanceEvent(event.Data.(metapb.WorkflowInstance).ID)
 	}
 }
 
-func (eng *engine) doStartInstanceState(state metapb.WorkflowInstanceState) {
+func (eng *engine) doStartInstanceStateEvent(state metapb.WorkflowInstanceState) {
 	key := workerKey(state)
 	if _, ok := eng.workers.Load(key); ok {
 		log.Fatalf("BUG: start a exists state worker")
@@ -499,7 +526,7 @@ func (eng *engine) stopWorker(arg interface{}) {
 	eng.rangeCache.Store(w.state.InstanceID, stoppedRange)
 }
 
-func (eng *engine) doStopInstanceState(state metapb.WorkflowInstanceState) {
+func (eng *engine) doStopInstanceStateEvent(state metapb.WorkflowInstanceState) {
 	key := workerKey(state)
 	if w, ok := eng.workers.Load(key); ok {
 		eng.workers.Delete(key)
@@ -507,7 +534,7 @@ func (eng *engine) doStopInstanceState(state metapb.WorkflowInstanceState) {
 	}
 }
 
-func (eng *engine) doStartInstance(instance metapb.WorkflowInstance) {
+func (eng *engine) doStartInstanceEvent(instance metapb.WorkflowInstance) {
 	var stopAt int64
 	if instance.Snapshot.Duration > 0 {
 		stopAt = time.Now().Add(time.Second * time.Duration(instance.Snapshot.Duration)).Unix()
@@ -544,7 +571,7 @@ func (eng *engine) doStartInstance(instance metapb.WorkflowInstance) {
 	eng.doCreateInstanceStateShardComplete(instance.ID)
 }
 
-func (eng *engine) doStartedInstance(instance metapb.WorkflowInstance) {
+func (eng *engine) doStartedInstanceEvent(instance metapb.WorkflowInstance) {
 	if instance.Snapshot.Duration == 0 {
 		return
 	}
@@ -555,6 +582,25 @@ func (eng *engine) doStartedInstance(instance metapb.WorkflowInstance) {
 		eng.addToInstanceStop(instance.ID)
 	} else {
 		util.DefaultTimeoutWheel().Schedule(time.Second*time.Duration(after), eng.addToInstanceStop, instance.ID)
+	}
+}
+
+func (eng *engine) doStoppedInstanceEvent(id uint64) {
+	eng.rangeCache.Store(id, stoppedRange)
+
+	var removed []interface{}
+	eng.workers.Range(func(key, value interface{}) bool {
+		w := value.(*stateWorker)
+		if w.state.InstanceID == id {
+			removed = append(removed, key)
+		}
+		return true
+	})
+
+	for _, key := range removed {
+		if w, ok := eng.workers.Load(key); ok {
+			eng.stopWorker(w)
+		}
 	}
 }
 

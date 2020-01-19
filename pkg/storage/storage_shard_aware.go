@@ -59,16 +59,16 @@ func (h *beeStorage) handleShardCycle(ctx context.Context) {
 			if ok {
 				switch shard.action {
 				case becomeLeader:
-					h.doLoadEvent(shard.shard, false)
-				case becomeFollower:
 					h.doLoadEvent(shard.shard, true)
+				case becomeFollower:
+					h.doLoadEvent(shard.shard, false)
 				}
 			}
 		}
 	}
 }
 
-func (h *beeStorage) doLoadEvent(shard beehivemetapb.Shard, remove bool) {
+func (h *beeStorage) doLoadEvent(shard beehivemetapb.Shard, leader bool) {
 	err := h.getStore(shard.ID).Scan(shard.Start, shard.End, func(key, value []byte) (bool, error) {
 		if len(value) == 0 {
 			return true, nil
@@ -76,33 +76,38 @@ func (h *beeStorage) doLoadEvent(shard beehivemetapb.Shard, remove bool) {
 
 		switch value[0] {
 		case instanceStartingType:
-			if !remove {
-				break
-			}
-
-			instance := metapb.WorkflowInstance{}
-			protoc.MustUnmarshal(&instance, value[1:])
-			h.eventC <- Event{
-				EventType: InstanceLoadedEvent,
-				Data:      instance,
+			if leader {
+				instance := metapb.WorkflowInstance{}
+				protoc.MustUnmarshal(&instance, value[1:])
+				h.eventC <- Event{
+					EventType: InstanceLoadedEvent,
+					Data:      instance,
+				}
 			}
 		case instanceStartedType:
-			if !remove {
-				break
+			if leader {
+				instance := metapb.WorkflowInstance{}
+				protoc.MustUnmarshal(&instance, value[1:])
+				h.eventC <- Event{
+					EventType: InstanceStartedEvent,
+					Data:      instance,
+				}
 			}
-
-			instance := metapb.WorkflowInstance{}
-			protoc.MustUnmarshal(&instance, value[1:])
-			h.eventC <- Event{
-				EventType: InstanceStartedEvent,
-				Data:      instance,
+		case instanceStoppedType:
+			if leader {
+				instance := metapb.WorkflowInstance{}
+				protoc.MustUnmarshal(&instance, value[1:])
+				h.eventC <- Event{
+					EventType: InstanceStoppedEvent,
+					Data:      instance,
+				}
 			}
 		case stateType:
 			state := metapb.WorkflowInstanceState{}
 			protoc.MustUnmarshal(&state, value[1:])
 
 			et := InstanceStateLoadedEvent
-			if remove {
+			if !leader {
 				et = InstanceStateRemovedEvent
 			}
 			h.eventC <- Event{

@@ -235,7 +235,6 @@ func (w *stateWorker) doStepTimer(batch *executionbatch, name string) {
 	err := w.steps[name].Execute(newExprCtx(metapb.Event{
 		TenantID:   w.state.TenantID,
 		InstanceID: w.state.InstanceID,
-		WorkflowID: w.state.WorkflowID,
 	}, w.eng),
 		w.stepChanged, batch)
 	if err != nil {

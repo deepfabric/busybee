@@ -23,7 +23,6 @@ func (b *executionbatch) notify() {
 	value := metapb.Notify{
 		UserID:     b.event.UserID,
 		TenantID:   b.event.TenantID,
-		WorkflowID: b.event.WorkflowID,
 		InstanceID: b.event.InstanceID,
 		FromStep:   b.from,
 		ToStep:     b.to,

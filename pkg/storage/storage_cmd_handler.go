@@ -445,6 +445,13 @@ func (h *beeStorage) stopInstance(shard uint64, req *raftcmdpb.Request) (uint64,
 		log.Fatalf("set workflow instance %d stopped failed with %+v", stopInstance.ID, err)
 	}
 
+	if h.store.MaybeLeader(shard) {
+		h.eventC <- Event{
+			EventType: InstanceStoppedEvent,
+			Data:      instance,
+		}
+	}
+
 	return uint64(len(req.Key) + len(value)), 0, resp
 }
 
