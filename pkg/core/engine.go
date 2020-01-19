@@ -547,7 +547,6 @@ func (eng *engine) doStartInstanceEvent(instance metapb.WorkflowInstance) {
 	for idx, shard := range shards {
 		state := metapb.WorkflowInstanceState{}
 		state.TenantID = instance.Snapshot.TenantID
-		state.WorkflowID = instance.Snapshot.ID
 		state.InstanceID = instance.ID
 		state.Start = shard.Minimum()
 		state.End = shard.Maximum() + 1

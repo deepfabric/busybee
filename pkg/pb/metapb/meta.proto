@@ -37,15 +37,14 @@ message WorkflowInstance {
 // WorkflowInstanceState workflow instance state, uid in [start,end). instance : instanceState = 1 : N
 message WorkflowInstanceState {
     uint64             tenantID   = 1;
-    uint64             workflowID = 2;
-    uint64             instanceID = 3;
-    uint32             start      = 4;
-    uint32             end        = 5;
-    repeated StepState states     = 6 [(gogoproto.nullable) = false];
-    uint64             version    = 7;
-    int64              stopAt     = 8;
-    uint64             idx        = 9;
-    uint64             maxIdx     = 10;
+    uint64             instanceID = 2;
+    uint32             start      = 3;
+    uint32             end        = 4;
+    repeated StepState states     = 5 [(gogoproto.nullable) = false];
+    uint64             version    = 6;
+    int64              stopAt     = 7;
+    uint64             idx        = 8;
+    uint64             maxIdx     = 9;
 }
 
 // CountState step count state
