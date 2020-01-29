@@ -31,10 +31,14 @@ enum Type {
     InstanceCountState       = 206;
     InstanceCrowdState       = 207;
 
-    QueueAdd            = 300;
-    QueueFetch          = 301;
+    QueueAdd      = 300;
+    QueueFetch    = 301;
 
-    TenantInit          = 400;
+    TenantInit    = 400;
+    UpdateMapping = 401;
+    GetMapping    = 402;
+    UpdateProfile = 403;
+    GetProfile    = 404;
 }
 
 // SetRequest set a key value pair
@@ -157,9 +161,41 @@ message TenantInitRequest {
     uint64 inputQueuePartitions = 2;
 }
 
+// UpdateMappingRequest update id mapping request
+message UpdateMappingRequest {
+    uint64                  id     = 1 [(gogoproto.customname) = "ID"];
+    repeated metapb.IDValue values = 2 [(gogoproto.nullable) = false];
+}
+
+// GetMappingRequest get id mapping request
+message GetMappingRequest {
+    uint64           id   = 1 [(gogoproto.customname) = "ID"];
+    metapb.IDValue   from = 2 [(gogoproto.nullable) = false];
+    uint32           to   = 3;
+}
+
+// UpdateProfileRequest update profile request
+message UpdateProfileRequest {
+    uint64 id     = 1 [(gogoproto.customname) = "ID"];
+    uint32 userID = 2;
+    bytes  value  = 3;
+}
+
+// GetProfileRequest get profile request
+message GetProfileRequest {
+    uint64 id     = 1 [(gogoproto.customname) = "ID"];
+    uint32 userID = 2;
+    string field  = 3;
+}
+
 // EmptyResponse empty response
 message EmptyResponse {
 
+}
+
+// StringResponse response
+message StringResponse {
+    string value = 1;
 }
 
 // BytesResponse response

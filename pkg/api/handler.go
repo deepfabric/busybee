@@ -47,6 +47,14 @@ func (s *server) onReq(sid interface{}, req *apipb.Request) error {
 		return s.doCountInstance(ctx)
 	case rpcpb.InstanceCrowdState:
 		return s.doCrowdInstance(ctx)
+	case rpcpb.UpdateMapping:
+		return s.doUpdateMapping(ctx)
+	case rpcpb.GetMapping:
+		return s.doGetMapping(ctx)
+	case rpcpb.UpdateProfile:
+		return s.doUpdateProfile(ctx)
+	case rpcpb.GetProfile:
+		return s.doGetProfile(ctx)
 	}
 
 	return fmt.Errorf("not support type %d", req.Type)
@@ -151,6 +159,52 @@ func (s *server) doCrowdInstance(ctx ctx) error {
 	return nil
 }
 
+func (s *server) doUpdateMapping(ctx ctx) error {
+	err := s.engine.Service().UpdateMapping(ctx.req.UpdateMapping.ID,
+		ctx.req.UpdateMapping.Values...)
+	if err != nil {
+		return err
+	}
+
+	s.onResp(ctx, nil, nil)
+	return nil
+}
+
+func (s *server) doGetMapping(ctx ctx) error {
+	value, err := s.engine.Service().GetIDValue(ctx.req.GetMapping.ID,
+		ctx.req.GetMapping.From, ctx.req.GetMapping.To)
+	if err != nil {
+		return err
+	}
+
+	s.onResp(ctx, value, nil)
+	return nil
+}
+
+func (s *server) doUpdateProfile(ctx ctx) error {
+	err := s.engine.Service().UpdateProfile(ctx.req.UpdateProfile.ID,
+		ctx.req.UpdateProfile.UserID,
+		ctx.req.UpdateProfile.Value)
+	if err != nil {
+		return err
+	}
+
+	s.onResp(ctx, nil, nil)
+	return nil
+}
+
+func (s *server) doGetProfile(ctx ctx) error {
+	value, err := s.engine.Service().GetProfileField(ctx.req.GetProfile.ID,
+		ctx.req.GetProfile.UserID,
+		ctx.req.GetProfile.Field)
+	if err != nil {
+		return err
+	}
+
+	s.onResp(ctx, value, nil)
+	return nil
+}
+
 func (s *server) doBMRange(ctx ctx) error {
 	s.engine.Storage().AsyncExecCommand(&ctx.req.BmRange, s.onResp, ctx)
 	return nil
@@ -170,9 +224,9 @@ func (s *server) onResp(arg interface{}, value []byte, err error) {
 		switch ctx.req.Type {
 		case rpcpb.Set, rpcpb.Delete, rpcpb.BMCreate, rpcpb.BMAdd,
 			rpcpb.BMRemove, rpcpb.BMClear, rpcpb.StartingInstance,
-			rpcpb.StopInstance:
+			rpcpb.StopInstance, rpcpb.UpdateMapping, rpcpb.UpdateProfile:
 			// empty response
-		case rpcpb.Get, rpcpb.InstanceCountState, rpcpb.InstanceCrowdState:
+		case rpcpb.Get:
 			protoc.MustUnmarshal(&rsp.BytesResp, value)
 		case rpcpb.BMRange:
 			protoc.MustUnmarshal(&rsp.Uint32SliceResp, value)
@@ -180,6 +234,9 @@ func (s *server) onResp(arg interface{}, value []byte, err error) {
 			protoc.MustUnmarshal(&rsp.Uint64Resp, value)
 		case rpcpb.BMContains:
 			protoc.MustUnmarshal(&rsp.BoolResp, value)
+		case rpcpb.InstanceCountState, rpcpb.InstanceCrowdState,
+			rpcpb.GetMapping, rpcpb.GetProfile:
+			rsp.BytesResp.Value = value
 		}
 
 		rs.(*util.Session).OnResp(rsp)

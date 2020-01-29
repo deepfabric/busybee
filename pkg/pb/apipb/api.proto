@@ -56,6 +56,10 @@ message Request {
     rpcpb.StopInstanceRequest       stopInstance  = 17 [(gogoproto.nullable) = false];
     rpcpb.InstanceCountStateRequest countInstance = 18 [(gogoproto.nullable) = false];
     rpcpb.InstanceCrowdStateRequest crowdInstance = 19 [(gogoproto.nullable) = false];
+    rpcpb.UpdateMappingRequest      updateMapping = 20 [(gogoproto.nullable) = false];
+    rpcpb.GetMappingRequest         getMapping    = 21 [(gogoproto.nullable) = false];
+    rpcpb.UpdateProfileRequest      updateProfile = 22 [(gogoproto.nullable) = false];
+    rpcpb.GetProfileRequest         getProfile    = 23 [(gogoproto.nullable) = false];
 }
 
 // Response the busybee response
@@ -68,6 +72,7 @@ message Response {
     rpcpb.Uint64Response      uint64Resp      = 6 [(gogoproto.nullable) = false];
     rpcpb.Uint32SliceResponse uint32SliceResp = 7 [(gogoproto.nullable) = false];
     rpcpb.BytesSliceResponse  bytesSliceResp  = 8 [(gogoproto.nullable) = false];
+    rpcpb.StringResponse      stringResp      = 9 [(gogoproto.nullable) = false];
 }
 
 // ErrorResponse error response 

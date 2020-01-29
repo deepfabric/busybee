@@ -308,16 +308,12 @@ func (c *exprCtx) Event() apipb.Event {
 }
 
 func (c *exprCtx) Profile(key []byte) ([]byte, error) {
-	values, err := c.eng.Service().GetProfileField(c.event.TenantID, c.event.UserID, hack.SliceToString(key))
+	value, err := c.eng.Service().GetProfileField(c.event.TenantID, c.event.UserID, hack.SliceToString(key))
 	if err != nil {
 		return nil, err
 	}
 
-	if len(values) == 0 {
-		return nil, nil
-	}
-
-	return hack.StringToSlice(values[0]), nil
+	return value, nil
 }
 
 func (c *exprCtx) KV(key []byte) ([]byte, error) {

@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"github.com/deepfabric/busybee/pkg/pb/apipb"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/util/hack"
@@ -57,7 +56,7 @@ func InstanceShardKey(id uint64, start uint32, end uint32) []byte {
 }
 
 // MappingKey returns a mapping key
-func MappingKey(tenantID uint64, from apipb.IDValue, to uint32) []byte {
+func MappingKey(tenantID uint64, from metapb.IDValue, to uint32) []byte {
 	size := 17 + len(from.Value)
 	key := make([]byte, size, size)
 	key[0] = mappingPrefix
