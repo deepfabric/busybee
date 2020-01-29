@@ -4,13 +4,12 @@ import (
 	"time"
 
 	"github.com/deepfabric/beehive"
-	"github.com/deepfabric/beehive/pb/metapb"
 	"github.com/deepfabric/beehive/raftstore"
 	"github.com/deepfabric/beehive/server"
 	beehiveStorage "github.com/deepfabric/beehive/storage"
-	meta "github.com/deepfabric/busybee/pkg/pb/metapb"
+	bhstorage "github.com/deepfabric/beehive/storage"
+	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
-	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/util/protoc"
 	"github.com/fagongzi/util/task"
 )
@@ -22,7 +21,7 @@ const (
 // Storage storage
 type Storage interface {
 	// Start the storage
-	Start(raftstore.LocalCommandFunc) error
+	Start() error
 	// Close close the storage
 	Close()
 	// WatchInstance watch instance
@@ -35,18 +34,17 @@ type Storage interface {
 	Delete([]byte) error
 	// ExecCommand exec command
 	ExecCommand(cmd interface{}) ([]byte, error)
-	// CreateQueue create a queue to serve a workflow instance events.
-	CreateQueue(id uint64, group meta.Group) error
-	// QueueAdd add items to work flow instance queue
-	QueueAdd(id uint64, group meta.Group, items ...[]byte) (uint64, error)
-	// QueueFetch add items to work flow instance queue
-	QueueFetch(id uint64, group meta.Group, afterOffset uint64, count uint64) (uint64, [][]byte, error)
+	// AsyncExecCommand async exec command
+	AsyncExecCommand(interface{}, func(interface{}, []byte, error), interface{})
+	// ExecCommandWithGroup exec command with group
+	ExecCommandWithGroup(interface{}, metapb.Group) ([]byte, error)
+	// AsyncExecCommandWithGroup async exec command with group
+	AsyncExecCommandWithGroup(interface{}, metapb.Group, func(interface{}, []byte, error), interface{})
 	// RaftStore returns the raft store
 	RaftStore() raftstore.Store
 }
 
 type beeStorage struct {
-	addr   string
 	app    *server.Application
 	store  raftstore.Store
 	eventC chan Event
@@ -55,12 +53,11 @@ type beeStorage struct {
 }
 
 // NewStorage returns a beehive request handler
-func NewStorage(addr string, dataPath string,
+func NewStorage(dataPath string,
 	metadataStorages []beehiveStorage.MetadataStorage,
 	dataStorages []beehiveStorage.DataStorage) (Storage, error) {
 
 	h := &beeStorage{
-		addr:   addr,
 		eventC: make(chan Event, 1024),
 		shardC: make(chan shardCycle, 1024),
 		runner: task.NewRunner(),
@@ -79,13 +76,13 @@ func NewStorage(addr string, dataPath string,
 	return h, nil
 }
 
-func (h *beeStorage) Start(stepFunc raftstore.LocalCommandFunc) error {
-	h.init(stepFunc)
+func (h *beeStorage) Start() error {
+	h.init()
 
 	app := server.NewApplication(server.Cfg{
-		Addr:    h.addr,
-		Store:   h.store,
-		Handler: h,
+		Store:          h.store,
+		Handler:        h,
+		ExternalServer: true,
 	})
 	err := app.Start()
 	if err != nil {
@@ -120,7 +117,7 @@ func (h *beeStorage) Get(key []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	resp := rpcpb.GetResponse{}
+	resp := rpcpb.BytesResponse{}
 	protoc.MustUnmarshal(&resp, value)
 	return resp.Value, nil
 }
@@ -137,58 +134,26 @@ func (h *beeStorage) ExecCommand(cmd interface{}) ([]byte, error) {
 	return h.app.Exec(cmd, defaultRPCTimeout)
 }
 
+func (h *beeStorage) AsyncExecCommand(cmd interface{}, cb func(interface{}, []byte, error), arg interface{}) {
+	h.app.AsyncExecWithTimeout(cmd, cb, defaultRPCTimeout, arg)
+}
+
+func (h *beeStorage) AsyncExecCommandWithGroup(cmd interface{}, group metapb.Group, cb func(interface{}, []byte, error), arg interface{}) {
+	h.app.AsyncExecWithGroupAndTimeout(cmd, uint64(group), cb, defaultRPCTimeout, arg)
+}
+
+func (h *beeStorage) ExecCommandWithGroup(cmd interface{}, group metapb.Group) ([]byte, error) {
+	return h.app.ExecWithGroup(cmd, uint64(group), defaultRPCTimeout)
+}
+
 func (h *beeStorage) WatchEvent() chan Event {
 	return h.eventC
 }
 
-func (h *beeStorage) CreateQueue(id uint64, group meta.Group) error {
-	return h.store.AddShard(metapb.Shard{
-		Start:        goetty.Uint64ToBytes(id),
-		End:          goetty.Uint64ToBytes(id + 1),
-		DisableSplit: true,
-		Group:        uint64(group),
-	})
-}
-
-func (h *beeStorage) QueueAdd(id uint64, group meta.Group, items ...[]byte) (uint64, error) {
-	req := rpcpb.AcquireQueueAddRequest()
-	req.Items = items
-	req.Key = goetty.Uint64ToBytes(id)
-
-	data, err := h.app.ExecWithGroup(req, uint64(group), defaultRPCTimeout)
-	if err != nil {
-		return 0, err
-	}
-
-	resp := rpcpb.AcquireQueueAddResponse()
-	protoc.MustUnmarshal(resp, data)
-
-	offset := resp.LastOffset
-	rpcpb.ReleaseQueueAddResponse(resp)
-	return offset, nil
-}
-
-func (h *beeStorage) QueueFetch(id uint64, group meta.Group, afterOffset uint64, count uint64) (uint64, [][]byte, error) {
-	req := rpcpb.AcquireQueueFetchRequest()
-	req.Count = count
-	req.Key = goetty.Uint64ToBytes(id)
-	req.AfterOffset = afterOffset
-	req.Key = goetty.Uint64ToBytes(id)
-
-	data, err := h.app.ExecWithGroup(req, uint64(group), defaultRPCTimeout)
-	if err != nil {
-		return 0, nil, err
-	}
-
-	resp := rpcpb.AcquireQueueFetchResponse()
-	protoc.MustUnmarshal(resp, data)
-
-	offset := resp.LastOffset
-	items := resp.Items
-	rpcpb.ReleaseQueueFetchResponse(resp)
-	return offset, items, nil
-}
-
 func (h *beeStorage) RaftStore() raftstore.Store {
 	return h.store
+}
+
+func (h *beeStorage) getStore(shard uint64) bhstorage.DataStorage {
+	return h.store.DataStorage(shard)
 }

@@ -32,7 +32,7 @@ func (h *beeStorage) Destory(shard beehivemetapb.Shard) {
 }
 
 func (h *beeStorage) BecomeLeader(shard beehivemetapb.Shard) {
-	if shard.Group == 0 {
+	if shard.Group == uint64(metapb.DefaultGroup) {
 		h.shardC <- shardCycle{
 			shard:  shard,
 			action: becomeLeader,
@@ -41,7 +41,7 @@ func (h *beeStorage) BecomeLeader(shard beehivemetapb.Shard) {
 }
 
 func (h *beeStorage) BecomeFollower(shard beehivemetapb.Shard) {
-	if shard.Group == 0 {
+	if shard.Group == uint64(metapb.DefaultGroup) {
 		h.shardC <- shardCycle{
 			shard:  shard,
 			action: becomeFollower,
@@ -93,16 +93,16 @@ func (h *beeStorage) doLoadEvent(shard beehivemetapb.Shard, leader bool) {
 					Data:      instance,
 				}
 			}
-		case instanceStoppedType:
+		case instanceStoppingType:
 			if leader {
 				instance := metapb.WorkflowInstance{}
 				protoc.MustUnmarshal(&instance, value[1:])
 				h.eventC <- Event{
-					EventType: InstanceStoppedEvent,
+					EventType: InstanceStoppingEvent,
 					Data:      instance,
 				}
 			}
-		case stateType:
+		case runingStateType:
 			state := metapb.WorkflowInstanceState{}
 			protoc.MustUnmarshal(&state, value[1:])
 

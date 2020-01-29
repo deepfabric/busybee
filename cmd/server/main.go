@@ -19,10 +19,9 @@ import (
 )
 
 var (
-	addr    = flag.String("addr", "127.0.0.1:8081", "beehive rpc address")
-	apiAddr = flag.String("addr-api", "127.0.0.1:8080", "http restful api address")
-	data    = flag.String("data", "", "data path")
-	wait    = flag.Int("wait", 0, "wait")
+	addr = flag.String("addr", "127.0.0.1:8081", "beehive api address")
+	data = flag.String("data", "", "data path")
+	wait = flag.Int("wait", 0, "wait")
 )
 
 func main() {
@@ -38,7 +37,7 @@ func main() {
 		log.Fatalf("create nemo failed with %+v", err)
 	}
 
-	store, err := storage.NewStorage(*addr, *data,
+	store, err := storage.NewStorage(*data,
 		[]beehiveStorage.MetadataStorage{nemoStorage},
 		[]beehiveStorage.DataStorage{nemoStorage})
 	if err != nil {
@@ -56,7 +55,7 @@ func main() {
 		log.Fatalf("start core engine failed with %+v", err)
 	}
 
-	apiServer, err := api.NewHTTPServer(*apiAddr, engine)
+	apiServer, err := api.NewAPIServer(*addr, engine)
 	if err != nil {
 		log.Fatalf("start api server failed with %+v", err)
 	}

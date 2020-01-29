@@ -94,7 +94,7 @@ github.com/coreos/go-systemd/journal
 github.com/coreos/pkg/capnslog
 # github.com/davecgh/go-spew v1.1.1
 github.com/davecgh/go-spew/spew
-# github.com/deepfabric/beehive v0.0.0-20191228081930-9b585edfb0fe
+# github.com/deepfabric/beehive v0.0.0-20200128110234-f7c4e080c46f
 github.com/deepfabric/beehive
 github.com/deepfabric/beehive/metric
 github.com/deepfabric/beehive/pb
@@ -118,7 +118,7 @@ github.com/deepfabric/prophet
 github.com/dgrijalva/jwt-go
 # github.com/fagongzi/expr v0.0.0-20200111083631-9072dbb0af1c
 github.com/fagongzi/expr
-# github.com/fagongzi/goetty v1.3.2
+# github.com/fagongzi/goetty v1.3.4
 github.com/fagongzi/goetty
 # github.com/fagongzi/log v0.0.0-20191122063922-293b75312445
 github.com/fagongzi/log
@@ -176,15 +176,6 @@ github.com/jonboulle/clockwork
 github.com/json-iterator/go
 # github.com/konsorten/go-windows-terminal-sequences v1.0.1
 github.com/konsorten/go-windows-terminal-sequences
-# github.com/labstack/echo v3.3.10+incompatible
-github.com/labstack/echo
-# github.com/labstack/gommon v0.3.0
-github.com/labstack/gommon/color
-github.com/labstack/gommon/log
-# github.com/mattn/go-colorable v0.1.2
-github.com/mattn/go-colorable
-# github.com/mattn/go-isatty v0.0.9
-github.com/mattn/go-isatty
 # github.com/matttproud/golang_protobuf_extensions v1.0.1
 github.com/matttproud/golang_protobuf_extensions/pbutil
 # github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd
@@ -227,10 +218,6 @@ github.com/stretchr/testify/assert
 github.com/tinylib/msgp/msgp
 # github.com/tmc/grpc-websocket-proxy v0.0.0-20190109142713-0ad062ec5ee5
 github.com/tmc/grpc-websocket-proxy/wsproxy
-# github.com/valyala/bytebufferpool v1.0.0
-github.com/valyala/bytebufferpool
-# github.com/valyala/fasttemplate v1.0.1
-github.com/valyala/fasttemplate
 # github.com/willf/bitset v1.1.10
 github.com/willf/bitset
 # github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2
@@ -247,8 +234,6 @@ go.uber.org/zap/internal/color
 go.uber.org/zap/internal/exit
 go.uber.org/zap/zapcore
 # golang.org/x/crypto v0.0.0-20190820162420-60c769a6c586
-golang.org/x/crypto/acme
-golang.org/x/crypto/acme/autocert
 golang.org/x/crypto/bcrypt
 golang.org/x/crypto/blowfish
 # golang.org/x/net v0.0.0-20190813141303-74dc4d7220e7

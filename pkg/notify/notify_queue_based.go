@@ -1,9 +1,11 @@
 package notify
 
 import (
+	"github.com/deepfabric/busybee/pkg/pb/apipb"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
+	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
+	"github.com/deepfabric/busybee/pkg/queue"
 	"github.com/deepfabric/busybee/pkg/storage"
-	"github.com/fagongzi/log"
 	"github.com/fagongzi/util/protoc"
 )
 
@@ -18,17 +20,15 @@ func NewQueueBasedNotifier(store storage.Storage) Notifier {
 	}
 }
 
-func (n *queueNotifier) Notify(id uint64, notifies ...metapb.Notify) error {
+func (n *queueNotifier) Notify(id uint64, notifies ...apipb.Notify) error {
 	var items [][]byte
 	for _, nt := range notifies {
 		items = append(items, protoc.MustMarshal(&nt))
 	}
 
-	offset, err := n.store.QueueAdd(id, metapb.NotifyGroup, items...)
-	if err != nil {
-		return err
-	}
-
-	log.Infof("instance %d notify queue last offset is %d", id, offset)
-	return nil
+	req := rpcpb.AcquireQueueAddRequest()
+	req.Items = items
+	req.Key = queue.PartitionKey(id, 0)
+	_, err := n.store.ExecCommandWithGroup(req, metapb.TenantOutputGroup)
+	return err
 }

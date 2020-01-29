@@ -3,17 +3,19 @@ package core
 import (
 	"github.com/RoaringBitmap/roaring"
 	"github.com/deepfabric/busybee/pkg/expr"
+	"github.com/deepfabric/busybee/pkg/pb/apipb"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
+	"github.com/deepfabric/busybee/pkg/queue"
 	bbutil "github.com/deepfabric/busybee/pkg/util"
-	"github.com/fagongzi/log"
 	"github.com/fagongzi/util/hack"
+	"github.com/fagongzi/util/protoc"
 	"github.com/fagongzi/util/task"
 	"github.com/robfig/cron/v3"
 )
 
 var (
-	workerBatch = int64(32)
+	workerBatch = int64(16)
 )
 
 const (
@@ -38,11 +40,16 @@ type stateWorker struct {
 	entryActions map[string]string
 	leaveActions map[string]string
 	queue        *task.Queue
-
-	cronIDs []cron.EntryID
+	cronIDs      []cron.EntryID
+	consumer     queue.Consumer
 }
 
 func newStateWorker(key string, state metapb.WorkflowInstanceState, eng Engine) (*stateWorker, error) {
+	consumer, err := queue.NewConsumer(state.TenantID, metapb.TenantInputGroup, eng.Storage(), []byte(key))
+	if err != nil {
+		return nil, err
+	}
+
 	var stepCrowds []*roaring.Bitmap
 	for _, state := range state.States {
 		stepCrowds = append(stepCrowds, bbutil.MustParseBM(state.Crowd))
@@ -58,6 +65,7 @@ func newStateWorker(key string, state metapb.WorkflowInstanceState, eng Engine) 
 		queue:        task.New(1024),
 		entryActions: make(map[string]string),
 		leaveActions: make(map[string]string),
+		consumer:     consumer,
 	}
 
 	for _, stepState := range state.States {
@@ -95,12 +103,11 @@ func (w *stateWorker) stop() {
 	})
 }
 
-func (w *stateWorker) matches(id uint64, uid uint32) bool {
-	return w.state.InstanceID == id && uid >= w.state.Start && uid < w.state.End
+func (w *stateWorker) matches(uid uint32) bool {
+	return w.totalCrowds.Contains(uid)
 }
 
 func (w *stateWorker) run() {
-	log.Infof("worker %s started", w.key)
 	go func() {
 		items := make([]interface{}, workerBatch, workerBatch)
 		batch := newExecutionbatch()
@@ -108,17 +115,22 @@ func (w *stateWorker) run() {
 		for {
 			n, err := w.queue.Get(workerBatch, items)
 			if err != nil {
-				log.Fatalf("BUG: fetch from work queue failed with %+v", err)
+				logger.Fatalf("BUG: fetch from work queue failed with %+v", err)
 			}
 
 			for i := int64(0); i < n; i++ {
 				value := items[i].(item)
 				if value.action == stopAction {
-					w.queue.Dispose()
+					w.consumer.Stop()
+
+					for _, v := range w.queue.Dispose() {
+						releaseCB(v.(item).cb)
+					}
+
 					for _, id := range w.cronIDs {
 						w.eng.StopCronJob(id)
 					}
-					log.Infof("worker %s stopped", w.key)
+					logger.Infof("worker %s stopped", w.key)
 					return
 				}
 
@@ -127,13 +139,50 @@ func (w *stateWorker) run() {
 					w.doStepTimer(batch, value.value.(string))
 				case eventAction:
 					batch.cbs = append(batch.cbs, value.cb)
-					w.doStepEvent(value.value.(metapb.Event), batch)
+					w.doStepEvents(value.value.([]apipb.Event), batch)
 				}
 			}
 
 			w.execBatch(batch)
 		}
 	}()
+
+	w.consumer.Start(uint64(workerBatch), w.onConsume)
+	logger.Infof("worker %s started", w.key)
+}
+
+func (w *stateWorker) onConsume(offset uint64, items ...[]byte) error {
+	logger.Debugf("worker %s consumer from queue, offset %d, %d items",
+		w.key,
+		offset,
+		len(items))
+
+	var events []apipb.Event
+	var event apipb.Event
+	for _, item := range items {
+		protoc.MustUnmarshal(&event, item)
+		if w.matches(event.UserID) {
+			event.WorkflowID = w.state.WorkflowID
+			events = append(events, event)
+		}
+	}
+
+	if len(events) > 0 {
+		cb := acquireCB()
+		err := w.queue.Put(item{
+			action: eventAction,
+			value:  events,
+			cb:     cb,
+		})
+		if err != nil {
+			releaseCB(cb)
+			return err
+		}
+
+		cb.wait()
+	}
+
+	return nil
 }
 
 func (w *stateWorker) execBatch(batch *executionbatch) {
@@ -143,11 +192,10 @@ func (w *stateWorker) execBatch(batch *executionbatch) {
 			batch.notifies[idx].ToAction = w.entryActions[batch.notifies[idx].ToStep]
 		}
 
-		err := w.eng.Notifier().Notify(w.state.InstanceID, batch.notifies...)
+		err := w.eng.Notifier().Notify(w.state.WorkflowID, batch.notifies...)
 		if err != nil {
-			log.Fatalf("%s instance %d state notify failed with %+v",
+			logger.Fatalf("worker %s notify failed with %+v",
 				w.key,
-				w.state.InstanceID,
 				err)
 		}
 
@@ -155,7 +203,9 @@ func (w *stateWorker) execBatch(batch *executionbatch) {
 		req.State = w.state
 		_, err = w.eng.Storage().ExecCommand(req)
 		if err != nil {
-			log.Fatalf("update instance state failed with %+v", err)
+			logger.Fatalf("worker %s update failed with %+v",
+				w.key,
+				err)
 		}
 	}
 
@@ -210,51 +260,50 @@ func (w *stateWorker) stepChanged(batch *executionbatch) error {
 	return nil
 }
 
-func (w *stateWorker) step(event metapb.Event, cb *stepCB) {
-	w.queue.Put(item{
-		action: eventAction,
-		value:  event,
-		cb:     cb,
-	})
-}
-
-func (w *stateWorker) doStepEvent(event metapb.Event, batch *executionbatch) {
-	for idx, crowd := range w.stepCrowds {
-		if crowd.Contains(event.UserID) {
-			err := w.steps[w.state.States[idx].Step.Name].Execute(newExprCtx(event, w.eng),
-				w.stepChanged, batch)
-			if err != nil {
-				log.Errorf("step event %+v failed with %+v", event, err)
+func (w *stateWorker) doStepEvents(events []apipb.Event, batch *executionbatch) {
+	for _, event := range events {
+		for idx, crowd := range w.stepCrowds {
+			if crowd.Contains(event.UserID) {
+				err := w.steps[w.state.States[idx].Step.Name].Execute(newExprCtx(event, w.eng),
+					w.stepChanged, batch)
+				if err != nil {
+					logger.Errorf("worker %s step event %+v failed with %+v",
+						w.key,
+						event,
+						err)
+				}
+				break
 			}
-			break
 		}
 	}
 }
 
 func (w *stateWorker) doStepTimer(batch *executionbatch, name string) {
-	err := w.steps[name].Execute(newExprCtx(metapb.Event{
+	err := w.steps[name].Execute(newExprCtx(apipb.Event{
 		TenantID:   w.state.TenantID,
-		InstanceID: w.state.InstanceID,
+		WorkflowID: w.state.WorkflowID,
 	}, w.eng),
 		w.stepChanged, batch)
 	if err != nil {
-		log.Errorf("worker trigger timer failed with %+v", err)
+		logger.Errorf("worker %s trigger timer failed with %+v",
+			w.key,
+			err)
 	}
 }
 
 type exprCtx struct {
-	event metapb.Event
+	event apipb.Event
 	eng   Engine
 }
 
-func newExprCtx(event metapb.Event, eng Engine) expr.Ctx {
+func newExprCtx(event apipb.Event, eng Engine) expr.Ctx {
 	return &exprCtx{
 		event: event,
 		eng:   eng,
 	}
 }
 
-func (c *exprCtx) Event() metapb.Event {
+func (c *exprCtx) Event() apipb.Event {
 	return c.event
 }
 

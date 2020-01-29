@@ -10,10 +10,9 @@ option (gogoproto.goproto_enum_prefix_all) = false;
 
 // Group shard group
 enum Group {
-    DefaultGroup = 0;
-    EventGroup   = 1;
-    NotifyGroup  = 2;
-    TenantGroup  = 3;
+    DefaultGroup      = 0;
+    TenantInputGroup  = 1;
+    TenantOutputGroup = 2;
 }
 
 // Workflow is process definition
@@ -27,24 +26,22 @@ message Workflow {
 
 // WorkflowInstance workflow instance
 message WorkflowInstance {
-    uint64   id          = 1 [(gogoproto.customname) = "ID"];
-    Workflow snapshot    = 2 [(gogoproto.nullable) = false];
-    bytes    crowd       = 3;
-    uint64   maxPerShard = 4;
-    int64    startedAt   = 5;
+    Workflow snapshot    = 1 [(gogoproto.nullable) = false];
+    bytes    crowd       = 2;
+    uint64   maxPerShard = 3;
+    int64    startedAt   = 4;
+    int64    stoppedAt   = 5;
 }
 
 // WorkflowInstanceState workflow instance state, uid in [start,end). instance : instanceState = 1 : N
 message WorkflowInstanceState {
     uint64             tenantID   = 1;
-    uint64             instanceID = 2;
+    uint64             workflowID = 2;
     uint32             start      = 3;
     uint32             end        = 4;
     repeated StepState states     = 5 [(gogoproto.nullable) = false];
     uint64             version    = 6;
     int64              stopAt     = 7;
-    uint64             idx        = 8;
-    uint64             maxIdx     = 9;
 }
 
 // CountState step count state

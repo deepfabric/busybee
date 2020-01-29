@@ -1,18 +1,23 @@
 package storage
 
+import (
+	"github.com/fagongzi/goetty"
+)
+
 var (
 	kvType               byte = 0x00
 	instanceStartingType byte = 0x01
 	instanceStartedType  byte = 0x02
-	instanceStoppedType  byte = 0x03
-	stateType            byte = 0x04
+	instanceStoppingType byte = 0x03
+	instanceStoppedType  byte = 0x04
+
+	runingStateType  byte = 0x05
+	stoppedStateType byte = 0x06
 )
 
-func appendPrefix(value []byte, prefix byte) []byte {
-	buf := acquireBuf()
+func appendValuePrefix(buf *goetty.ByteBuf, value []byte, prefix byte) []byte {
+	idx := buf.GetWriteIndex()
 	buf.WriteByte(prefix)
 	buf.Write(value)
-	_, data, _ := buf.ReadBytes(buf.Readable())
-	releaseBuf(buf)
-	return data
+	return buf.RawBuf()[idx:buf.GetWriteIndex()]
 }

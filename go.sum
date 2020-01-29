@@ -37,6 +37,18 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/deepfabric/beehive v0.0.0-20191228081930-9b585edfb0fe h1:xbLl2UpNKzuBb9VXo0zb1AR9e989LbfTnLC4uu7FX0Y=
 github.com/deepfabric/beehive v0.0.0-20191228081930-9b585edfb0fe/go.mod h1:G1KtBPn3AgVGwhJlQqBuyYckvBhczNs4n5V6GG1QAbc=
+github.com/deepfabric/beehive v0.0.0-20200120061632-b76be516b6d9 h1:Y7zieSNYqnhqKTSq2xxIXfUbB/deS3HvKx6tMVQxum4=
+github.com/deepfabric/beehive v0.0.0-20200120061632-b76be516b6d9/go.mod h1:G1KtBPn3AgVGwhJlQqBuyYckvBhczNs4n5V6GG1QAbc=
+github.com/deepfabric/beehive v0.0.0-20200121021350-bf50cd4740aa h1:UfaBP28msGWtoIEOZE+Dsd9WbaTeY54ZgGkd5ec1G9M=
+github.com/deepfabric/beehive v0.0.0-20200121021350-bf50cd4740aa/go.mod h1:G1KtBPn3AgVGwhJlQqBuyYckvBhczNs4n5V6GG1QAbc=
+github.com/deepfabric/beehive v0.0.0-20200127052850-b8a7239f576b h1:daKUJrTiAEuj4Ce9tz7+aJz3hZk1cfIRxKsmPhXGo58=
+github.com/deepfabric/beehive v0.0.0-20200127052850-b8a7239f576b/go.mod h1:G1KtBPn3AgVGwhJlQqBuyYckvBhczNs4n5V6GG1QAbc=
+github.com/deepfabric/beehive v0.0.0-20200127063503-9ee105f1be78 h1:iOfTwqIP38M3xnOKqF1crEd96od12auZ97MlmiFfuAw=
+github.com/deepfabric/beehive v0.0.0-20200127063503-9ee105f1be78/go.mod h1:G1KtBPn3AgVGwhJlQqBuyYckvBhczNs4n5V6GG1QAbc=
+github.com/deepfabric/beehive v0.0.0-20200128085816-0762e26d577e h1:dKTEgPo/yO0Dpd/pVNJrD4Nbl4qkV7A7g2Bhc6CUAyI=
+github.com/deepfabric/beehive v0.0.0-20200128085816-0762e26d577e/go.mod h1:G1KtBPn3AgVGwhJlQqBuyYckvBhczNs4n5V6GG1QAbc=
+github.com/deepfabric/beehive v0.0.0-20200128110234-f7c4e080c46f h1:xshsVv9HY0cje3m9pRvlEvAnKEggieNUapKkkMfivIQ=
+github.com/deepfabric/beehive v0.0.0-20200128110234-f7c4e080c46f/go.mod h1:G1KtBPn3AgVGwhJlQqBuyYckvBhczNs4n5V6GG1QAbc=
 github.com/deepfabric/c-nemo v0.0.0-20190419083223-23fa413d9df4 h1:r5nY1MRVgtskrh+F4ZXzG1/zgekyJfAI+twMWpfvh04=
 github.com/deepfabric/c-nemo v0.0.0-20190419083223-23fa413d9df4/go.mod h1:xHI4efz5VNLAaNzIpEzcWlG03PcKRA+S7J1LkYbCG9Q=
 github.com/deepfabric/etcd v3.3.17+incompatible h1:JDSLn0ZFr4Jtxko12SkJNl+yWRenHPeqlhUQ+PkMwew=
@@ -58,6 +70,8 @@ github.com/fagongzi/expr v0.0.0-20200111083631-9072dbb0af1c/go.mod h1:8zU9m3Ji8N
 github.com/fagongzi/goetty v1.3.1/go.mod h1:lLUyHhtjlOqatxVXgyLocwoI2o359JzLE7EWRGZiGw4=
 github.com/fagongzi/goetty v1.3.2 h1:ARKYpvh2yvh47zMeGxnnmjpYbkroPL4khLfe8oAyQ9E=
 github.com/fagongzi/goetty v1.3.2/go.mod h1:lLUyHhtjlOqatxVXgyLocwoI2o359JzLE7EWRGZiGw4=
+github.com/fagongzi/goetty v1.3.4 h1:2UtE7fvgjzFLhZRGuq6+QHKJnEnquIVsPJsfIHaHRkU=
+github.com/fagongzi/goetty v1.3.4/go.mod h1:lLUyHhtjlOqatxVXgyLocwoI2o359JzLE7EWRGZiGw4=
 github.com/fagongzi/log v0.0.0-20191122063922-293b75312445 h1:XhTJpo5oMYnjgQPq28pufQ/XDGoQXi1x8qa87A4Fsb8=
 github.com/fagongzi/log v0.0.0-20191122063922-293b75312445/go.mod h1:1aUifpZCjAdZK7L3vRRl2cpSktbKasAU5vOSyLSCODs=
 github.com/fagongzi/util v0.0.0-20181102105153-fd38e0f42a4f/go.mod h1:jYDIbpaqHXCCQ7QIDXRVfsQYAGKSNNb6N8BPTgdpcdE=

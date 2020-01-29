@@ -6,7 +6,7 @@
 set -e
 
 # directories containing protos to be built
-DIRS="./metapb ./rpcpb"
+DIRS="./metapb ./rpcpb ./apipb"
 
 PRJ_PB_PATH="${GOPATH}/src/github.com/deepfabric/busybee/pkg/pb"
 

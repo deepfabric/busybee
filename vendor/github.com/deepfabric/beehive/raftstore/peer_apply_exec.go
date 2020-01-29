@@ -233,6 +233,7 @@ func (d *applyDelegate) execWriteRequest(ctx *applyContext) (uint64, int64, *raf
 	writeBytes := uint64(0)
 	diffBytes := int64(0)
 	resp := pb.AcquireRaftCMDResponse()
+	d.buf.Clear()
 	for _, req := range ctx.req.Requests {
 		if logger.DebugEnabled() {
 			logger.Debugf("exec %s", formatRequest(req))
@@ -240,7 +241,7 @@ func (d *applyDelegate) execWriteRequest(ctx *applyContext) (uint64, int64, *raf
 
 		ctx.metrics.writtenKeys++
 		if ctx.writeBatch != nil {
-			ok, rsp, err := ctx.writeBatch.Add(d.shard.ID, req)
+			ok, rsp, err := ctx.writeBatch.Add(d.shard.ID, req, d.buf)
 			if err != nil {
 				logger.Fatalf("shard %s add %+v to write batch failed with %+v",
 					d.shard.ID,
@@ -255,7 +256,7 @@ func (d *applyDelegate) execWriteRequest(ctx *applyContext) (uint64, int64, *raf
 		}
 
 		if h, ok := d.store.writeHandlers[req.CustemType]; ok {
-			written, diff, rsp := h(ctx.req.Header.ShardID, req)
+			written, diff, rsp := h(ctx.req.Header.ShardID, req, d.buf)
 			resp.Responses = append(resp.Responses, rsp)
 			writeBytes += written
 			diffBytes += diff

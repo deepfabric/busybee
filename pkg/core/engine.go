@@ -3,19 +3,18 @@ package core
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/RoaringBitmap/roaring"
-	"github.com/deepfabric/beehive/pb"
-	"github.com/deepfabric/beehive/pb/raftcmdpb"
+	hbmetapb "github.com/deepfabric/beehive/pb/metapb"
 	"github.com/deepfabric/beehive/util"
 	"github.com/deepfabric/busybee/pkg/crm"
 	"github.com/deepfabric/busybee/pkg/notify"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
+	"github.com/deepfabric/busybee/pkg/queue"
 	"github.com/deepfabric/busybee/pkg/storage"
 	bbutil "github.com/deepfabric/busybee/pkg/util"
 	"github.com/fagongzi/goetty"
@@ -26,13 +25,14 @@ import (
 )
 
 var (
-	emptyBMData  = bytes.NewBuffer(nil)
-	initBM       = roaring.NewBitmap()
-	stoppedRange [][]uint32
+	emptyBMData = bytes.NewBuffer(nil)
+	initBM      = roaring.NewBitmap()
+	logger      log.Logger
 )
 
 func init() {
 	initBM.WriteTo(emptyBMData)
+	logger = log.NewLoggerWithPrefix("[engine]")
 }
 
 // Engine the engine maintains all state information
@@ -41,26 +41,18 @@ type Engine interface {
 	Start() error
 	// Stop stop the engine
 	Stop() error
-	// Create create a work flow definition meta
-	Create(meta metapb.Workflow) (uint64, error)
-	// Update update a work flow definition meta
-	Update(meta metapb.Workflow) error
-	// CreateInstance create a new work flow instance,
+	// StartInstance start instance
 	// an instance may contain a lot of people, so an instance will be divided into many shards,
 	// each shard handles some people's events.
-	CreateInstance(workflowID uint64, crow []byte, maxPerShard uint64) (uint64, error)
-	// DeleteInstance delete instance
-	DeleteInstance(instanceID uint64) error
-	// StartInstance start instance
-	StartInstance(id uint64) error
+	StartInstance(workflow metapb.Workflow, crow []byte, maxPerShard uint64) error
 	// StopInstance stop instance
 	StopInstance(id uint64) error
 	// InstanceCountState returns instance count state
 	InstanceCountState(id uint64) (metapb.InstanceCountState, error)
 	// InstanceStepState returns instance step state
 	InstanceStepState(id uint64, name string) (metapb.StepState, error)
-	// Step drivers the workflow instance
-	Step(metapb.Event) error
+	// CreateTenantQueue create the tenant input and output queue
+	CreateTenantQueue(id, partitions uint64) error
 	// Notifier returns notifier
 	Notifier() notify.Notifier
 	// Storage returns storage
@@ -79,7 +71,8 @@ func NewEngine(store storage.Storage, notifier notify.Notifier) (Engine, error) 
 		store:                  store,
 		notifier:               notifier,
 		eventC:                 store.WatchEvent(),
-		retryNewInstanceC:      make(chan metapb.WorkflowInstance, 1024),
+		retryNewInstanceC:      make(chan metapb.WorkflowInstance, 16),
+		retryStoppingInstanceC: make(chan metapb.WorkflowInstance, 16),
 		retryCompleteInstanceC: make(chan uint64, 1024),
 		stopInstanceC:          make(chan uint64, 1024),
 		runner:                 task.NewRunner(),
@@ -99,14 +92,13 @@ type engine struct {
 	workers                sync.Map // key -> *worker
 	eventC                 chan storage.Event
 	retryNewInstanceC      chan metapb.WorkflowInstance
+	retryStoppingInstanceC chan metapb.WorkflowInstance
 	retryCompleteInstanceC chan uint64
 	stopInstanceC          chan uint64
-
-	rangeCache sync.Map // instanceID -> [][]uint32{start, end}
 }
 
 func (eng *engine) Start() error {
-	err := eng.store.Start(eng.doStep)
+	err := eng.store.Start()
 	if err != nil {
 		return err
 	}
@@ -121,116 +113,66 @@ func (eng *engine) Stop() error {
 	return eng.runner.Stop()
 }
 
-func (eng *engine) Create(meta metapb.Workflow) (uint64, error) {
-	id := eng.store.RaftStore().MustAllocID()
-	meta.ID = id
-	err := eng.store.Set(uint64Key(id), protoc.MustMarshal(&meta))
+func (eng *engine) StartInstance(workflow metapb.Workflow, crow []byte, maxPerShard uint64) error {
+	bm := bbutil.AcquireBitmap()
+	err := bm.UnmarshalBinary(crow)
 	if err != nil {
-		return 0, err
+		logger.Errorf("start workflow-%d failed with %+v",
+			workflow.ID,
+			err)
+		return err
 	}
 
-	return id, nil
-}
+	logger.Infof("start workflow-%d with crow %d, maxPerShard %d",
+		workflow.ID,
+		bm.GetCardinality(),
+		maxPerShard)
 
-func (eng *engine) Update(meta metapb.Workflow) error {
-	if meta.ID == 0 {
-		return errors.New("missing workflow id")
-	}
-
-	return eng.store.Set(uint64Key(meta.ID), protoc.MustMarshal(&meta))
-}
-
-func (eng *engine) CreateInstance(workflowID uint64, crow []byte, maxPerShard uint64) (uint64, error) {
-	value, err := eng.store.Get(uint64Key(workflowID))
+	value, err := eng.store.Get(storage.StartedInstanceKey(workflow.ID))
 	if err != nil {
-		return 0, err
+		return err
+	}
+	if len(value) > 0 {
+		logger.Warningf("start workflow-%d already started",
+			workflow.ID)
+		return nil
 	}
 
-	if len(value) == 0 {
-		return 0, fmt.Errorf("missing workflow %d", workflowID)
-	}
-
-	snapshot := metapb.Workflow{}
-	protoc.MustUnmarshal(&snapshot, value)
 	instance := metapb.WorkflowInstance{
-		ID:          eng.store.RaftStore().MustAllocID(),
-		Snapshot:    snapshot,
+		Snapshot:    workflow,
 		Crowd:       crow,
 		MaxPerShard: maxPerShard,
 	}
 
-	err = eng.store.Set(uint64Key(instance.ID), protoc.MustMarshal(&instance))
-	if err != nil {
-		return 0, err
-	}
-
-	return instance.ID, nil
-}
-
-func (eng *engine) DeleteInstance(id uint64) error {
-	key := storage.InstanceStartKey(id)
-	value, err := eng.store.Get(key)
-	if err != nil {
-		return err
-	}
-	if len(value) > 0 {
-		return fmt.Errorf("instance %d already started", id)
-	}
-
-	return eng.store.Delete(uint64Key(id))
-}
-
-func (eng *engine) StartInstance(id uint64) error {
-	value, err := eng.store.Get(storage.InstanceStartKey(id))
-	if err != nil {
-		return err
-	}
-	if len(value) > 0 {
-		return nil
-	}
-
-	value, err = eng.store.Get(uint64Key(id))
-	if err != nil {
-		return err
-	}
-	if len(value) == 0 {
-		return fmt.Errorf("instance %d not create", id)
-	}
-
-	instance := metapb.WorkflowInstance{}
-	protoc.MustUnmarshal(&instance, value)
-
 	req := rpcpb.AcquireStartingInstanceRequest()
 	req.Instance = instance
 	_, err = eng.store.ExecCommand(req)
+	if err != nil {
+		logger.Errorf("start workflow-%d failed with %+v",
+			workflow.ID,
+			err)
+	}
+
 	return err
 }
 
 func (eng *engine) StopInstance(id uint64) error {
-	value, err := eng.store.Get(uint64Key(id))
+	value, err := eng.store.Get(storage.StartedInstanceKey(id))
 	if err != nil {
 		return err
 	}
 	if len(value) == 0 {
-		return fmt.Errorf("instance %d not create", id)
-	}
-
-	value, err = eng.store.Get(storage.InstanceStartKey(id))
-	if err != nil {
-		return err
-	}
-	if len(value) == 0 {
-		return fmt.Errorf("instance %d not started", id)
+		return nil
 	}
 
 	_, err = eng.store.ExecCommand(&rpcpb.StopInstanceRequest{
-		InstanceID: id,
+		WorkflowID: id,
 	})
 	return err
 }
 
 func (eng *engine) InstanceCountState(id uint64) (metapb.InstanceCountState, error) {
-	value, err := eng.store.Get(storage.InstanceStartKey(id))
+	value, err := eng.store.Get(storage.StartedInstanceKey(id))
 	if err != nil {
 		return metapb.InstanceCountState{}, err
 	}
@@ -256,7 +198,7 @@ func (eng *engine) InstanceCountState(id uint64) (metapb.InstanceCountState, err
 
 	shards := bbutil.BMSplit(bm, instance.MaxPerShard)
 	for _, shard := range shards {
-		key := storage.InstanceStateKey(instance.ID, shard.Minimum(), shard.Maximum()+1)
+		key := storage.InstanceShardKey(instance.Snapshot.ID, shard.Minimum(), shard.Maximum()+1)
 		stepState := metapb.WorkflowInstanceState{}
 		value, err = eng.store.Get(key)
 		if err != nil {
@@ -281,7 +223,7 @@ func (eng *engine) InstanceCountState(id uint64) (metapb.InstanceCountState, err
 }
 
 func (eng *engine) InstanceStepState(id uint64, name string) (metapb.StepState, error) {
-	value, err := eng.store.Get(storage.InstanceStartKey(id))
+	value, err := eng.store.Get(storage.StartedInstanceKey(id))
 	if err != nil {
 		return metapb.StepState{}, err
 	}
@@ -298,7 +240,7 @@ func (eng *engine) InstanceStepState(id uint64, name string) (metapb.StepState, 
 	bm := bbutil.MustParseBM(instance.Crowd)
 	shards := bbutil.BMSplit(bm, instance.MaxPerShard)
 	for _, shard := range shards {
-		key := storage.InstanceStateKey(instance.ID, shard.Minimum(), shard.Maximum()+1)
+		key := storage.InstanceShardKey(instance.Snapshot.ID, shard.Minimum(), shard.Maximum()+1)
 		stepState := metapb.WorkflowInstanceState{}
 		value, err = eng.store.Get(key)
 		if err != nil {
@@ -324,106 +266,34 @@ func (eng *engine) InstanceStepState(id uint64, name string) (metapb.StepState, 
 	}, nil
 }
 
-func (eng *engine) Step(event metapb.Event) error {
-	ranges, err := eng.maybeLoadInstanceStateShardRanges(event.InstanceID)
+func (eng *engine) CreateTenantQueue(id, partitions uint64) error {
+	err := eng.store.Set(storage.QueueMetadataKey(id, metapb.TenantInputGroup),
+		goetty.Uint64ToBytes(partitions))
 	if err != nil {
 		return err
 	}
 
-	// instance stopped
-	if len(ranges) == 0 {
-		return nil
+	err = eng.store.Set(storage.QueueMetadataKey(id, metapb.TenantOutputGroup),
+		goetty.Uint64ToBytes(1))
+	if err != nil {
+		return err
 	}
 
-	var start uint32
-	var end uint32
-	for _, r := range ranges {
-		if event.UserID >= r[0] && event.UserID < r[1] {
-			start = r[0]
-			end = r[1]
-			break
-		}
+	var shards []hbmetapb.Shard
+	for i := uint64(0); i < partitions; i++ {
+		shards = append(shards, hbmetapb.Shard{
+			Group: uint64(metapb.TenantInputGroup),
+			Start: queue.PartitionKey(id, i),
+			End:   queue.PartitionKey(id, i+1),
+		})
 	}
-
-	if start == 0 && end == 0 {
-		return fmt.Errorf("instance state range not found by user %d", event.InstanceID)
-	}
-
-	req := rpcpb.AcquireStepInstanceStateShardRequest()
-	req.Event = event
-	req.Start = start
-	req.End = end
-
-	_, err = eng.store.ExecCommand(req)
-	return err
-}
-
-func (eng *engine) doStep(id uint64, req *raftcmdpb.Request) (*raftcmdpb.Response, error) {
-	customReq := rpcpb.StepInstanceStateShardRequest{}
-	protoc.MustUnmarshal(&customReq, req.Cmd)
-
-	var cb *stepCB
-	found := false
-	eng.workers.Range(func(key, value interface{}) bool {
-		w := value.(*stateWorker)
-		if w.matches(customReq.Event.InstanceID, customReq.Event.UserID) {
-			found = true
-			cb = acquireCB()
-			cb.c = make(chan struct{})
-			w.step(customReq.Event, cb)
-			return false
-		}
-
-		return true
+	shards = append(shards, hbmetapb.Shard{
+		Group: uint64(metapb.TenantOutputGroup),
+		Start: queue.PartitionKey(id, 0),
+		End:   queue.PartitionKey(id, 1),
 	})
 
-	if !found {
-		return nil, errWorkerNotFound
-	}
-
-	cb.wait()
-
-	customResp := rpcpb.AcquireStepInstanceStateShardResponse()
-	customResp.ID = customReq.ID
-	resp := pb.AcquireResponse()
-	resp.Value = protoc.MustMarshal(customResp)
-	rpcpb.ReleaseStepInstanceStateShardResponse(customResp)
-	return resp, nil
-}
-
-func (eng *engine) maybeLoadInstanceStateShardRanges(id uint64) ([][]uint32, error) {
-	if ranges, ok := eng.rangeCache.Load(id); ok {
-		return ranges.([][]uint32), nil
-	}
-
-	value, err := eng.store.Get(storage.InstanceStartKey(id))
-	if err != nil {
-		return nil, err
-	}
-
-	if len(value) == 0 {
-		return nil, fmt.Errorf("instance %d not started", id)
-	}
-
-	instance := metapb.WorkflowInstance{}
-	protoc.MustUnmarshal(&instance, value)
-
-	bm := bbutil.MustParseBM(instance.Crowd)
-	shards := bbutil.BMSplit(bm, instance.MaxPerShard)
-	return eng.addShardRangesToCache(instance.ID, shards), nil
-}
-
-func (eng *engine) addShardRangesToCache(id uint64, shards []*roaring.Bitmap) [][]uint32 {
-	if ranges, ok := eng.rangeCache.Load(id); ok {
-		return ranges.([][]uint32)
-	}
-
-	var ranges [][]uint32
-	for _, shard := range shards {
-		ranges = append(ranges, []uint32{shard.Minimum(), shard.Maximum() + 1})
-	}
-	eng.rangeCache.Store(id, ranges)
-	return ranges
+	return eng.store.RaftStore().AddShards(shards...)
 }
 
 func (eng *engine) Notifier() notify.Notifier {
@@ -446,15 +316,11 @@ func (eng *engine) StopCronJob(id cron.EntryID) {
 	eng.cronRunner.Remove(id)
 }
 
-func uint64Key(id uint64) []byte {
-	return goetty.Uint64ToBytes(id)
-}
-
 func (eng *engine) handleEvent(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Infof("handler instance task stopped")
+			logger.Infof("handler instance task stopped")
 			return
 		case event, ok := <-eng.eventC:
 			if ok {
@@ -463,6 +329,10 @@ func (eng *engine) handleEvent(ctx context.Context) {
 		case instance, ok := <-eng.retryNewInstanceC:
 			if ok {
 				eng.doStartInstanceEvent(instance)
+			}
+		case instance, ok := <-eng.retryStoppingInstanceC:
+			if ok {
+				eng.doStoppingInstanceEvent(instance)
 			}
 		case id, ok := <-eng.retryCompleteInstanceC:
 			if ok {
@@ -479,22 +349,46 @@ func (eng *engine) handleEvent(ctx context.Context) {
 func (eng *engine) doEvent(event storage.Event) {
 	switch event.EventType {
 	case storage.InstanceLoadedEvent:
-		eng.doStartInstanceEvent(event.Data.(metapb.WorkflowInstance))
-	case storage.InstanceStateLoadedEvent:
-		eng.doStartInstanceStateEvent(event.Data.(metapb.WorkflowInstanceState))
-	case storage.InstanceStateRemovedEvent:
-		eng.doStopInstanceStateEvent(event.Data.(metapb.WorkflowInstanceState))
+		value := event.Data.(metapb.WorkflowInstance)
+		logger.Infof("do event with starting workflow-%d",
+			value.Snapshot.ID)
+		eng.doStartInstanceEvent(value)
 	case storage.InstanceStartedEvent:
-		eng.doStartedInstanceEvent(event.Data.(metapb.WorkflowInstance))
+		value := event.Data.(metapb.WorkflowInstance)
+		logger.Infof("do event with workflow-%d started",
+			value.Snapshot.ID)
+		eng.doStartedInstanceEvent(value)
+	case storage.InstanceStoppingEvent:
+		value := event.Data.(metapb.WorkflowInstance)
+		logger.Infof("do event with stopping workflow-%d",
+			value.Snapshot.ID)
+		eng.doStoppingInstanceEvent(value)
 	case storage.InstanceStoppedEvent:
-		eng.doStoppedInstanceEvent(event.Data.(metapb.WorkflowInstance).ID)
+		value := event.Data.(uint64)
+		logger.Infof("do event with workflow-%d stopped",
+			value)
+		eng.doStoppedInstanceEvent(value)
+	case storage.InstanceStateLoadedEvent:
+		value := event.Data.(metapb.WorkflowInstanceState)
+		logger.Infof("do event with create workflow-%d shard [%d,%d)",
+			value.WorkflowID,
+			value.Start,
+			value.End)
+		eng.doStartInstanceStateEvent(value)
+	case storage.InstanceStateRemovedEvent:
+		value := event.Data.(metapb.WorkflowInstanceState)
+		logger.Infof("do event with stop workflow-%d shard [%d,%d)",
+			value.WorkflowID,
+			value.Start,
+			value.End)
+		eng.doInstanceStateRemovedEvent(value)
 	}
 }
 
 func (eng *engine) doStartInstanceStateEvent(state metapb.WorkflowInstanceState) {
 	key := workerKey(state)
 	if _, ok := eng.workers.Load(key); ok {
-		log.Fatalf("BUG: start a exists state worker")
+		logger.Fatalf("BUG: start a exists state worker")
 	}
 
 	now := time.Now().Unix()
@@ -504,8 +398,8 @@ func (eng *engine) doStartInstanceStateEvent(state metapb.WorkflowInstanceState)
 
 	w, err := newStateWorker(key, state, eng)
 	if err != nil {
-		log.Errorf("create worker for state %+v failed with %+v",
-			state,
+		logger.Errorf("create worker %s failed with %+v",
+			w.key,
 			err)
 		return
 	}
@@ -523,10 +417,9 @@ func (eng *engine) stopWorker(arg interface{}) {
 	w := arg.(*stateWorker)
 	eng.workers.Delete(w.key)
 	w.stop()
-	eng.rangeCache.Store(w.state.InstanceID, stoppedRange)
 }
 
-func (eng *engine) doStopInstanceStateEvent(state metapb.WorkflowInstanceState) {
+func (eng *engine) doInstanceStateRemovedEvent(state metapb.WorkflowInstanceState) {
 	key := workerKey(state)
 	if w, ok := eng.workers.Load(key); ok {
 		eng.workers.Delete(key)
@@ -542,17 +435,13 @@ func (eng *engine) doStartInstanceEvent(instance metapb.WorkflowInstance) {
 
 	bm := bbutil.MustParseBM(instance.Crowd)
 	shards := bbutil.BMSplit(bm, instance.MaxPerShard)
-	eng.addShardRangesToCache(instance.ID, shards)
-
-	for idx, shard := range shards {
+	for _, shard := range shards {
 		state := metapb.WorkflowInstanceState{}
 		state.TenantID = instance.Snapshot.TenantID
-		state.InstanceID = instance.ID
+		state.WorkflowID = instance.Snapshot.ID
 		state.Start = shard.Minimum()
 		state.End = shard.Maximum() + 1
 		state.StopAt = stopAt
-		state.Idx = uint64(idx)
-		state.MaxIdx = uint64(len(shards) - 1)
 
 		for _, step := range instance.Snapshot.Steps {
 			state.States = append(state.States, metapb.StepState{
@@ -567,7 +456,7 @@ func (eng *engine) doStartInstanceEvent(instance metapb.WorkflowInstance) {
 		}
 	}
 
-	eng.doCreateInstanceStateShardComplete(instance.ID)
+	eng.doCreateInstanceStateShardComplete(instance.Snapshot.ID)
 }
 
 func (eng *engine) doStartedInstanceEvent(instance metapb.WorkflowInstance) {
@@ -578,19 +467,39 @@ func (eng *engine) doStartedInstanceEvent(instance metapb.WorkflowInstance) {
 	now := time.Now().Unix()
 	after := instance.Snapshot.Duration - (now - instance.StartedAt)
 	if after <= 0 {
-		eng.addToInstanceStop(instance.ID)
+		eng.addToInstanceStop(instance.Snapshot.ID)
 	} else {
-		util.DefaultTimeoutWheel().Schedule(time.Second*time.Duration(after), eng.addToInstanceStop, instance.ID)
+		util.DefaultTimeoutWheel().Schedule(time.Second*time.Duration(after), eng.addToInstanceStop, instance.Snapshot.ID)
+	}
+}
+
+func (eng *engine) doStoppingInstanceEvent(instance metapb.WorkflowInstance) {
+	bm := bbutil.MustParseBM(instance.Crowd)
+	shards := bbutil.BMSplit(bm, instance.MaxPerShard)
+	for _, shard := range shards {
+		req := rpcpb.AcquireRemoveInstanceStateShardRequest()
+		req.WorkflowID = instance.Snapshot.ID
+		req.Start = shard.Minimum()
+		req.End = shard.Maximum() + 1
+
+		_, err := eng.store.ExecCommand(req)
+		if err != nil {
+			logger.Errorf("create workflow-%d failed with %+v, retry later",
+				instance.Snapshot.ID,
+				err)
+			util.DefaultTimeoutWheel().Schedule(eng.opts.retryInterval,
+				eng.addToRetryStoppingInstance,
+				instance)
+			return
+		}
 	}
 }
 
 func (eng *engine) doStoppedInstanceEvent(id uint64) {
-	eng.rangeCache.Store(id, stoppedRange)
-
 	var removed []interface{}
 	eng.workers.Range(func(key, value interface{}) bool {
 		w := value.(*stateWorker)
-		if w.state.InstanceID == id {
+		if w.state.WorkflowID == id {
 			removed = append(removed, key)
 		}
 		return true
@@ -608,7 +517,10 @@ func (eng *engine) doCreateInstanceState(instance metapb.WorkflowInstance, state
 		State: state,
 	})
 	if err != nil {
-		log.Errorf("create workflow instance failed with %+v, retry later", err)
+		logger.Errorf("create workflow-%d state %s failed with %+v, retry later",
+			instance.Snapshot.ID,
+			workerKey(state),
+			err)
 		util.DefaultTimeoutWheel().Schedule(eng.opts.retryInterval, eng.addToRetryNewInstance, instance)
 		return false
 	}
@@ -618,32 +530,38 @@ func (eng *engine) doCreateInstanceState(instance metapb.WorkflowInstance, state
 
 func (eng *engine) doCreateInstanceStateShardComplete(id uint64) {
 	_, err := eng.store.ExecCommand(&rpcpb.StartedInstanceRequest{
-		InstanceID: id,
+		WorkflowID: id,
 	})
 	if err != nil {
-		log.Errorf("set workflow instance %d started failed with %+v, retry later", id, err)
+		logger.Errorf("start workflow-%d state failed with %+v, retry later",
+			id, err)
 		util.DefaultTimeoutWheel().Schedule(eng.opts.retryInterval, eng.addToRetryCompleteInstance, id)
 		return
 	}
 
-	log.Infof("workflow instance %d started ", id)
+	logger.Infof("workflow-%d started", id)
 }
 
 func (eng *engine) doStopInstance(id uint64) {
 	_, err := eng.store.ExecCommand(&rpcpb.StopInstanceRequest{
-		InstanceID: id,
+		WorkflowID: id,
 	})
 	if err != nil {
-		log.Errorf("stop workflow instance %d failed with %+v, retry later", id, err)
+		logger.Errorf("stop workflow-%d failed with %+v, retry later",
+			id, err)
 		util.DefaultTimeoutWheel().Schedule(eng.opts.retryInterval, eng.addToInstanceStop, id)
 		return
 	}
 
-	log.Infof("workflow instance %d stopped ", id)
+	logger.Infof("workflow-%d stopped ", id)
 }
 
 func (eng *engine) addToRetryNewInstance(arg interface{}) {
 	eng.retryNewInstanceC <- arg.(metapb.WorkflowInstance)
+}
+
+func (eng *engine) addToRetryStoppingInstance(arg interface{}) {
+	eng.retryStoppingInstanceC <- arg.(metapb.WorkflowInstance)
 }
 
 func (eng *engine) addToRetryCompleteInstance(arg interface{}) {
@@ -655,9 +573,8 @@ func (eng *engine) addToInstanceStop(id interface{}) {
 }
 
 func workerKey(state metapb.WorkflowInstanceState) string {
-	return fmt.Sprintf("%d/[%d-%d)/%d",
-		state.InstanceID,
+	return fmt.Sprintf("%d/[%d-%d)",
+		state.WorkflowID,
 		state.Start,
-		state.End,
-		state.Idx)
+		state.End)
 }

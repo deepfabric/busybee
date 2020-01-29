@@ -2,16 +2,16 @@ package core
 
 import (
 	"github.com/RoaringBitmap/roaring"
-	"github.com/deepfabric/busybee/pkg/pb/metapb"
+	"github.com/deepfabric/busybee/pkg/pb/apipb"
 	"github.com/deepfabric/busybee/pkg/util"
 )
 
 type executionbatch struct {
-	event    metapb.Event
+	event    apipb.Event
 	from     string
 	to       string
 	crowd    *roaring.Bitmap
-	notifies []metapb.Notify
+	notifies []apipb.Notify
 	cbs      []*stepCB
 }
 
@@ -20,10 +20,10 @@ func newExecutionbatch() *executionbatch {
 }
 
 func (b *executionbatch) notify() {
-	value := metapb.Notify{
+	value := apipb.Notify{
 		UserID:     b.event.UserID,
 		TenantID:   b.event.TenantID,
-		InstanceID: b.event.InstanceID,
+		WorkflowID: b.event.WorkflowID,
 		FromStep:   b.from,
 		ToStep:     b.to,
 	}
@@ -38,14 +38,14 @@ func (b *executionbatch) next(notify bool) {
 		b.notify()
 	}
 
-	b.event = metapb.Event{}
+	b.event = apipb.Event{}
 	b.from = ""
 	b.to = ""
 	b.crowd = nil
 }
 
 func (b *executionbatch) reset() {
-	b.event = metapb.Event{}
+	b.event = apipb.Event{}
 	b.from = ""
 	b.to = ""
 	b.crowd = nil

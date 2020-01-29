@@ -3,7 +3,6 @@ package rpcpb;
 
 import "github.com/gogo/protobuf/gogoproto/gogo.proto";
 import "github.com/deepfabric/busybee/pkg/pb/metapb/meta.proto";
-import "github.com/deepfabric/busybee/pkg/pb/metapb/api.proto";
 
 option (gogoproto.marshaler_all) = true;
 option (gogoproto.sizer_all) = true;
@@ -20,9 +19,8 @@ enum Type {
     BMRemove      = 102;
     BMClear       = 103;
     BMContains    = 104;
-    BMDel         = 105;
-    BMCount       = 106;
-    BMRange       = 107;
+    BMCount       = 105;
+    BMRange       = 106;
 
     StartingInstance         = 200;
     StartedInstance          = 201;
@@ -30,250 +28,162 @@ enum Type {
     CreateInstanceStateShard = 203;
     UpdateInstanceStateShard = 204;
     RemoveInstanceStateShard = 205;
-    StepInstanceStateShard   = 206;
+    InstanceCountState       = 206;
+    InstanceCrowdState       = 207;
 
-    QueueAdd      = 300;
-    QueueFetch    = 301;
+    QueueAdd            = 300;
+    QueueFetch          = 301;
+
+    TenantInit          = 400;
 }
 
 // SetRequest set a key value pair
 message SetRequest {
-    bytes           id    = 1 [(gogoproto.customname) = "ID"];
-    bytes           key   = 2;
-    bytes           value = 3;
-}
-
-// SetResponse response
-message SetResponse {
-    bytes           id    = 1 [(gogoproto.customname) = "ID"];
+    bytes  key   = 1;
+    bytes  value = 2;
 }
 
 // GetRequest get value by key
 message GetRequest {
-    bytes           id    = 1 [(gogoproto.customname) = "ID"];
-    bytes           key   = 2;
-}
-
-// GetResponse response
-message GetResponse {
-    bytes           id    = 1 [(gogoproto.customname) = "ID"];
-    bytes           value = 2;
+    bytes key = 1;
 }
 
 // DeleteRequest remove a key value pair
 message DeleteRequest {
-    bytes           id    = 1 [(gogoproto.customname) = "ID"];
-    bytes           key   = 2;
-}
-
-// DeleteResponse response
-message DeleteResponse {
-    bytes           id    = 1 [(gogoproto.customname) = "ID"];
+    bytes key = 1;
 }
 
 // BMCreateRequest create a bitmap
 message BMCreateRequest {
-    bytes           id    = 1 [(gogoproto.customname) = "ID"];
-    bytes           key   = 2;
-    repeated uint32 value = 3;
-}
-
-// BMCreateResponse response
-message BMCreateResponse {
-    bytes           id    = 1 [(gogoproto.customname) = "ID"];
+    bytes           key   = 1;
+    repeated uint32 value = 2;
 }
 
 // BMAddRequest add some uint64 to a bitmap
 message BMAddRequest {
-    bytes           id    = 1 [(gogoproto.customname) = "ID"];
-    bytes           key   = 2;
-    repeated uint32 value = 3;
-}
-
-// BMCreateResponse response
-message BMAddResponse {
-    bytes           id    = 1 [(gogoproto.customname) = "ID"];
+    bytes           key   = 1;
+    repeated uint32 value = 2;
 }
 
 // BMRemoveRequest remove some uint64 from a bitmap
 message BMRemoveRequest {
-    bytes           id    = 1 [(gogoproto.customname) = "ID"];
-    bytes           key   = 2;
-    repeated uint32 value = 3;
-}
-
-// BMRemoveResponse response
-message BMRemoveResponse {
-    bytes           id    = 1 [(gogoproto.customname) = "ID"];
+    bytes           key   = 1;
+    repeated uint32 value = 2;
 }
 
 // BMClearRequest clear a bitmap
 message BMClearRequest {
-    bytes           id    = 1 [(gogoproto.customname) = "ID"];
-    bytes           key   = 2;
-}
-
-// BMClearResponse response
-message BMClearResponse {
-    bytes           id    = 1 [(gogoproto.customname) = "ID"];
+    bytes           key   = 1;
 }
 
 // BMContainsRequest check some uint64 is in a bitmap
 message BMContainsRequest {
-    bytes           id    = 1 [(gogoproto.customname) = "ID"];
-    bytes           key   = 2;
-    repeated uint32 value = 3;
-}
-
-// BMContainsResponse response
-message BMContainsResponse {
-    bytes id       = 1 [(gogoproto.customname) = "ID"];
-    bool  contains = 2;
-}
-
-// BMDelRequest delete a bitmap
-message BMDelRequest {
-    bytes id  = 1 [(gogoproto.customname) = "ID"];
-    bytes key = 2;
-}
-
-// BMDelResponse response
-message BMDelResponse {
-    bytes id  = 1 [(gogoproto.customname) = "ID"];
+    bytes           key   = 1;
+    repeated uint32 value = 2;
 }
 
 // BMCountRequest returns the count of a bitmap
 message BMCountRequest {
-    bytes id  = 1 [(gogoproto.customname) = "ID"];
-    bytes key = 2;
-}
-
-// BMCountResponse response
-message BMCountResponse {
-    bytes  id    = 1 [(gogoproto.customname) = "ID"];
-    uint64 count = 2;
+    bytes key = 1;
 }
 
 // BMRangeRequest returns the limit uint64s that that >= start of a bitmap
 message BMRangeRequest {
-    bytes           id    = 1 [(gogoproto.customname) = "ID"];
-    bytes           key   = 2;
-    uint32          start = 3;
-    uint64          limit = 4;
-}
-
-// BMRangeResponse response
-message BMRangeResponse {
-    bytes           id     = 1 [(gogoproto.customname) = "ID"];
-    bytes           key    = 2;
-    repeated uint32 values = 3;
+    bytes           key   = 1;
+    uint32          start = 2;
+    uint64          limit = 3;
 }
 
 // StartingInstanceRequest start a workflow
 message StartingInstanceRequest {
-    bytes                   id         = 1 [(gogoproto.customname) = "ID"];
-    metapb.WorkflowInstance instance   = 2 [(gogoproto.nullable) = false];
+    metapb.WorkflowInstance instance  = 1 [(gogoproto.nullable) = false];
 }
-
-// StartingInstanceResponse response
-message StartingInstanceResponse {
-    bytes id = 1 [(gogoproto.customname) = "ID"];
-}
-
 
 // StartedInstanceRequest remove a workflow
 message StartedInstanceRequest {
-    bytes  id         = 1 [(gogoproto.customname) = "ID"];
-    uint64 instanceID = 2;
-}
-
-// StartedInstanceResponse response
-message StartedInstanceResponse {
-    bytes id = 1 [(gogoproto.customname) = "ID"];
+    uint64 workflowID = 1;
 }
 
 // StopInstanceRequest remove a workflow
 message StopInstanceRequest {
-    bytes  id         = 1 [(gogoproto.customname) = "ID"];
-    uint64 instanceID = 2;
-}
-
-// StopInstanceResponse response
-message StopInstanceResponse {
-    bytes id = 1 [(gogoproto.customname) = "ID"];
+    uint64 workflowID = 1;
 }
 
 // CreateInstanceStateShardRequest create a instance state
 message CreateInstanceStateShardRequest {
-    bytes                        id    = 1 [(gogoproto.customname) = "ID"];
-    metapb.WorkflowInstanceState state = 2 [(gogoproto.nullable) = false];
-}
-
-// CreateInstanceStateShardResponse response
-message CreateInstanceStateShardResponse {
-    bytes id = 1 [(gogoproto.customname) = "ID"];
+    metapb.WorkflowInstanceState state = 1 [(gogoproto.nullable) = false];
 }
 
 // UpdateInstanceStateShardRequest update a instance state
 message UpdateInstanceStateShardRequest {
-    bytes                        id    = 1 [(gogoproto.customname) = "ID"];
-    metapb.WorkflowInstanceState state = 2 [(gogoproto.nullable) = false];
-}
-
-// UpdateInstanceStateShardResponse response
-message UpdateInstanceStateShardResponse {
-    bytes id = 1 [(gogoproto.customname) = "ID"];
+    metapb.WorkflowInstanceState state = 1 [(gogoproto.nullable) = false];
 }
 
 // RemoveInstanceStateShardRequest remove a instance state
 message RemoveInstanceStateShardRequest {
-    bytes id          = 1 [(gogoproto.customname) = "ID"];
-    uint64 instanceID = 2;
-    uint32 start      = 3;
-    uint32 end        = 4;
+    uint64 workflowID = 1;
+    uint32 start      = 2;
+    uint32 end        = 3;
 }
 
-// RemoveInstanceStateShardResponse response
-message RemoveInstanceStateShardResponse {
-    bytes id = 1 [(gogoproto.customname) = "ID"];
+// InstanceCountStateRequest instance count state
+message InstanceCountStateRequest {
+    uint64 workflowID = 1;
+}
+
+// InstanceCrowdStateRequest instance crowd state
+message InstanceCrowdStateRequest {
+    uint64 workflowID = 1;
+    string name       = 2;
 }
 
 // QueueAddRequest add items into a queue
 message QueueAddRequest {
-    bytes          id    = 1 [(gogoproto.customname) = "ID"];
-    bytes          key   = 2;
-    repeated bytes items = 3;
+    bytes          key   = 1;
+    repeated bytes items = 2;
 }
-
-// QueueAddResponse response
-message QueueAddResponse {
-    bytes  id         = 1 [(gogoproto.customname) = "ID"];
-    uint64 lastOffset = 2;
-}
-
 
 // QueueFetchResponse add items into a queue
 message QueueFetchRequest {
-    bytes  id          = 1 [(gogoproto.customname) = "ID"];
-    bytes  key         = 2;
+    bytes  key         = 1;
+    bytes  consumer    = 2;
     uint64 afterOffset = 3;
     uint64 count       = 4;
 }
 
-// QueueAddResponse response
-message QueueFetchResponse {
-    bytes          id         = 1 [(gogoproto.customname) = "ID"];
-    repeated bytes items      = 2;
-    uint64         lastOffset = 3;
+// TenantInitRequest init tenant
+message TenantInitRequest {
+    uint64 id                   = 1 [(gogoproto.customname) = "ID"];
+    uint64 inputQueuePartitions = 2;
 }
 
-message StepInstanceStateShardRequest {
-    bytes        id    = 1 [(gogoproto.customname) = "ID"];
-    metapb.Event event = 2 [(gogoproto.nullable) = false];
-    uint32       start = 3;
-    uint32       end   = 4;
+// EmptyResponse empty response
+message EmptyResponse {
+
 }
 
-message StepInstanceStateShardResponse {
-    bytes        id    = 1 [(gogoproto.customname) = "ID"];
+// BytesResponse response
+message BytesResponse {
+    bytes value = 1;
+}
+
+// BoolResponse response
+message BoolResponse {
+    bool  value = 1;
+}
+
+// Uint64Response response
+message Uint64Response {
+    uint64 value = 1;
+}
+
+// Uint32SliceResponse response
+message Uint32SliceResponse {
+    repeated uint32 values = 1;
+}
+
+// BytesSliceResponse response
+message BytesSliceResponse {
+    repeated bytes items      = 1;
+    uint64         lastOffset = 2;
 }

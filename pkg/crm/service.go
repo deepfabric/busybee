@@ -2,15 +2,15 @@ package crm
 
 import (
 	"github.com/buger/jsonparser"
-	"github.com/deepfabric/busybee/pkg/pb/metapb"
+	"github.com/deepfabric/busybee/pkg/pb/apipb"
 	"github.com/deepfabric/busybee/pkg/storage"
 	"github.com/fagongzi/util/hack"
 )
 
 // Service crm service
 type Service interface {
-	UpdateMapping(uint64, metapb.IDValues) error
-	GetIDValue(uint64, metapb.IDValue, uint32) (string, error)
+	UpdateMapping(uint64, apipb.IDValues) error
+	GetIDValue(uint64, apipb.IDValue, uint32) (string, error)
 	UpdateProfile(uint64, uint32, []byte) error
 	GetProfileField(uint64, uint32, ...string) ([]string, error)
 }
@@ -26,7 +26,7 @@ type service struct {
 	store storage.Storage
 }
 
-func (s *service) UpdateMapping(tid uint64, values metapb.IDValues) error {
+func (s *service) UpdateMapping(tid uint64, values apipb.IDValues) error {
 	n := len(values.Values)
 
 	for i := 0; i < n; i++ {
@@ -45,9 +45,8 @@ func (s *service) UpdateMapping(tid uint64, values metapb.IDValues) error {
 	return nil
 }
 
-func (s *service) GetIDValue(tid uint64, from metapb.IDValue, to uint32) (string, error) {
-	key := storage.MappingKey(tid, from, to)
-	value, err := s.store.Get(key)
+func (s *service) GetIDValue(tid uint64, from apipb.IDValue, to uint32) (string, error) {
+	value, err := s.store.Get(storage.MappingKey(tid, from, to))
 	if err != nil {
 		return "", err
 	}
@@ -77,7 +76,7 @@ func (s *service) GetProfileField(tid uint64, uid uint32, fields ...string) ([]s
 	return values, nil
 }
 
-func (s *service) update(tid uint64, from, to metapb.IDValue) error {
+func (s *service) update(tid uint64, from, to apipb.IDValue) error {
 	return s.store.Set(storage.MappingKey(tid, from, to.Type), hack.StringToSlice(to.Value))
 }
 

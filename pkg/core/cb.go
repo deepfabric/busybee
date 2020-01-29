@@ -17,6 +17,10 @@ func acquireCB() *stepCB {
 }
 
 func releaseCB(value *stepCB) {
+	if value == nil {
+		return
+	}
+
 	if value.c != nil {
 		close(value.c)
 	}
