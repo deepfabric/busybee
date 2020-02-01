@@ -6,14 +6,13 @@ import (
 	"time"
 
 	"github.com/RoaringBitmap/roaring"
-	"github.com/deepfabric/busybee/pkg/pb/apipb"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/util"
 	"github.com/stretchr/testify/assert"
 )
 
 type testCtx struct {
-	event apipb.Event
+	event metapb.Event
 	kvs   map[string]string
 }
 
@@ -31,13 +30,13 @@ func (c *testCtx) setEventKV(key, value string) {
 		}
 	}
 
-	c.event.Data = append(c.event.Data, apipb.KV{
+	c.event.Data = append(c.event.Data, metapb.KV{
 		Key:   []byte(key),
 		Value: []byte(value),
 	})
 }
 
-func (c *testCtx) Event() apipb.Event {
+func (c *testCtx) Event() metapb.Event {
 	return c.event
 }
 

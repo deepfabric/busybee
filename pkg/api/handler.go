@@ -2,18 +2,19 @@ package api
 
 import (
 	"fmt"
+
 	"github.com/deepfabric/beehive/util"
-	"github.com/deepfabric/busybee/pkg/pb/apipb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
+	"github.com/deepfabric/busybee/pkg/queue"
 	"github.com/fagongzi/util/protoc"
 )
 
 type ctx struct {
 	sid interface{}
-	req *apipb.Request
+	req *rpcpb.Request
 }
 
-func (s *server) onReq(sid interface{}, req *apipb.Request) error {
+func (s *server) onReq(sid interface{}, req *rpcpb.Request) error {
 	ctx := ctx{sid: sid, req: req}
 
 	switch req.Type {
@@ -55,6 +56,10 @@ func (s *server) onReq(sid interface{}, req *apipb.Request) error {
 		return s.doUpdateProfile(ctx)
 	case rpcpb.GetProfile:
 		return s.doGetProfile(ctx)
+	case rpcpb.AddEvent:
+		return s.doAddEvent(ctx)
+	case rpcpb.FetchNotify:
+		return s.doFetchNotify(ctx)
 	}
 
 	return fmt.Errorf("not support type %d", req.Type)
@@ -205,6 +210,37 @@ func (s *server) doGetProfile(ctx ctx) error {
 	return nil
 }
 
+func (s *server) doAddEvent(ctx ctx) error {
+	value, ok := s.tenantQueues.Load(ctx.req.AddEvent.Event.TenantID)
+	if !ok {
+		tq := newTenantQueue(ctx.req.AddEvent.Event.TenantID, s.engine, s.onResp)
+		value, ok = s.tenantQueues.LoadOrStore(ctx.req.AddEvent.Event.TenantID, tq)
+		if !ok {
+			err := tq.start()
+			if err != nil {
+				s.onResp(ctx, nil, err)
+				return nil
+			}
+			value = tq
+		} else {
+			tq.stop()
+		}
+	}
+
+	value.(*tenantQueue).add(ctx)
+	return nil
+}
+
+func (s *server) doFetchNotify(ctx ctx) error {
+	req := rpcpb.AcquireQueueFetchRequest()
+	req.Key = queue.PartitionKey(ctx.req.FetchNotify.ID, 0)
+	req.AfterOffset = ctx.req.FetchNotify.After
+	req.Count = ctx.req.FetchNotify.Count
+	req.Consumer = []byte(ctx.req.FetchNotify.Consumer)
+	s.engine.Storage().AsyncExecCommand(req, s.onResp, ctx)
+	return nil
+}
+
 func (s *server) doBMRange(ctx ctx) error {
 	s.engine.Storage().AsyncExecCommand(&ctx.req.BmRange, s.onResp, ctx)
 	return nil
@@ -213,7 +249,7 @@ func (s *server) doBMRange(ctx ctx) error {
 func (s *server) onResp(arg interface{}, value []byte, err error) {
 	ctx := arg.(ctx)
 	if rs, ok := s.sessions.Load(ctx.sid); ok {
-		rsp := apipb.AcquireResponse()
+		rsp := rpcpb.AcquireResponse()
 		rsp.ID = ctx.req.ID
 		if err != nil {
 			rsp.Error.Error = err.Error()
@@ -224,7 +260,8 @@ func (s *server) onResp(arg interface{}, value []byte, err error) {
 		switch ctx.req.Type {
 		case rpcpb.Set, rpcpb.Delete, rpcpb.BMCreate, rpcpb.BMAdd,
 			rpcpb.BMRemove, rpcpb.BMClear, rpcpb.StartingInstance,
-			rpcpb.StopInstance, rpcpb.UpdateMapping, rpcpb.UpdateProfile:
+			rpcpb.StopInstance, rpcpb.UpdateMapping, rpcpb.UpdateProfile,
+			rpcpb.AddEvent:
 			// empty response
 		case rpcpb.Get:
 			protoc.MustUnmarshal(&rsp.BytesResp, value)
@@ -237,6 +274,8 @@ func (s *server) onResp(arg interface{}, value []byte, err error) {
 		case rpcpb.InstanceCountState, rpcpb.InstanceCrowdState,
 			rpcpb.GetMapping, rpcpb.GetProfile:
 			rsp.BytesResp.Value = value
+		case rpcpb.FetchNotify:
+			protoc.MustUnmarshal(&rsp.BytesSliceResp, value)
 		}
 
 		rs.(*util.Session).OnResp(rsp)

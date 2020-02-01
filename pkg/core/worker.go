@@ -3,7 +3,6 @@ package core
 import (
 	"github.com/RoaringBitmap/roaring"
 	"github.com/deepfabric/busybee/pkg/expr"
-	"github.com/deepfabric/busybee/pkg/pb/apipb"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/deepfabric/busybee/pkg/queue"
@@ -139,7 +138,7 @@ func (w *stateWorker) run() {
 					w.doStepTimer(batch, value.value.(string))
 				case eventAction:
 					batch.cbs = append(batch.cbs, value.cb)
-					w.doStepEvents(value.value.([]apipb.Event), batch)
+					w.doStepEvents(value.value.([]metapb.Event), batch)
 				}
 			}
 
@@ -157,8 +156,8 @@ func (w *stateWorker) onConsume(offset uint64, items ...[]byte) error {
 		offset,
 		len(items))
 
-	var events []apipb.Event
-	var event apipb.Event
+	var events []metapb.Event
+	var event metapb.Event
 	for _, item := range items {
 		protoc.MustUnmarshal(&event, item)
 		if w.matches(event.UserID) {
@@ -260,7 +259,7 @@ func (w *stateWorker) stepChanged(batch *executionbatch) error {
 	return nil
 }
 
-func (w *stateWorker) doStepEvents(events []apipb.Event, batch *executionbatch) {
+func (w *stateWorker) doStepEvents(events []metapb.Event, batch *executionbatch) {
 	for _, event := range events {
 		for idx, crowd := range w.stepCrowds {
 			if crowd.Contains(event.UserID) {
@@ -279,7 +278,7 @@ func (w *stateWorker) doStepEvents(events []apipb.Event, batch *executionbatch) 
 }
 
 func (w *stateWorker) doStepTimer(batch *executionbatch, name string) {
-	err := w.steps[name].Execute(newExprCtx(apipb.Event{
+	err := w.steps[name].Execute(newExprCtx(metapb.Event{
 		TenantID:   w.state.TenantID,
 		WorkflowID: w.state.WorkflowID,
 	}, w.eng),
@@ -292,18 +291,18 @@ func (w *stateWorker) doStepTimer(batch *executionbatch, name string) {
 }
 
 type exprCtx struct {
-	event apipb.Event
+	event metapb.Event
 	eng   Engine
 }
 
-func newExprCtx(event apipb.Event, eng Engine) expr.Ctx {
+func newExprCtx(event metapb.Event, eng Engine) expr.Ctx {
 	return &exprCtx{
 		event: event,
 		eng:   eng,
 	}
 }
 
-func (c *exprCtx) Event() apipb.Event {
+func (c *exprCtx) Event() metapb.Event {
 	return c.event
 }
 

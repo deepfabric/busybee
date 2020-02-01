@@ -39,6 +39,48 @@ enum Type {
     GetMapping    = 402;
     UpdateProfile = 403;
     GetProfile    = 404;
+    AddEvent      = 405;
+    FetchNotify   = 406;
+}
+
+// Request the busybee request
+message Request {
+    uint64                    id            = 1  [(gogoproto.customname) = "ID"];
+    Type                      type          = 2;
+    SetRequest                set           = 3  [(gogoproto.nullable) = false];
+    GetRequest                get           = 4  [(gogoproto.nullable) = false];
+    DeleteRequest             delete        = 5  [(gogoproto.nullable) = false];
+    BMCreateRequest           bmCreate      = 6  [(gogoproto.nullable) = false];
+    BMAddRequest              bmAdd         = 7  [(gogoproto.nullable) = false];
+    BMRemoveRequest           bmRemove      = 8  [(gogoproto.nullable) = false];
+    BMClearRequest            bmClear       = 9  [(gogoproto.nullable) = false];
+    BMRangeRequest            bmRange       = 10 [(gogoproto.nullable) = false];
+    BMCountRequest            bmCount       = 11 [(gogoproto.nullable) = false];
+    BMContainsRequest         bmContains    = 12 [(gogoproto.nullable) = false];
+    TenantInitRequest         tenantInit    = 13 [(gogoproto.nullable) = false];
+    StartingInstanceRequest   startInstance = 14 [(gogoproto.nullable) = false];
+    StopInstanceRequest       stopInstance  = 15 [(gogoproto.nullable) = false];
+    InstanceCountStateRequest countInstance = 16 [(gogoproto.nullable) = false];
+    InstanceCrowdStateRequest crowdInstance = 17 [(gogoproto.nullable) = false];
+    UpdateMappingRequest      updateMapping = 18 [(gogoproto.nullable) = false];
+    GetMappingRequest         getMapping    = 19 [(gogoproto.nullable) = false];
+    UpdateProfileRequest      updateProfile = 20 [(gogoproto.nullable) = false];
+    GetProfileRequest         getProfile    = 21 [(gogoproto.nullable) = false];
+    AddEventRequest           addEvent      = 22 [(gogoproto.nullable) = false];
+    FetchNotifyRequest        fetchNotify   = 23 [(gogoproto.nullable) = false];
+}
+
+// Response the busybee response
+message Response {
+    uint64              id              = 1 [(gogoproto.customname) = "ID"];
+    Type                type            = 2;
+    ErrorResponse       error           = 3 [(gogoproto.nullable) = false];
+    BytesResponse       bytesResp       = 4 [(gogoproto.nullable) = false];
+    BoolResponse        boolResp        = 5 [(gogoproto.nullable) = false];
+    Uint64Response      uint64Resp      = 6 [(gogoproto.nullable) = false];
+    Uint32SliceResponse uint32SliceResp = 7 [(gogoproto.nullable) = false];
+    BytesSliceResponse  bytesSliceResp  = 8 [(gogoproto.nullable) = false];
+    StringResponse      stringResp      = 9 [(gogoproto.nullable) = false];
 }
 
 // SetRequest set a key value pair
@@ -186,6 +228,24 @@ message GetProfileRequest {
     uint64 id     = 1 [(gogoproto.customname) = "ID"];
     uint32 userID = 2;
     string field  = 3;
+}
+
+// AddEventRequest add event
+message AddEventRequest {
+    metapb.Event event = 1 [(gogoproto.nullable) = false];
+}
+
+// FetchNotifyRequest fetch notify request
+message FetchNotifyRequest {
+    uint64 id       = 1 [(gogoproto.customname) = "ID"];
+    uint64 after    = 2;
+    uint64 count    = 3;
+    string consumer = 4;
+}
+
+// ErrorResponse error response 
+message ErrorResponse {
+    string error = 1;
 }
 
 // EmptyResponse empty response

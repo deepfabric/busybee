@@ -1,12 +1,12 @@
 package expr
 
 import (
-	"github.com/deepfabric/busybee/pkg/pb/apipb"
+	"github.com/deepfabric/busybee/pkg/pb/metapb"
 )
 
 // Ctx expr excution ctx
 type Ctx interface {
-	Event() apipb.Event
+	Event() metapb.Event
 	Profile([]byte) ([]byte, error)
 	KV([]byte) ([]byte, error)
 }

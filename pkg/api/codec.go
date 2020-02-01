@@ -3,7 +3,7 @@ package api
 import (
 	"fmt"
 
-	"github.com/deepfabric/busybee/pkg/pb/apipb"
+	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/util/protoc"
 )
@@ -19,7 +19,7 @@ type codec struct {
 
 func (c *codec) Decode(in *goetty.ByteBuf) (bool, interface{}, error) {
 	data := in.GetMarkedRemindData()
-	req := apipb.AcquireRequest()
+	req := rpcpb.AcquireRequest()
 	err := req.Unmarshal(data)
 	if err != nil {
 		return false, nil, err
@@ -30,13 +30,13 @@ func (c *codec) Decode(in *goetty.ByteBuf) (bool, interface{}, error) {
 }
 
 func (c *codec) Encode(data interface{}, out *goetty.ByteBuf) error {
-	if resp, ok := data.(*apipb.Response); ok {
+	if resp, ok := data.(*rpcpb.Response); ok {
 		index := out.GetWriteIndex()
 		size := resp.Size()
 		out.Expansion(size)
 		protoc.MustMarshalTo(resp, out.RawBuf()[index:index+size])
 		out.SetWriterIndex(index + size)
-		apipb.ReleaseResponse(resp)
+		rpcpb.ReleaseResponse(resp)
 		return nil
 	}
 

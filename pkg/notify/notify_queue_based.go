@@ -1,7 +1,6 @@
 package notify
 
 import (
-	"github.com/deepfabric/busybee/pkg/pb/apipb"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/deepfabric/busybee/pkg/queue"
@@ -20,7 +19,7 @@ func NewQueueBasedNotifier(store storage.Storage) Notifier {
 	}
 }
 
-func (n *queueNotifier) Notify(id uint64, notifies ...apipb.Notify) error {
+func (n *queueNotifier) Notify(id uint64, notifies ...metapb.Notify) error {
 	var items [][]byte
 	for _, nt := range notifies {
 		items = append(items, protoc.MustMarshal(&nt))

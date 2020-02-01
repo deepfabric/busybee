@@ -6,7 +6,7 @@ import (
 
 	"github.com/deepfabric/beehive/util"
 	"github.com/deepfabric/busybee/pkg/core"
-	"github.com/deepfabric/busybee/pkg/pb/apipb"
+	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/log"
 )
@@ -18,8 +18,9 @@ type Server interface {
 }
 
 type server struct {
-	addr   string
-	engine core.Engine
+	addr         string
+	engine       core.Engine
+	tenantQueues sync.Map // tenanId -> *tenantQueue
 
 	svr      *goetty.Server
 	sessions sync.Map // interface{} -> *util.Session
@@ -56,10 +57,6 @@ func (s *server) Stop() error {
 	return nil
 }
 
-func releaseResponse(resp interface{}) {
-	apipb.ReleaseResponse(resp.(*apipb.Response))
-}
-
 func (s *server) doConnection(conn goetty.IOSession) error {
 	rs := util.NewSession(conn, releaseResponse)
 	s.sessions.Store(rs.ID, rs)
@@ -86,13 +83,17 @@ func (s *server) doConnection(conn goetty.IOSession) error {
 			return err
 		}
 
-		req := value.(*apipb.Request)
+		req := value.(*rpcpb.Request)
 		err = s.onReq(rs.ID, req)
 		if err != nil {
-			rsp := apipb.AcquireResponse()
+			rsp := rpcpb.AcquireResponse()
 			rsp.ID = req.ID
 			rsp.Error.Error = err.Error()
 			rs.OnResp(rsp)
 		}
 	}
+}
+
+func releaseResponse(resp interface{}) {
+	rpcpb.ReleaseResponse(resp.(*rpcpb.Response))
 }

@@ -14,6 +14,32 @@ message IDValue {
     uint32 type   = 2;
 }
 
+// Event is process definition
+message Event {
+    uint32 userID     = 1;
+    uint64 tenantID   = 2;
+    uint64 workflowID = 3;
+    repeated KV data  = 4 [(gogoproto.nullable) = false];
+}
+
+// KV custom KV data
+message KV {
+    bytes key   = 1;
+    bytes value = 2;
+}
+
+// Notify notify message
+message Notify {
+    uint32 userID     = 1;
+    bytes  crowd      = 2;
+    uint64 tenantID   = 3;
+    uint64 workflowID = 4;
+    string fromStep   = 5;
+    string fromAction = 6;
+    string toStep     = 7;
+    string toAction   = 8;
+}
+
 // Group shard group
 enum Group {
     DefaultGroup      = 0;
