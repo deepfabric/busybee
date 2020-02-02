@@ -7,8 +7,62 @@ import (
 	"github.com/deepfabric/busybee/pkg/util"
 	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/log"
+	"github.com/fagongzi/util/format"
 	"github.com/fagongzi/util/protoc"
 )
+
+func (h *beeStorage) allocID(shard uint64, req *raftcmdpb.Request, buf *goetty.ByteBuf) (uint64, int64, *raftcmdpb.Response) {
+	resp := pb.AcquireResponse()
+	customReq := rpcpb.AllocIDRequest{}
+	protoc.MustUnmarshal(&customReq, req.Cmd)
+
+	value, err := h.getValueWithPrefix(shard, req.Key)
+	if err != nil {
+		log.Fatalf("alloc id %+v failed with %+v", req.Key, err)
+	}
+
+	id := uint32(0)
+	if len(value) > 0 {
+		id, err = format.BytesToUint32(value)
+		if err != nil {
+			log.Fatalf("alloc id %+v failed with %+v", req.Key, err)
+		}
+	}
+
+	start := id + 1
+	end := id + customReq.Batch
+
+	err = h.getStore(shard).Set(req.Key, format.Uint32ToBytes(end))
+	if err != nil {
+		log.Fatalf("alloc id %+v failed with %+v", req.Key, err)
+	}
+
+	customResp := rpcpb.AcquireUint32RangeResponse()
+	customResp.From = start
+	customResp.To = end
+	resp.Value = protoc.MustMarshal(customResp)
+	rpcpb.ReleaseUint32RangeResponse(customResp)
+
+	written := uint64(len(req.Key)) + 4
+	return written, int64(written), resp
+}
+
+func (h *beeStorage) resetID(shard uint64, req *raftcmdpb.Request, buf *goetty.ByteBuf) (uint64, int64, *raftcmdpb.Response) {
+	resp := pb.AcquireResponse()
+	customReq := rpcpb.ResetIDRequest{}
+	protoc.MustUnmarshal(&customReq, req.Cmd)
+
+	value := 0 + customReq.StartWith
+	err := h.getStore(shard).Set(req.Key, format.Uint32ToBytes(value))
+	if err != nil {
+		log.Fatalf("alloc id %+v failed with %+v", req.Key, err)
+	}
+
+	resp.Value = rpcpb.EmptyRespBytes
+
+	written := uint64(len(req.Key)) + 4
+	return written, int64(written), resp
+}
 
 func (h *beeStorage) get(shard uint64, req *raftcmdpb.Request, buf *goetty.ByteBuf) *raftcmdpb.Response {
 	resp := pb.AcquireResponse()

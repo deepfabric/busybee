@@ -11,6 +11,8 @@ import (
 
 func (h *beeStorage) init() {
 	h.AddReadFunc("get", uint64(rpcpb.Get), h.get)
+	h.AddWriteFunc("allocid", uint64(rpcpb.AllocID), h.allocID)
+	h.AddWriteFunc("resetid", uint64(rpcpb.ResetID), h.resetID)
 	h.AddReadFunc("bm-contains", uint64(rpcpb.BMContains), h.bmcontains)
 	h.AddReadFunc("bm-count", uint64(rpcpb.BMCount), h.bmcount)
 	h.AddReadFunc("bm-range", uint64(rpcpb.BMRange), h.bmrange)
@@ -30,70 +32,84 @@ func (h *beeStorage) BuildRequest(req *raftcmdpb.Request, cmd interface{}) error
 	switch cmd.(type) {
 	case *rpcpb.SetRequest:
 		msg := cmd.(*rpcpb.SetRequest)
-		req.Key = msg.Key
+		req.Key = KVKey(msg.Key)
 		req.CustemType = uint64(rpcpb.Set)
 		req.Type = raftcmdpb.Write
 		req.Cmd = protoc.MustMarshal(msg)
 		rpcpb.ReleaseSetRequest(msg)
 	case *rpcpb.GetRequest:
 		msg := cmd.(*rpcpb.GetRequest)
-		req.Key = msg.Key
+		req.Key = KVKey(msg.Key)
 		req.CustemType = uint64(rpcpb.Get)
 		req.Type = raftcmdpb.Read
 		req.Cmd = protoc.MustMarshal(msg)
 		rpcpb.ReleaseGetRequest(msg)
 	case *rpcpb.DeleteRequest:
 		msg := cmd.(*rpcpb.DeleteRequest)
-		req.Key = msg.Key
+		req.Key = KVKey(msg.Key)
 		req.CustemType = uint64(rpcpb.Delete)
 		req.Type = raftcmdpb.Write
 		req.Cmd = protoc.MustMarshal(msg)
 		rpcpb.ReleaseDeleteRequest(msg)
+	case *rpcpb.AllocIDRequest:
+		msg := cmd.(*rpcpb.AllocIDRequest)
+		req.Key = KVKey(msg.Key)
+		req.CustemType = uint64(rpcpb.AllocID)
+		req.Type = raftcmdpb.Write
+		req.Cmd = protoc.MustMarshal(msg)
+		rpcpb.ReleaseAllocIDRequest(msg)
+	case *rpcpb.ResetIDRequest:
+		msg := cmd.(*rpcpb.ResetIDRequest)
+		req.Key = KVKey(msg.Key)
+		req.CustemType = uint64(rpcpb.ResetID)
+		req.Type = raftcmdpb.Write
+		req.Cmd = protoc.MustMarshal(msg)
+		rpcpb.ReleaseResetIDRequest(msg)
 	case *rpcpb.BMCreateRequest:
 		msg := cmd.(*rpcpb.BMCreateRequest)
-		req.Key = msg.Key
+		req.Key = KVKey(msg.Key)
 		req.CustemType = uint64(rpcpb.BMCreate)
 		req.Type = raftcmdpb.Write
 		req.Cmd = protoc.MustMarshal(msg)
 		rpcpb.ReleaseBMCreateRequest(msg)
 	case *rpcpb.BMAddRequest:
 		msg := cmd.(*rpcpb.BMAddRequest)
-		req.Key = msg.Key
+		req.Key = KVKey(msg.Key)
 		req.CustemType = uint64(rpcpb.BMAdd)
 		req.Type = raftcmdpb.Write
 		req.Cmd = protoc.MustMarshal(msg)
 		rpcpb.ReleaseBMAddRequest(msg)
 	case *rpcpb.BMRemoveRequest:
 		msg := cmd.(*rpcpb.BMRemoveRequest)
-		req.Key = msg.Key
+		req.Key = KVKey(msg.Key)
 		req.CustemType = uint64(rpcpb.BMRemove)
 		req.Type = raftcmdpb.Write
 		req.Cmd = protoc.MustMarshal(msg)
 		rpcpb.ReleaseBMRemoveRequest(msg)
 	case *rpcpb.BMClearRequest:
 		msg := cmd.(*rpcpb.BMClearRequest)
-		req.Key = msg.Key
+		req.Key = KVKey(msg.Key)
 		req.CustemType = uint64(rpcpb.BMClear)
 		req.Type = raftcmdpb.Write
 		req.Cmd = protoc.MustMarshal(msg)
 		rpcpb.ReleaseBMClearRequest(msg)
 	case *rpcpb.BMContainsRequest:
 		msg := cmd.(*rpcpb.BMContainsRequest)
-		req.Key = msg.Key
+		req.Key = KVKey(msg.Key)
 		req.CustemType = uint64(rpcpb.BMContains)
 		req.Type = raftcmdpb.Read
 		req.Cmd = protoc.MustMarshal(msg)
 		rpcpb.ReleaseBMContainsRequest(msg)
 	case *rpcpb.BMCountRequest:
 		msg := cmd.(*rpcpb.BMCountRequest)
-		req.Key = msg.Key
+		req.Key = KVKey(msg.Key)
 		req.CustemType = uint64(rpcpb.BMCount)
 		req.Type = raftcmdpb.Read
 		req.Cmd = protoc.MustMarshal(msg)
 		rpcpb.ReleaseBMCountRequest(msg)
 	case *rpcpb.BMRangeRequest:
 		msg := cmd.(*rpcpb.BMRangeRequest)
-		req.Key = msg.Key
+		req.Key = KVKey(msg.Key)
 		req.CustemType = uint64(rpcpb.BMRange)
 		req.Type = raftcmdpb.Read
 		req.Cmd = protoc.MustMarshal(msg)

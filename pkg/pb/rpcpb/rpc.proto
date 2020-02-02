@@ -41,6 +41,9 @@ enum Type {
     GetProfile    = 404;
     AddEvent      = 405;
     FetchNotify   = 406;
+
+    AllocID       = 501;
+    ResetID       = 502;
 }
 
 // Request the busybee request
@@ -68,19 +71,23 @@ message Request {
     GetProfileRequest         getProfile    = 21 [(gogoproto.nullable) = false];
     AddEventRequest           addEvent      = 22 [(gogoproto.nullable) = false];
     FetchNotifyRequest        fetchNotify   = 23 [(gogoproto.nullable) = false];
+    AllocIDRequest            allocID       = 24 [(gogoproto.nullable) = false];
+    ResetIDRequest            resetID       = 25 [(gogoproto.nullable) = false];
 }
 
 // Response the busybee response
 message Response {
-    uint64              id              = 1 [(gogoproto.customname) = "ID"];
+    uint64              id              = 1  [(gogoproto.customname) = "ID"];
     Type                type            = 2;
-    ErrorResponse       error           = 3 [(gogoproto.nullable) = false];
-    BytesResponse       bytesResp       = 4 [(gogoproto.nullable) = false];
-    BoolResponse        boolResp        = 5 [(gogoproto.nullable) = false];
-    Uint64Response      uint64Resp      = 6 [(gogoproto.nullable) = false];
-    Uint32SliceResponse uint32SliceResp = 7 [(gogoproto.nullable) = false];
-    BytesSliceResponse  bytesSliceResp  = 8 [(gogoproto.nullable) = false];
-    StringResponse      stringResp      = 9 [(gogoproto.nullable) = false];
+    ErrorResponse       error           = 3  [(gogoproto.nullable) = false];
+    BytesResponse       bytesResp       = 4  [(gogoproto.nullable) = false];
+    BoolResponse        boolResp        = 5  [(gogoproto.nullable) = false];
+    Uint64Response      uint64Resp      = 6  [(gogoproto.nullable) = false];
+    Uint32Response      uint32Resp      = 7  [(gogoproto.nullable) = false];
+    Uint32RangeResponse uint32RangeResp = 8  [(gogoproto.nullable) = false];
+    Uint32SliceResponse uint32SliceResp = 9  [(gogoproto.nullable) = false];
+    BytesSliceResponse  bytesSliceResp  = 10 [(gogoproto.nullable) = false];
+    StringResponse      stringResp      = 11 [(gogoproto.nullable) = false];
 }
 
 // SetRequest set a key value pair
@@ -243,6 +250,23 @@ message FetchNotifyRequest {
     string consumer = 4;
 }
 
+// AllocIDRequest alloc id request
+message AllocIDRequest {
+    bytes  key   = 1;
+    uint32 batch = 2; 
+}
+
+// CurrentIDRequest get alloc current id request
+message CurrentIDRequest {
+    bytes  key   = 1;
+}
+
+// ResetIDRequest reset alloc id request
+message ResetIDRequest {
+    bytes  key       = 1;
+    uint32 startWith = 2;
+}
+
 // ErrorResponse error response 
 message ErrorResponse {
     string error = 1;
@@ -282,4 +306,15 @@ message Uint32SliceResponse {
 message BytesSliceResponse {
     repeated bytes items      = 1;
     uint64         lastOffset = 2;
+}
+
+// Uint32Response uint32 response
+message Uint32Response {
+    uint32 value = 1;
+}
+
+// Uint32RangeResponse uint32 range response
+message Uint32RangeResponse {
+    uint32 from = 1;
+    uint32 to   = 2;
 }

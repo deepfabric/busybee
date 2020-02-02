@@ -16,17 +16,12 @@ func TestSetAndGet(t *testing.T) {
 	key := []byte("key1")
 	value := []byte("value1")
 
-	data, err := store.ExecCommand(&rpcpb.SetRequest{
-		Key:   key,
-		Value: value,
-	})
+	err := store.Set(key, value)
 	assert.NoError(t, err, "TestSetAndGet failed")
 
-	data, err = store.ExecCommand(&rpcpb.GetRequest{
-		Key: key,
-	})
+	data, err := store.Get(key)
 	assert.NoError(t, err, "TestSetAndGet failed")
-	assert.NotEmpty(t, data, "TestSetAndGet failed")
+	assert.Equal(t, string(value), string(data), "TestSetAndGet failed")
 }
 
 func TestDelete(t *testing.T) {
@@ -36,23 +31,56 @@ func TestDelete(t *testing.T) {
 	key := []byte("key1")
 	value := []byte("value1")
 
-	data, err := store.ExecCommand(&rpcpb.SetRequest{
+	err := store.Set(key, value)
+	assert.NoError(t, err, "TestDelete failed")
+
+	err = store.Delete(key)
+	assert.NoError(t, err, "TestDelete failed")
+
+	data, err := store.Get(key)
+	assert.NoError(t, err, "TestDelete failed")
+	assert.Empty(t, data, "TestDelete failed")
+}
+
+func TestAllocIDAndReset(t *testing.T) {
+	store, deferFunc := NewTestStorage(t, true)
+	defer deferFunc()
+
+	key := []byte("key1")
+	data, err := store.ExecCommand(&rpcpb.AllocIDRequest{
 		Key:   key,
-		Value: value,
+		Batch: 1,
 	})
-	assert.NoError(t, err, "TestDelete failed")
+	assert.NoError(t, err, "TestAllocID failed")
+	assert.NotEmpty(t, data, "TestAllocID failed")
 
-	data, err = store.ExecCommand(&rpcpb.DeleteRequest{
-		Key: key,
-	})
-	assert.NoError(t, err, "TestDelete failed")
-	assert.Empty(t, data, "TestDelete failed")
+	resp := rpcpb.AcquireUint32RangeResponse()
+	protoc.MustUnmarshal(resp, data)
+	assert.Equal(t, uint32(1), resp.From, "TestAllocID failed")
+	assert.Equal(t, uint32(1), resp.To, "TestAllocID failed")
 
-	data, err = store.ExecCommand(&rpcpb.GetRequest{
-		Key: key,
+	data, err = store.ExecCommand(&rpcpb.AllocIDRequest{
+		Key:   key,
+		Batch: 2,
 	})
-	assert.NoError(t, err, "TestDelete failed")
-	assert.Empty(t, data, "TestDelete failed")
+	assert.NoError(t, err, "TestAllocID failed")
+	assert.NotEmpty(t, data, "TestAllocID failed")
+
+	protoc.MustUnmarshal(resp, data)
+	assert.Equal(t, uint32(2), resp.From, "TestAllocID failed")
+	assert.Equal(t, uint32(3), resp.To, "TestAllocID failed")
+
+	_, err = store.ExecCommand(&rpcpb.ResetIDRequest{
+		Key:       key,
+		StartWith: 0,
+	})
+	data, _ = store.ExecCommand(&rpcpb.AllocIDRequest{
+		Key:   key,
+		Batch: 2,
+	})
+	protoc.MustUnmarshal(resp, data)
+	assert.Equal(t, uint32(1), resp.From, "TestAllocID failed")
+	assert.Equal(t, uint32(2), resp.To, "TestAllocID failed")
 }
 
 func TestBMCreate(t *testing.T) {

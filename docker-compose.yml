@@ -7,8 +7,7 @@ services:
     volumes:
       - ./cfg/node1.toml:/etc/node.toml
     command: 
-      - --addr=node1:8081
-      - --addr-api=node1:8080
+      - --addr=node1:8080
       - --data=/tmp
       - --beehive-cfg=/etc/node.toml
 
@@ -19,8 +18,7 @@ services:
     volumes:
       - ./cfg/node2.toml:/etc/node.toml
     command: 
-      - --addr=node2:8081
-      - --addr-api=node2:8080
+      - --addr=node2:8080
       - --data=/tmp
       - --beehive-cfg=/etc/node.toml
 
@@ -32,8 +30,7 @@ services:
       - ./cfg/node3.toml:/etc/node.toml
     command: 
       - --wait=10
-      - --addr=node3:8081
-      - --addr-api=node3:8080
+      - --addr=node3:8080
       - --data=/tmp
       - --beehive-cfg=/etc/node.toml
 
@@ -45,7 +42,6 @@ services:
       - ./cfg/node4.toml:/etc/node.toml
     command: 
       - --wait=10
-      - --addr=node4:8081
-      - --addr-api=node4:8080
+      - --addr=node4:8080
       - --data=/tmp
       - --beehive-cfg=/etc/node.toml

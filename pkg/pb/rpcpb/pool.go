@@ -16,6 +16,8 @@ var (
 	setPool                      sync.Pool
 	getPool                      sync.Pool
 	deletePool                   sync.Pool
+	allocIDPool                  sync.Pool
+	resetIDPool                  sync.Pool
 	bmCreatePool                 sync.Pool
 	bmAddPool                    sync.Pool
 	bmRemovePool                 sync.Pool
@@ -36,21 +38,83 @@ var (
 	uint64Pool      sync.Pool
 	bytesPool       sync.Pool
 	boolPool        sync.Pool
+	uint32Pool      sync.Pool
+	uint32RangePool sync.Pool
 	uint32SlicePool sync.Pool
 	bytesSlicePool  sync.Pool
 
 	requestPool = sync.Pool{
 		New: func() interface{} {
-			return Request{}
+			return &Request{}
 		},
 	}
 
 	responsePool = sync.Pool{
 		New: func() interface{} {
-			return Response{}
+			return &Response{}
 		},
 	}
 )
+
+// AcquireResetIDRequest returns value from pool
+func AcquireResetIDRequest() *ResetIDRequest {
+	value := resetIDPool.Get()
+	if value == nil {
+		return &ResetIDRequest{}
+	}
+	return value.(*ResetIDRequest)
+}
+
+// ReleaseResetIDRequest returns the value to pool
+func ReleaseResetIDRequest(value *ResetIDRequest) {
+	value.Reset()
+	resetIDPool.Put(value)
+}
+
+// AcquireAllocIDRequest returns value from pool
+func AcquireAllocIDRequest() *AllocIDRequest {
+	value := allocIDPool.Get()
+	if value == nil {
+		return &AllocIDRequest{}
+	}
+	return value.(*AllocIDRequest)
+}
+
+// ReleaseAllocIDRequest returns the value to pool
+func ReleaseAllocIDRequest(value *AllocIDRequest) {
+	value.Reset()
+	allocIDPool.Put(value)
+}
+
+// AcquireUint32RangeResponse returns value from pool
+func AcquireUint32RangeResponse() *Uint32RangeResponse {
+	value := uint32RangePool.Get()
+	if value == nil {
+		return &Uint32RangeResponse{}
+	}
+	return value.(*Uint32RangeResponse)
+}
+
+// ReleaseUint32RangeResponse returns the value to pool
+func ReleaseUint32RangeResponse(value *Uint32RangeResponse) {
+	value.Reset()
+	uint32RangePool.Put(value)
+}
+
+// AcquireUint32Response returns value from pool
+func AcquireUint32Response() *Uint32Response {
+	value := uint32Pool.Get()
+	if value == nil {
+		return &Uint32Response{}
+	}
+	return value.(*Uint32Response)
+}
+
+// ReleaseUint32Response returns the value to pool
+func ReleaseUint32Response(value *Uint32Response) {
+	value.Reset()
+	uint32Pool.Put(value)
+}
 
 // AcquireRequest returns value from pool
 func AcquireRequest() *Request {
