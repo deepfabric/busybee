@@ -471,11 +471,11 @@ func (eng *engine) doStartedInstanceEvent(instance metapb.WorkflowInstance) {
 }
 
 func (eng *engine) doStoppingInstanceEvent(instance metapb.WorkflowInstance) {
-	logger.Infof("stop workflow-%d",
-		instance.Snapshot.ID)
-
 	bm := bbutil.MustParseBM(instance.Crowd)
 	shards := bbutil.BMSplit(bm, instance.MaxPerShard)
+	logger.Infof("stop workflow-%d %d shards",
+		instance.Snapshot.ID,
+		len(shards))
 	for _, shard := range shards {
 		req := rpcpb.AcquireRemoveInstanceStateShardRequest()
 		req.WorkflowID = instance.Snapshot.ID
@@ -541,8 +541,6 @@ func (eng *engine) doCreateInstanceStateShardComplete(id uint64) {
 		util.DefaultTimeoutWheel().Schedule(eng.opts.retryInterval, eng.addToRetryCompleteInstance, id)
 		return
 	}
-
-	logger.Infof("workflow-%d started", id)
 }
 
 func (eng *engine) doStopInstance(id uint64) {
@@ -555,8 +553,6 @@ func (eng *engine) doStopInstance(id uint64) {
 		util.DefaultTimeoutWheel().Schedule(eng.opts.retryInterval, eng.addToInstanceStop, id)
 		return
 	}
-
-	logger.Infof("stopping workflow-%d", id)
 }
 
 func (eng *engine) addToRetryNewInstance(arg interface{}) {
