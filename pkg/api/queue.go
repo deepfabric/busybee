@@ -27,7 +27,7 @@ type tenantQueue struct {
 	eng     core.Engine
 	cb      func(arg interface{}, value []byte, err error)
 
-	runner         task.Runner
+	runner         *task.Runner
 	partitons      uint64
 	partitonQueues []*task.Queue
 	created        uint32
@@ -35,9 +35,10 @@ type tenantQueue struct {
 
 func newTenantQueue(id uint64, eng core.Engine, cb func(arg interface{}, value []byte, err error)) *tenantQueue {
 	return &tenantQueue{
-		id:  id,
-		eng: eng,
-		cb:  cb,
+		id:     id,
+		eng:    eng,
+		cb:     cb,
+		runner: task.NewRunner(),
 	}
 }
 
