@@ -114,6 +114,10 @@ func (eng *engine) Stop() error {
 }
 
 func (eng *engine) StartInstance(workflow metapb.Workflow, crow []byte, maxPerShard uint64) error {
+	if err := checkExcution(workflow); err != nil {
+		return err
+	}
+
 	bm := bbutil.AcquireBitmap()
 	err := bm.UnmarshalBinary(crow)
 	if err != nil {

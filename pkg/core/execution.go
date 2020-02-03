@@ -1,6 +1,8 @@
 package core
 
 import (
+	"fmt"
+
 	"github.com/RoaringBitmap/roaring"
 	"github.com/deepfabric/busybee/pkg/expr"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
@@ -12,14 +14,33 @@ type excution interface {
 	Execute(expr.Ctx, stepChangedFunc, *executionbatch) error
 }
 
+func checkExcution(workflow metapb.Workflow) error {
+	for _, step := range workflow.Steps {
+		_, err := newExcution(step.Name, step.Execution)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func newExcution(currentStep string, exec metapb.Execution) (excution, error) {
 	switch exec.Type {
 	case metapb.Direct:
+		if exec.Direct == nil {
+			return nil, fmt.Errorf("Missing Direct Execution")
+		}
+
 		return &directExecution{
 			step:     currentStep,
 			nextStep: exec.Direct.NextStep,
 		}, nil
 	case metapb.Timer:
+		if exec.Timer == nil {
+			return nil, fmt.Errorf("Missing Timer Execution")
+		}
+
 		var exprRuntime expr.Runtime
 		if exec.Timer.Condition != nil {
 			r, err := expr.NewRuntime(*exec.Timer.Condition)
@@ -37,6 +58,10 @@ func newExcution(currentStep string, exec metapb.Execution) (excution, error) {
 			},
 		}, nil
 	case metapb.Branch:
+		if len(exec.Branches) < 2 {
+			return nil, fmt.Errorf("Branch count must > 1, but %d", len(exec.Branches))
+		}
+
 		value := &branchExecution{}
 		for _, branch := range exec.Branches {
 			r, err := expr.NewRuntime(branch.Condition)
@@ -66,6 +91,11 @@ func newExcution(currentStep string, exec metapb.Execution) (excution, error) {
 
 		return value, nil
 	case metapb.Parallel:
+		if len(exec.Parallel.Parallels) < 2 {
+			return nil, fmt.Errorf("Parallels count must > 1, but %d",
+				len(exec.Parallel.Parallels))
+		}
+
 		value := &parallelExecution{
 			step:     currentStep,
 			nextStep: exec.Parallel.NextStep,
