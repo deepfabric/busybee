@@ -484,7 +484,7 @@ func (eng *engine) doStoppingInstanceEvent(instance metapb.WorkflowInstance) {
 
 		_, err := eng.store.ExecCommand(req)
 		if err != nil {
-			logger.Errorf("create workflow-%d failed with %+v, retry later",
+			logger.Errorf("stop workflow-%d failed with %+v, retry later",
 				instance.Snapshot.ID,
 				err)
 			util.DefaultTimeoutWheel().Schedule(eng.opts.retryInterval,
@@ -547,13 +547,13 @@ func (eng *engine) doStopInstance(id uint64) {
 		WorkflowID: id,
 	})
 	if err != nil {
-		logger.Errorf("stop workflow-%d failed with %+v, retry later",
+		logger.Errorf("stopping workflow-%d failed with %+v, retry later",
 			id, err)
 		util.DefaultTimeoutWheel().Schedule(eng.opts.retryInterval, eng.addToInstanceStop, id)
 		return
 	}
 
-	logger.Infof("workflow-%d stopped ", id)
+	logger.Infof("stopping workflow-%d", id)
 }
 
 func (eng *engine) addToRetryNewInstance(arg interface{}) {
