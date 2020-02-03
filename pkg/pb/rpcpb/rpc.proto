@@ -256,11 +256,6 @@ message AllocIDRequest {
     uint32 batch = 2; 
 }
 
-// CurrentIDRequest get alloc current id request
-message CurrentIDRequest {
-    bytes  key   = 1;
-}
-
 // ResetIDRequest reset alloc id request
 message ResetIDRequest {
     bytes  key       = 1;

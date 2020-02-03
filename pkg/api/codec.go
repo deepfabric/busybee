@@ -36,7 +36,6 @@ func (c *codec) Encode(data interface{}, out *goetty.ByteBuf) error {
 		out.Expansion(size)
 		protoc.MustMarshalTo(resp, out.RawBuf()[index:index+size])
 		out.SetWriterIndex(index + size)
-		rpcpb.ReleaseResponse(resp)
 		return nil
 	}
 

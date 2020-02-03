@@ -28,9 +28,8 @@ type service struct {
 
 func (s *service) UpdateMapping(tid uint64, values ...metapb.IDValue) error {
 	n := len(values)
-
 	for i := 0; i < n; i++ {
-		for j := 0; j < j; i++ {
+		for j := 0; j < n; j++ {
 			if i == j {
 				continue
 			}

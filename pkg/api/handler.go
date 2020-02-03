@@ -249,11 +249,12 @@ func (s *server) doBMRange(ctx ctx) error {
 func (s *server) onResp(arg interface{}, value []byte, err error) {
 	ctx := arg.(ctx)
 	if rs, ok := s.sessions.Load(ctx.sid); ok {
-		rsp := rpcpb.AcquireResponse()
-		rsp.ID = ctx.req.ID
+		resp := rpcpb.AcquireResponse()
+		resp.Type = ctx.req.Type
+		resp.ID = ctx.req.ID
 		if err != nil {
-			rsp.Error.Error = err.Error()
-			rs.(*util.Session).OnResp(rsp)
+			resp.Error.Error = err.Error()
+			rs.(*util.Session).OnResp(resp)
 			return
 		}
 
@@ -264,20 +265,20 @@ func (s *server) onResp(arg interface{}, value []byte, err error) {
 			rpcpb.AddEvent:
 			// empty response
 		case rpcpb.Get:
-			protoc.MustUnmarshal(&rsp.BytesResp, value)
+			protoc.MustUnmarshal(&resp.BytesResp, value)
 		case rpcpb.BMRange:
-			protoc.MustUnmarshal(&rsp.Uint32SliceResp, value)
+			protoc.MustUnmarshal(&resp.Uint32SliceResp, value)
 		case rpcpb.BMCount:
-			protoc.MustUnmarshal(&rsp.Uint64Resp, value)
+			protoc.MustUnmarshal(&resp.Uint64Resp, value)
 		case rpcpb.BMContains:
-			protoc.MustUnmarshal(&rsp.BoolResp, value)
+			protoc.MustUnmarshal(&resp.BoolResp, value)
 		case rpcpb.InstanceCountState, rpcpb.InstanceCrowdState,
 			rpcpb.GetMapping, rpcpb.GetProfile:
-			rsp.BytesResp.Value = value
+			resp.BytesResp.Value = value
 		case rpcpb.FetchNotify:
-			protoc.MustUnmarshal(&rsp.BytesSliceResp, value)
+			protoc.MustUnmarshal(&resp.BytesSliceResp, value)
 		}
 
-		rs.(*util.Session).OnResp(rsp)
+		rs.(*util.Session).OnResp(resp)
 	}
 }
