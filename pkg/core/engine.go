@@ -349,43 +349,26 @@ func (eng *engine) handleEvent(ctx context.Context) {
 func (eng *engine) doEvent(event storage.Event) {
 	switch event.EventType {
 	case storage.InstanceLoadedEvent:
-		value := event.Data.(metapb.WorkflowInstance)
-		logger.Infof("do event with starting workflow-%d",
-			value.Snapshot.ID)
-		eng.doStartInstanceEvent(value)
+		eng.doStartInstanceEvent(event.Data.(metapb.WorkflowInstance))
 	case storage.InstanceStartedEvent:
-		value := event.Data.(metapb.WorkflowInstance)
-		logger.Infof("do event with workflow-%d started",
-			value.Snapshot.ID)
-		eng.doStartedInstanceEvent(value)
+		eng.doStartedInstanceEvent(event.Data.(metapb.WorkflowInstance))
 	case storage.InstanceStoppingEvent:
-		value := event.Data.(metapb.WorkflowInstance)
-		logger.Infof("do event with stopping workflow-%d",
-			value.Snapshot.ID)
-		eng.doStoppingInstanceEvent(value)
+		eng.doStoppingInstanceEvent(event.Data.(metapb.WorkflowInstance))
 	case storage.InstanceStoppedEvent:
-		value := event.Data.(uint64)
-		logger.Infof("do event with workflow-%d stopped",
-			value)
-		eng.doStoppedInstanceEvent(value)
+		eng.doStoppedInstanceEvent(event.Data.(uint64))
 	case storage.InstanceStateLoadedEvent:
-		value := event.Data.(metapb.WorkflowInstanceState)
-		logger.Infof("do event with create workflow-%d shard [%d,%d)",
-			value.WorkflowID,
-			value.Start,
-			value.End)
-		eng.doStartInstanceStateEvent(value)
+		eng.doStartInstanceStateEvent(event.Data.(metapb.WorkflowInstanceState))
 	case storage.InstanceStateRemovedEvent:
-		value := event.Data.(metapb.WorkflowInstanceState)
-		logger.Infof("do event with stop workflow-%d shard [%d,%d)",
-			value.WorkflowID,
-			value.Start,
-			value.End)
-		eng.doInstanceStateRemovedEvent(value)
+		eng.doInstanceStateRemovedEvent(event.Data.(metapb.WorkflowInstanceState))
 	}
 }
 
 func (eng *engine) doStartInstanceStateEvent(state metapb.WorkflowInstanceState) {
+	logger.Infof("create workflow-%d shard [%d,%d)",
+		state.WorkflowID,
+		state.Start,
+		state.End)
+
 	key := workerKey(state)
 	if _, ok := eng.workers.Load(key); ok {
 		logger.Fatalf("BUG: start a exists state worker")
@@ -420,6 +403,11 @@ func (eng *engine) stopWorker(arg interface{}) {
 }
 
 func (eng *engine) doInstanceStateRemovedEvent(state metapb.WorkflowInstanceState) {
+	logger.Infof("stop workflow-%d shard [%d,%d), moved to the other node",
+		state.WorkflowID,
+		state.Start,
+		state.End)
+
 	key := workerKey(state)
 	if w, ok := eng.workers.Load(key); ok {
 		eng.workers.Delete(key)
@@ -428,6 +416,9 @@ func (eng *engine) doInstanceStateRemovedEvent(state metapb.WorkflowInstanceStat
 }
 
 func (eng *engine) doStartInstanceEvent(instance metapb.WorkflowInstance) {
+	logger.Infof("starting workflow-%d",
+		instance.Snapshot.ID)
+
 	var stopAt int64
 	if instance.Snapshot.Duration > 0 {
 		stopAt = time.Now().Add(time.Second * time.Duration(instance.Snapshot.Duration)).Unix()
@@ -461,6 +452,8 @@ func (eng *engine) doStartInstanceEvent(instance metapb.WorkflowInstance) {
 
 func (eng *engine) doStartedInstanceEvent(instance metapb.WorkflowInstance) {
 	if instance.Snapshot.Duration == 0 {
+		logger.Infof("workflow-%d started",
+			instance.Snapshot.ID)
 		return
 	}
 
@@ -468,12 +461,19 @@ func (eng *engine) doStartedInstanceEvent(instance metapb.WorkflowInstance) {
 	after := instance.Snapshot.Duration - (now - instance.StartedAt)
 	if after <= 0 {
 		eng.addToInstanceStop(instance.Snapshot.ID)
-	} else {
-		util.DefaultTimeoutWheel().Schedule(time.Second*time.Duration(after), eng.addToInstanceStop, instance.Snapshot.ID)
+		return
 	}
+
+	util.DefaultTimeoutWheel().Schedule(time.Second*time.Duration(after), eng.addToInstanceStop, instance.Snapshot.ID)
+	logger.Infof("workflow-%d started, duration %d seconds",
+		instance.Snapshot.ID,
+		after)
 }
 
 func (eng *engine) doStoppingInstanceEvent(instance metapb.WorkflowInstance) {
+	logger.Infof("stop workflow-%d",
+		instance.Snapshot.ID)
+
 	bm := bbutil.MustParseBM(instance.Crowd)
 	shards := bbutil.BMSplit(bm, instance.MaxPerShard)
 	for _, shard := range shards {
@@ -510,6 +510,9 @@ func (eng *engine) doStoppedInstanceEvent(id uint64) {
 			eng.stopWorker(w)
 		}
 	}
+
+	logger.Infof("workflow-%d stopped",
+		id)
 }
 
 func (eng *engine) doCreateInstanceState(instance metapb.WorkflowInstance, state metapb.WorkflowInstanceState) bool {
