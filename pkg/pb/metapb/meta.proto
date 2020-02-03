@@ -149,7 +149,7 @@ message DirectExecution {
 // ConditionExecution is selecting multiple operations to satisfy the operation of the conditional operation
 message ConditionExecution {
     Expr      condition = 1 [(gogoproto.nullable) = false];
-    Execution execution = 2 [(gogoproto.nullable) = false];
+    Execution execution = 2;
     string    nextStep  = 3;
 }
 

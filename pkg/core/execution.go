@@ -44,15 +44,24 @@ func newExcution(currentStep string, exec metapb.Execution) (excution, error) {
 				return nil, err
 			}
 
-			exec, err := newExcution(currentStep, branch.Execution)
-			if err != nil {
-				return nil, err
-			}
+			if branch.Execution != nil {
+				exec, err := newExcution(currentStep, *branch.Execution)
+				if err != nil {
+					return nil, err
+				}
 
-			value.branches = append(value.branches, &conditionExecution{
-				conditionExpr: r,
-				exec:          exec,
-			})
+				value.branches = append(value.branches, &conditionExecution{
+					conditionExpr: r,
+					exec:          exec,
+				})
+			} else {
+				value.branches = append(value.branches, &conditionExecution{
+					conditionExpr: r,
+					exec: &directExecution{
+						nextStep: branch.NextStep,
+					},
+				})
+			}
 		}
 
 		return value, nil

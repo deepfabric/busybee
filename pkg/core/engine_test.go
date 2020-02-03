@@ -80,7 +80,7 @@ func TestStartInstance(t *testing.T) {
 							Condition: metapb.Expr{
 								Value: []byte("{num: event.uid} == 1"),
 							},
-							Execution: metapb.Execution{
+							Execution: &metapb.Execution{
 								Direct: &metapb.DirectExecution{
 									NextStep: "step_end_1",
 								},
@@ -90,7 +90,7 @@ func TestStartInstance(t *testing.T) {
 							Condition: metapb.Expr{
 								Value: []byte("1 == 1"),
 							},
-							Execution: metapb.Execution{
+							Execution: & metapb.Execution{
 								Direct: &metapb.DirectExecution{
 									NextStep: "step_end_else",
 								},
