@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/deepfabric/beehive/util"
+	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/deepfabric/busybee/pkg/queue"
 	"github.com/fagongzi/util/protoc"
@@ -237,7 +238,7 @@ func (s *server) doFetchNotify(ctx ctx) error {
 	req.AfterOffset = ctx.req.FetchNotify.After
 	req.Count = ctx.req.FetchNotify.Count
 	req.Consumer = []byte(ctx.req.FetchNotify.Consumer)
-	s.engine.Storage().AsyncExecCommand(req, s.onResp, ctx)
+	s.engine.Storage().AsyncExecCommandWithGroup(req, metapb.TenantOutputGroup, s.onResp, ctx)
 	return nil
 }
 
