@@ -7,6 +7,7 @@ import (
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/deepfabric/busybee/pkg/queue"
 	bbutil "github.com/deepfabric/busybee/pkg/util"
+	"github.com/fagongzi/log"
 	"github.com/fagongzi/util/hack"
 	"github.com/fagongzi/util/protoc"
 	"github.com/fagongzi/util/task"
@@ -123,7 +124,7 @@ func (w *stateWorker) run() {
 					w.consumer.Stop()
 
 					for _, v := range w.queue.Dispose() {
-						releaseCB(v.(item).cb)
+						(v.(item).cb).complete(task.ErrDisposed)
 					}
 
 					for _, id := range w.cronIDs {
@@ -168,6 +169,7 @@ func (w *stateWorker) onConsume(offset uint64, items ...[]byte) error {
 
 	if len(events) > 0 {
 		cb := acquireCB()
+		cb.reset()
 		err := w.queue.Put(item{
 			action: eventAction,
 			value:  events,
@@ -178,7 +180,11 @@ func (w *stateWorker) onConsume(offset uint64, items ...[]byte) error {
 			return err
 		}
 
-		cb.wait()
+		err = cb.wait()
+		releaseCB(cb)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -199,6 +205,11 @@ func (w *stateWorker) execBatch(batch *executionbatch) {
 				err)
 		}
 
+		log.Infof("worker %s added %d notifies to tenant %d",
+			w.key,
+			len(batch.notifies),
+			w.state.TenantID)
+
 		req := rpcpb.AcquireUpdateInstanceStateShardRequest()
 		req.State = w.state
 		_, err = w.eng.Storage().ExecCommand(req)
@@ -210,7 +221,7 @@ func (w *stateWorker) execBatch(batch *executionbatch) {
 	}
 
 	for _, c := range batch.cbs {
-		releaseCB(c)
+		c.complete(nil)
 	}
 	batch.reset()
 }
@@ -262,6 +273,8 @@ func (w *stateWorker) stepChanged(batch *executionbatch) error {
 
 func (w *stateWorker) doStepEvents(events []metapb.Event, batch *executionbatch) {
 	for _, event := range events {
+		log.Infof("worker %s step event %+v", w.key, event)
+
 		for idx, crowd := range w.stepCrowds {
 			if crowd.Contains(event.UserID) {
 				err := w.steps[w.state.States[idx].Step.Name].Execute(newExprCtx(event, w.eng),
@@ -279,6 +292,8 @@ func (w *stateWorker) doStepEvents(events []metapb.Event, batch *executionbatch)
 }
 
 func (w *stateWorker) doStepTimer(batch *executionbatch, name string) {
+	log.Infof("worker %s step timer %s", name)
+
 	err := w.steps[name].Execute(newExprCtx(metapb.Event{
 		TenantID:   w.state.TenantID,
 		WorkflowID: w.state.WorkflowID,

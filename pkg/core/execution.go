@@ -83,6 +83,7 @@ func newExcution(currentStep string, exec metapb.Execution) (excution, error) {
 				value.branches = append(value.branches, &conditionExecution{
 					conditionExpr: r,
 					exec: &directExecution{
+						step:     currentStep,
 						nextStep: branch.NextStep,
 					},
 				})
@@ -132,6 +133,36 @@ type conditionExecution struct {
 	exec          excution
 }
 
+func (e *conditionExecution) executeWithMatches(ctx expr.Ctx, cb stepChangedFunc, batch *executionbatch) (bool, error) {
+	if e.conditionExpr != nil {
+		matches, value, err := e.conditionExpr.Exec(ctx)
+		if err != nil {
+			return false, err
+		}
+
+		if !matches {
+			return false, nil
+		}
+
+		if bm, ok := value.(*roaring.Bitmap); ok {
+			batch.crowd = bm
+			err := e.exec.Execute(ctx, cb, batch)
+			if err != nil {
+				return false, err
+			}
+
+			return true, nil
+		}
+	}
+
+	err := e.exec.Execute(ctx, cb, batch)
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
 func (e *conditionExecution) Execute(ctx expr.Ctx, cb stepChangedFunc, batch *executionbatch) error {
 	if e.conditionExpr != nil {
 		matches, value, err := e.conditionExpr.Exec(ctx)
@@ -153,14 +184,18 @@ func (e *conditionExecution) Execute(ctx expr.Ctx, cb stepChangedFunc, batch *ex
 }
 
 type branchExecution struct {
-	branches []excution
+	branches []*conditionExecution
 }
 
 func (e *branchExecution) Execute(ctx expr.Ctx, cb stepChangedFunc, batch *executionbatch) error {
 	for _, exec := range e.branches {
-		err := exec.Execute(ctx, cb, batch)
+		ok, err := exec.executeWithMatches(ctx, cb, batch)
 		if err != nil {
 			return err
+		}
+
+		if ok {
+			break
 		}
 	}
 

@@ -9,6 +9,7 @@ import (
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/deepfabric/busybee/pkg/queue"
 	"github.com/deepfabric/busybee/pkg/storage"
+	"github.com/fagongzi/util/protoc"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -25,17 +26,21 @@ func TestNotify(t *testing.T) {
 
 	time.Sleep(time.Second * 2)
 
+	n := NewQueueBasedNotifier(s)
+	assert.NoError(t, n.Notify(tenantID, metapb.Notify{
+		UserID: 1,
+	}), "TestNotify failed")
+
 	req := rpcpb.AcquireQueueFetchRequest()
 	req.Key = queue.PartitionKey(tenantID, 0)
 	req.AfterOffset = 0
 	req.Consumer = []byte("c")
 	req.Count = 1
 
-	_, err := s.ExecCommandWithGroup(req, metapb.TenantOutputGroup)
+	data, err := s.ExecCommandWithGroup(req, metapb.TenantOutputGroup)
 	assert.NoError(t, err, "TestNotify failed")
 
-	n := NewQueueBasedNotifier(s)
-	assert.NoError(t, n.Notify(tenantID, metapb.Notify{
-		UserID: 1,
-	}), "TestNotify failed")
+	resp := rpcpb.AcquireBytesSliceResponse()
+	protoc.MustUnmarshal(resp, data)
+	assert.Equal(t, 1, len(resp.Items), "TestNotify failed")
 }

@@ -28,9 +28,17 @@ func releaseCB(value *stepCB) {
 }
 
 type stepCB struct {
-	c chan struct{}
+	c chan error
 }
 
-func (cb *stepCB) wait() {
-	<-cb.c
+func (cb *stepCB) reset() {
+	cb.c = make(chan error)
+}
+
+func (cb *stepCB) wait() error {
+	return <-cb.c
+}
+
+func (cb *stepCB) complete(err error) {
+	cb.c <- err
 }

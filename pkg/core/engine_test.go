@@ -7,9 +7,12 @@ import (
 	"github.com/RoaringBitmap/roaring"
 	"github.com/deepfabric/busybee/pkg/notify"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
+	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
+	"github.com/deepfabric/busybee/pkg/queue"
 	"github.com/deepfabric/busybee/pkg/storage"
 	"github.com/deepfabric/busybee/pkg/util"
 	"github.com/deepfabric/prophet"
+	"github.com/fagongzi/util/protoc"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -68,8 +71,8 @@ func TestStartInstance(t *testing.T) {
 	err = ng.StartInstance(metapb.Workflow{
 		ID:       10000,
 		TenantID: 10001,
-		Name:     "test_wf",
 		Duration: 10,
+		Name:     "test_wf",
 		Steps: []metapb.Step{
 			metapb.Step{
 				Name: "step_start",
@@ -80,21 +83,13 @@ func TestStartInstance(t *testing.T) {
 							Condition: metapb.Expr{
 								Value: []byte("{num: event.uid} == 1"),
 							},
-							Execution: &metapb.Execution{
-								Direct: &metapb.DirectExecution{
-									NextStep: "step_end_1",
-								},
-							},
+							NextStep: "step_end_1",
 						},
 						metapb.ConditionExecution{
 							Condition: metapb.Expr{
 								Value: []byte("1 == 1"),
 							},
-							Execution: & metapb.Execution{
-								Direct: &metapb.DirectExecution{
-									NextStep: "step_end_else",
-								},
-							},
+							NextStep: "step_end_else",
 						},
 					},
 				},
@@ -117,7 +112,7 @@ func TestStartInstance(t *testing.T) {
 	}, util.MustMarshalBM(bm), 3)
 	assert.NoError(t, err, "TestStartInstance failed")
 
-	time.Sleep(time.Second * 5)
+	time.Sleep(time.Second * 2)
 	c := 0
 	ng.(*engine).workers.Range(func(key, value interface{}) bool {
 		c++
@@ -125,7 +120,38 @@ func TestStartInstance(t *testing.T) {
 	})
 	assert.Equal(t, 2, c, "TestStartInstance failed")
 
-	time.Sleep(time.Second * 6)
+	req := rpcpb.AcquireQueueAddRequest()
+	req.Items = [][]byte{
+		protoc.MustMarshal(&metapb.Event{
+			TenantID: 10001,
+			UserID:   1,
+			Data: []metapb.KV{
+				metapb.KV{
+					Key:   []byte("uid"),
+					Value: []byte("1"),
+				},
+			},
+		}),
+	}
+	req.Key = queue.PartitionKey(10001, 0)
+	_, err = ng.Storage().ExecCommandWithGroup(req, metapb.TenantInputGroup)
+	assert.NoError(t, err, "TestStartInstance failed")
+
+	time.Sleep(time.Second)
+
+	fetch := rpcpb.AcquireQueueFetchRequest()
+	fetch.Key = queue.PartitionKey(10001, 0)
+	fetch.AfterOffset = 0
+	fetch.Count = 1
+	fetch.Consumer = []byte("ccccccccccccccccccccccccccc")
+	data, err := ng.Storage().ExecCommandWithGroup(fetch, metapb.TenantOutputGroup)
+	assert.NoError(t, err, "TestStartInstance failed")
+
+	resp := rpcpb.AcquireBytesSliceResponse()
+	protoc.MustUnmarshal(resp, data)
+	assert.Equal(t, 1, len(resp.Items), "TestStartInstance failed")
+
+	time.Sleep(time.Second * 9)
 	c = 0
 	ng.(*engine).workers.Range(func(key, value interface{}) bool {
 		c++
