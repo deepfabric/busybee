@@ -62,9 +62,9 @@ func (s *server) onReq(sid interface{}, req *rpcpb.Request) error {
 	case rpcpb.FetchNotify:
 		return s.doFetchNotify(ctx)
 	case rpcpb.AllocID:
-		return nil
+		return s.doAllocID(ctx)
 	case rpcpb.ResetID:
-		return nil
+		return s.doResetID(ctx)
 	}
 
 	return fmt.Errorf("not support type %d", req.Type)
