@@ -253,13 +253,13 @@ message FetchNotifyRequest {
 // AllocIDRequest alloc id request
 message AllocIDRequest {
     bytes  key   = 1;
-    uint32 batch = 2; 
+    uint64 batch = 2; 
 }
 
 // ResetIDRequest reset alloc id request
 message ResetIDRequest {
     bytes  key       = 1;
-    uint32 startWith = 2;
+    uint64 startWith = 2;
 }
 
 // ErrorResponse error response 
@@ -310,6 +310,6 @@ message Uint32Response {
 
 // Uint32RangeResponse uint32 range response
 message Uint32RangeResponse {
-    uint32 from = 1;
-    uint32 to   = 2;
+    uint64 from = 1;
+    uint64 to   = 2;
 }

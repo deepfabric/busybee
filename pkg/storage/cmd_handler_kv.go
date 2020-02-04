@@ -30,7 +30,7 @@ func (h *beeStorage) allocID(shard uint64, req *raftcmdpb.Request, buf *goetty.B
 	}
 
 	start := id + 1
-	end := id + customReq.Batch
+	end := id + uint32(customReq.Batch)
 
 	err = h.getStore(shard).Set(req.Key, format.Uint32ToBytes(end))
 	if err != nil {
@@ -38,8 +38,8 @@ func (h *beeStorage) allocID(shard uint64, req *raftcmdpb.Request, buf *goetty.B
 	}
 
 	customResp := rpcpb.AcquireUint32RangeResponse()
-	customResp.From = start
-	customResp.To = end
+	customResp.From = uint64(start)
+	customResp.To = uint64(end)
 	resp.Value = protoc.MustMarshal(customResp)
 	rpcpb.ReleaseUint32RangeResponse(customResp)
 
@@ -53,7 +53,7 @@ func (h *beeStorage) resetID(shard uint64, req *raftcmdpb.Request, buf *goetty.B
 	protoc.MustUnmarshal(&customReq, req.Cmd)
 
 	value := 0 + customReq.StartWith
-	err := h.getStore(shard).Set(req.Key, format.Uint32ToBytes(value))
+	err := h.getStore(shard).Set(req.Key, format.Uint32ToBytes(uint32(value)))
 	if err != nil {
 		log.Fatalf("alloc id %+v failed with %+v", req.Key, err)
 	}
