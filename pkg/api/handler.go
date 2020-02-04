@@ -61,6 +61,10 @@ func (s *server) onReq(sid interface{}, req *rpcpb.Request) error {
 		return s.doAddEvent(ctx)
 	case rpcpb.FetchNotify:
 		return s.doFetchNotify(ctx)
+	case rpcpb.AllocID:
+		return nil
+	case rpcpb.ResetID:
+		return nil
 	}
 
 	return fmt.Errorf("not support type %d", req.Type)
@@ -242,6 +246,16 @@ func (s *server) doFetchNotify(ctx ctx) error {
 	return nil
 }
 
+func (s *server) doAllocID(ctx ctx) error {
+	s.engine.Storage().AsyncExecCommand(&ctx.req.AllocID, s.onResp, ctx)
+	return nil
+}
+
+func (s *server) doResetID(ctx ctx) error {
+	s.engine.Storage().AsyncExecCommand(&ctx.req.ResetID, s.onResp, ctx)
+	return nil
+}
+
 func (s *server) doBMRange(ctx ctx) error {
 	s.engine.Storage().AsyncExecCommand(&ctx.req.BmRange, s.onResp, ctx)
 	return nil
@@ -263,7 +277,7 @@ func (s *server) onResp(arg interface{}, value []byte, err error) {
 		case rpcpb.Set, rpcpb.Delete, rpcpb.BMCreate, rpcpb.BMAdd,
 			rpcpb.BMRemove, rpcpb.BMClear, rpcpb.StartingInstance,
 			rpcpb.StopInstance, rpcpb.UpdateMapping, rpcpb.UpdateProfile,
-			rpcpb.AddEvent:
+			rpcpb.AddEvent, rpcpb.ResetID:
 			// empty response
 		case rpcpb.Get:
 			protoc.MustUnmarshal(&resp.BytesResp, value)
@@ -278,6 +292,8 @@ func (s *server) onResp(arg interface{}, value []byte, err error) {
 			resp.BytesResp.Value = value
 		case rpcpb.FetchNotify:
 			protoc.MustUnmarshal(&resp.BytesSliceResp, value)
+		case rpcpb.AllocID:
+			protoc.MustUnmarshal(&resp.Uint32RangeResp, value)
 		}
 
 		rs.(*util.Session).OnResp(resp)
