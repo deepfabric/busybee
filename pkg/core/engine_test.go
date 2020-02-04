@@ -163,6 +163,12 @@ func TestStartInstance(t *testing.T) {
 	}
 	assert.Equal(t, uint64(3), m["step_start"], "TestStartInstance failed")
 	assert.Equal(t, uint64(1), m["step_end_1"], "TestStartInstance failed")
+	assert.Equal(t, uint64(0), m["step_end_else"], "TestStartInstance failed")
+
+	state, err := ng.InstanceStepState(10000, "step_start")
+	assert.NoError(t, err, "TestStartInstance failed")
+	bm = util.MustParseBM(state.Crowd)
+	assert.Equal(t, uint64(3), bm.GetCardinality(), "TestStartInstance failed")
 
 	time.Sleep(time.Second * 9)
 	c = 0
