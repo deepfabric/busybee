@@ -184,6 +184,7 @@ func (w *stateWorker) onConsume(offset uint64, items ...[]byte) error {
 	return nil
 }
 
+// TODO: rollback if exec failed
 func (w *stateWorker) execBatch(batch *executionbatch) {
 	if len(batch.notifies) > 0 {
 		for idx := range batch.notifies {
@@ -191,7 +192,7 @@ func (w *stateWorker) execBatch(batch *executionbatch) {
 			batch.notifies[idx].ToAction = w.entryActions[batch.notifies[idx].ToStep]
 		}
 
-		err := w.eng.Notifier().Notify(w.state.WorkflowID, batch.notifies...)
+		err := w.eng.Notifier().Notify(w.state.TenantID, batch.notifies...)
 		if err != nil {
 			logger.Fatalf("worker %s notify failed with %+v",
 				w.key,
