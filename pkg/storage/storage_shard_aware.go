@@ -104,7 +104,7 @@ func (h *beeStorage) doLoadEvent(shard beehivemetapb.Shard, leader bool) {
 			}
 		case runingStateType:
 			state := metapb.WorkflowInstanceState{}
-			protoc.MustUnmarshal(&state, value[1:])
+			protoc.MustUnmarshal(&state, OriginInstanceStatePBValue(value[1:]))
 
 			et := InstanceStateLoadedEvent
 			if !leader {

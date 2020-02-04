@@ -203,7 +203,6 @@ func (eng *engine) InstanceCountState(id uint64) (metapb.InstanceCountState, err
 	shards := bbutil.BMSplit(bm, instance.MaxPerShard)
 	for _, shard := range shards {
 		key := storage.InstanceShardKey(instance.Snapshot.ID, shard.Minimum(), shard.Maximum()+1)
-		stepState := metapb.WorkflowInstanceState{}
 		value, err = eng.store.Get(key)
 		if err != nil {
 			return metapb.InstanceCountState{}, err
@@ -213,7 +212,8 @@ func (eng *engine) InstanceCountState(id uint64) (metapb.InstanceCountState, err
 			return metapb.InstanceCountState{}, fmt.Errorf("missing step state key %+v", key)
 		}
 
-		protoc.MustUnmarshal(&stepState, value)
+		stepState := metapb.WorkflowInstanceState{}
+		protoc.MustUnmarshal(&stepState, storage.OriginInstanceStatePBValue(value))
 		for _, ss := range stepState.States {
 			m[ss.Step.Name].Count += bbutil.MustParseBM(ss.Crowd).GetCardinality()
 		}
@@ -245,7 +245,6 @@ func (eng *engine) InstanceStepState(id uint64, name string) (metapb.StepState, 
 	shards := bbutil.BMSplit(bm, instance.MaxPerShard)
 	for _, shard := range shards {
 		key := storage.InstanceShardKey(instance.Snapshot.ID, shard.Minimum(), shard.Maximum()+1)
-		stepState := metapb.WorkflowInstanceState{}
 		value, err = eng.store.Get(key)
 		if err != nil {
 			return metapb.StepState{}, err
@@ -255,7 +254,8 @@ func (eng *engine) InstanceStepState(id uint64, name string) (metapb.StepState, 
 			return metapb.StepState{}, fmt.Errorf("missing step state key %+v", key)
 		}
 
-		protoc.MustUnmarshal(&stepState, value)
+		stepState := metapb.WorkflowInstanceState{}
+		protoc.MustUnmarshal(&stepState, storage.OriginInstanceStatePBValue(value))
 		for _, ss := range stepState.States {
 			if ss.Step.Name == name {
 				valueStep = ss.Step

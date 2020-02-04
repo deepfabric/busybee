@@ -65,7 +65,7 @@ func TestStartInstance(t *testing.T) {
 
 	err = ng.CreateTenantQueue(10001, 1)
 	assert.NoError(t, err, "TestStartInstance failed")
-	time.Sleep(time.Millisecond * 500)
+	time.Sleep(time.Second)
 
 	bm := roaring.BitmapOf(1, 2, 3, 4)
 	err = ng.StartInstance(metapb.Workflow{
@@ -112,6 +112,10 @@ func TestStartInstance(t *testing.T) {
 	}, util.MustMarshalBM(bm), 3)
 	assert.NoError(t, err, "TestStartInstance failed")
 
+	data, err := ng.Storage().Get(storage.StartedInstanceKey(10000))
+	assert.NoError(t, err, "TestStartInstance failed")
+	assert.NotEmpty(t, data, "TestStartInstance failed")
+
 	time.Sleep(time.Second * 2)
 	c := 0
 	ng.(*engine).workers.Range(func(key, value interface{}) bool {
@@ -144,12 +148,21 @@ func TestStartInstance(t *testing.T) {
 	fetch.AfterOffset = 0
 	fetch.Count = 1
 	fetch.Consumer = []byte("ccccccccccccccccccccccccccc")
-	data, err := ng.Storage().ExecCommandWithGroup(fetch, metapb.TenantOutputGroup)
+	data, err = ng.Storage().ExecCommandWithGroup(fetch, metapb.TenantOutputGroup)
 	assert.NoError(t, err, "TestStartInstance failed")
 
 	resp := rpcpb.AcquireBytesSliceResponse()
 	protoc.MustUnmarshal(resp, data)
 	assert.Equal(t, 1, len(resp.Items), "TestStartInstance failed")
+
+	states, err := ng.InstanceCountState(10000)
+	assert.NoError(t, err, "TestStartInstance failed")
+	m := make(map[string]uint64)
+	for _, state := range states.States {
+		m[state.Step] = state.Count
+	}
+	assert.Equal(t, uint64(3), m["step_start"], "TestStartInstance failed")
+	assert.Equal(t, uint64(1), m["step_end_1"], "TestStartInstance failed")
 
 	time.Sleep(time.Second * 9)
 	c = 0

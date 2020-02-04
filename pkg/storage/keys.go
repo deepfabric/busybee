@@ -7,24 +7,14 @@ import (
 )
 
 const (
-	kvPrefix             byte = 0
-	mappingPrefix        byte = 1
-	profilePrefix        byte = 2
-	queueMetadataPrefix  byte = 3
-	workflowMetataPrefix byte = 4
+	mappingPrefix        byte = 0
+	profilePrefix        byte = 1
+	queueMetadataPrefix  byte = 2
+	workflowMetataPrefix byte = 3
 
 	instance      byte = 1
 	instanceShard byte = 2
 )
-
-// KVKey returns a kv key
-func KVKey(src []byte) []byte {
-	n := len(src) + 1
-	key := make([]byte, n, n)
-	key[0] = kvPrefix
-	copy(key[1:], src)
-	return key
-}
 
 // QueueMetadataKey returns queue metadata key
 func QueueMetadataKey(id uint64, group metapb.Group) []byte {

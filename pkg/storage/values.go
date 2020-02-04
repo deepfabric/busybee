@@ -21,3 +21,8 @@ func appendValuePrefix(buf *goetty.ByteBuf, value []byte, prefix byte) []byte {
 	buf.Write(value)
 	return buf.RawBuf()[idx:buf.GetWriteIndex()]
 }
+
+// OriginInstanceStatePBValue returns origin instance state pb value
+func OriginInstanceStatePBValue(value []byte) []byte {
+	return value[8:]
+}
