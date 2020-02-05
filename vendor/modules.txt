@@ -122,12 +122,13 @@ github.com/fagongzi/expr
 github.com/fagongzi/goetty
 # github.com/fagongzi/log v0.0.0-20191122063922-293b75312445
 github.com/fagongzi/log
-# github.com/fagongzi/util v0.0.0-20191031020235-c0f29a56724d
+# github.com/fagongzi/util v0.0.0-20200205003627-8cf7ebc854c9
 github.com/fagongzi/util/format
 github.com/fagongzi/util/hack
 github.com/fagongzi/util/protoc
 github.com/fagongzi/util/task
 github.com/fagongzi/util/uuid
+github.com/fagongzi/util/version
 # github.com/funny/slab v0.0.0-20180511031532-b1fad5e5d478
 github.com/funny/slab
 # github.com/glycerine/go-unsnap-stream v0.0.0-20181221182339-f9677308dec2

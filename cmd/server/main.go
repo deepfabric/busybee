@@ -14,17 +14,25 @@ import (
 	"github.com/deepfabric/busybee/pkg/core"
 	"github.com/deepfabric/busybee/pkg/notify"
 	"github.com/deepfabric/busybee/pkg/storage"
+	"github.com/deepfabric/busybee/pkg/util"
 	"github.com/deepfabric/prophet"
 	"github.com/fagongzi/log"
 )
 
 var (
-	addr = flag.String("addr", "127.0.0.1:8081", "beehive api address")
-	data = flag.String("data", "", "data path")
-	wait = flag.Int("wait", 0, "wait")
+	addr    = flag.String("addr", "127.0.0.1:8081", "beehive api address")
+	data    = flag.String("data", "", "data path")
+	wait    = flag.Int("wait", 0, "wait")
+	version = flag.Bool("version", false, "Show version info")
 )
 
 func main() {
+	flag.Parse()
+	if *version {
+		util.PrintVersion()
+		os.Exit(0)
+	}
+
 	log.InitLog()
 	prophet.SetLogger(log.NewLoggerWithPrefix("[prophet]"))
 
