@@ -1,6 +1,9 @@
 package core
 
 import (
+	"sync/atomic"
+	"time"
+
 	"github.com/RoaringBitmap/roaring"
 	"github.com/deepfabric/busybee/pkg/expr"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
@@ -31,6 +34,7 @@ type item struct {
 }
 
 type stateWorker struct {
+	stopped      uint32
 	key          string
 	eng          Engine
 	state        metapb.WorkflowInstanceState
@@ -98,9 +102,14 @@ func newStateWorker(key string, state metapb.WorkflowInstanceState, eng Engine) 
 }
 
 func (w *stateWorker) stop() {
+	atomic.StoreUint32(&w.stopped, 1)
 	w.queue.Put(item{
 		action: stopAction,
 	})
+}
+
+func (w *stateWorker) isStopped() bool {
+	return atomic.LoadUint32(&w.stopped) == 1
 }
 
 func (w *stateWorker) matches(uid uint32) bool {
@@ -190,7 +199,6 @@ func (w *stateWorker) onConsume(offset uint64, items ...[]byte) error {
 	return nil
 }
 
-// TODO: rollback if exec failed
 func (w *stateWorker) execBatch(batch *executionbatch) {
 	if len(batch.notifies) > 0 {
 		for idx := range batch.notifies {
@@ -198,26 +206,16 @@ func (w *stateWorker) execBatch(batch *executionbatch) {
 			batch.notifies[idx].ToAction = w.entryActions[batch.notifies[idx].ToStep]
 		}
 
-		err := w.eng.Notifier().Notify(w.state.TenantID, batch.notifies...)
-		if err != nil {
-			logger.Fatalf("worker %s notify failed with %+v",
-				w.key,
-				err)
-		}
-
+		w.retryDo("notify", batch, w.execNotify)
 		log.Infof("worker %s added %d notifies to tenant %d",
 			w.key,
 			len(batch.notifies),
 			w.state.TenantID)
 
-		req := rpcpb.AcquireUpdateInstanceStateShardRequest()
-		req.State = w.state
-		_, err = w.eng.Storage().ExecCommand(req)
-		if err != nil {
-			logger.Fatalf("worker %s update failed with %+v",
-				w.key,
-				err)
-		}
+		w.retryDo("notify", batch, w.execUpdate)
+		log.Infof("worker %s state update to version %d",
+			w.key,
+			w.state.Version)
 	}
 
 	for _, c := range batch.cbs {
@@ -226,8 +224,51 @@ func (w *stateWorker) execBatch(batch *executionbatch) {
 	batch.reset()
 }
 
+func (w *stateWorker) retryDo(thing string, batch *executionbatch, fn func(*executionbatch) error) {
+	times := 1
+	after := 2
+	maxAfter := 30
+	for {
+		if w.isStopped() {
+			return
+		}
+
+		err := fn(batch)
+		if err == nil {
+			return
+		}
+
+		logger.Errorf("worker %s do %s failed %d times with %+v, retry after %d sec",
+			w.key,
+			thing,
+			times,
+			err,
+			after)
+		times++
+		if after < maxAfter {
+			after = after * times
+			if after > maxAfter {
+				after = maxAfter
+			}
+		}
+		time.Sleep(time.Second * time.Duration(after))
+	}
+}
+
+func (w *stateWorker) execNotify(batch *executionbatch) error {
+	return w.eng.Notifier().Notify(w.state.TenantID, batch.notifies...)
+}
+
+func (w *stateWorker) execUpdate(batch *executionbatch) error {
+	req := rpcpb.AcquireUpdateInstanceStateShardRequest()
+	req.State = w.state
+	_, err := w.eng.Storage().ExecCommand(req)
+	return err
+}
+
 func (w *stateWorker) stepChanged(batch *executionbatch) error {
 	if batch.crowd != nil {
+		// filter other shard state crowds
 		batch.crowd.And(w.totalCrowds)
 	}
 
