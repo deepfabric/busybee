@@ -5,7 +5,7 @@ go 1.13
 require (
 	github.com/RoaringBitmap/roaring v0.4.21
 	github.com/buger/jsonparser v0.0.0-20191204142016-1a29609e0929
-	github.com/deepfabric/beehive v0.0.0-20200128110234-f7c4e080c46f
+	github.com/deepfabric/beehive v0.0.0-20200205103359-796376e893cd
 	github.com/deepfabric/prophet v0.0.0-20191202055442-cec7351ee5cf
 	github.com/fagongzi/expr v0.0.0-20200111083631-9072dbb0af1c
 	github.com/fagongzi/goetty v1.3.4

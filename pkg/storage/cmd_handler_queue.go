@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/deepfabric/beehive/pb"
+	bhmetapb "github.com/deepfabric/beehive/pb/metapb"
 	"github.com/deepfabric/beehive/pb/raftcmdpb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/fagongzi/goetty"
@@ -11,7 +12,7 @@ import (
 	"github.com/fagongzi/util/protoc"
 )
 
-func (h *beeStorage) queueFetch(shard uint64, req *raftcmdpb.Request, buf *goetty.ByteBuf) (uint64, int64, *raftcmdpb.Response) {
+func (h *beeStorage) queueFetch(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *goetty.ByteBuf) (uint64, int64, *raftcmdpb.Response) {
 	resp := pb.AcquireResponse()
 	queueFetch := rpcpb.QueueFetchRequest{}
 	protoc.MustUnmarshal(&queueFetch, req.Cmd)
@@ -19,7 +20,7 @@ func (h *beeStorage) queueFetch(shard uint64, req *raftcmdpb.Request, buf *goett
 	customResp := rpcpb.AcquireBytesSliceResponse()
 	offset := queueFetch.AfterOffset
 	if offset == 0 {
-		value, err := h.getStore(shard).Get(committedOffsetKey(req.Key, queueFetch.Consumer))
+		value, err := h.getStore(shard.ID).Get(committedOffsetKey(req.Key, queueFetch.Consumer))
 		if err != nil {
 			log.Fatalf("get consumer committed offset failed with %+v", err)
 		}
@@ -34,22 +35,22 @@ func (h *beeStorage) queueFetch(shard uint64, req *raftcmdpb.Request, buf *goett
 	idx := buf.GetWriteIndex()
 	buf.WriteUInt64(offset)
 	buf.WriteInt64(time.Now().Unix())
-	err := h.getStore(shard).Set(committedOffsetKey(req.Key, queueFetch.Consumer),
+	err := h.getStore(shard.ID).Set(committedOffsetKey(req.Key, queueFetch.Consumer),
 		buf.RawBuf()[idx:buf.GetWriteIndex()])
 	if err != nil {
 		log.Fatalf("set consumer committed offset failed with %+v", err)
 	}
 
-	err = h.getStore(shard).Scan(from, to, func(key, value []byte) (bool, error) {
+	err = h.getStore(shard.ID).Scan(from, to, func(key, value []byte) (bool, error) {
 		offset++
-		customResp.Items = append(customResp.Items, value)
+		customResp.Values = append(customResp.Values, value)
 		return true, nil
 	}, false)
 	if err != nil {
 		log.Fatalf("fetch queue failed with %+v", err)
 	}
 
-	customResp.LastOffset = offset
+	customResp.LastValue = offset
 	resp.Value = protoc.MustMarshal(customResp)
 	rpcpb.ReleaseBytesSliceResponse(customResp)
 	return 0, 0, resp

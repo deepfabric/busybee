@@ -150,7 +150,7 @@ func TestStartInstance(t *testing.T) {
 
 	resp := rpcpb.AcquireBytesSliceResponse()
 	protoc.MustUnmarshal(resp, data)
-	assert.Equal(t, 1, len(resp.Items), "TestStartInstance failed")
+	assert.Equal(t, 1, len(resp.Values), "TestStartInstance failed")
 
 	states, err := ng.InstanceCountState(10000)
 	assert.NoError(t, err, "TestStartInstance failed")
@@ -291,7 +291,7 @@ func TestStartInstanceWithNotifyError(t *testing.T) {
 
 	resp := rpcpb.AcquireBytesSliceResponse()
 	protoc.MustUnmarshal(resp, data)
-	assert.Equal(t, 1, len(resp.Items), "TestStartInstance failed")
+	assert.Equal(t, 1, len(resp.Values), "TestStartInstance failed")
 
 	states, err := ng.InstanceCountState(10000)
 	assert.NoError(t, err, "TestStartInstance failed")

@@ -16,6 +16,7 @@ var (
 	setPool                      sync.Pool
 	getPool                      sync.Pool
 	deletePool                   sync.Pool
+	scanPool                     sync.Pool
 	allocIDPool                  sync.Pool
 	resetIDPool                  sync.Pool
 	bmCreatePool                 sync.Pool
@@ -271,6 +272,21 @@ func AcquireDeleteRequest() *DeleteRequest {
 func ReleaseDeleteRequest(value *DeleteRequest) {
 	value.Reset()
 	deletePool.Put(value)
+}
+
+// AcquireScanRequest returns value from pool
+func AcquireScanRequest() *ScanRequest {
+	value := scanPool.Get()
+	if value == nil {
+		return &ScanRequest{}
+	}
+	return value.(*ScanRequest)
+}
+
+// ReleaseScanRequest returns the value to pool
+func ReleaseScanRequest(value *ScanRequest) {
+	value.Reset()
+	scanPool.Put(value)
 }
 
 // AcquireBMCreateRequest returns value from pool

@@ -104,19 +104,19 @@ func (c *consumer) startPartition(ctx context.Context, idx, batch uint64, fn fun
 				resp := rpcpb.AcquireBytesSliceResponse()
 				protoc.MustUnmarshal(resp, value)
 
-				if len(resp.Items) == 0 {
+				if len(resp.Values) == 0 {
 					time.Sleep(time.Second)
 					continue
 				}
 
-				err = fn(resp.LastOffset, resp.Items...)
+				err = fn(resp.LastValue, resp.Values...)
 				if err != nil {
 					logger.Errorf("%s handle failed with %+v",
 						string(c.consumer),
 						err)
 					continue
 				}
-				offset = resp.LastOffset
+				offset = resp.LastValue
 			}
 		}
 	}()

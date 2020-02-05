@@ -1,8 +1,12 @@
 package storage
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
+	bhmetapb "github.com/deepfabric/beehive/pb/metapb"
+	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/deepfabric/busybee/pkg/util"
 	"github.com/fagongzi/util/protoc"
@@ -40,6 +44,82 @@ func TestDelete(t *testing.T) {
 	data, err := store.Get(key)
 	assert.NoError(t, err, "TestDelete failed")
 	assert.Empty(t, data, "TestDelete failed")
+}
+
+func TestScan(t *testing.T) {
+	store, deferFunc := NewTestStorage(t, true)
+	defer deferFunc()
+
+	err := store.RaftStore().AddShards(bhmetapb.Shard{
+		Group: 1,
+		Start: []byte("k1"),
+		End:   []byte("k5"),
+	}, bhmetapb.Shard{
+		Group: 1,
+		Start: []byte("k5"),
+		End:   []byte("k9"),
+	})
+	assert.NoError(t, err, "TestScan failed")
+
+	time.Sleep(time.Second * 2)
+
+	for i := 1; i < 9; i++ {
+		_, err = store.ExecCommandWithGroup(&rpcpb.SetRequest{
+			Key:   []byte(fmt.Sprintf("k%d", i)),
+			Value: []byte(fmt.Sprintf("v%d", i)),
+		}, metapb.Group(1))
+		assert.NoErrorf(t, err, "TestScan failed %d", i)
+	}
+
+	req := rpcpb.AcquireScanRequest()
+	req.Start = []byte("k1")
+	req.End = []byte("k9")
+	req.Limit = 9
+	data, err := store.ExecCommandWithGroup(req, metapb.Group(1))
+	assert.NoError(t, err, "TestScan failed")
+	resp := rpcpb.AcquireBytesSliceResponse()
+	protoc.MustUnmarshal(resp, data)
+	assert.Equal(t, 4, len(resp.Values), "TestScan failed")
+
+	req = rpcpb.AcquireScanRequest()
+	req.Start = []byte("k1")
+	req.End = []byte("k9")
+	req.Limit = 2
+	data, err = store.ExecCommandWithGroup(req, metapb.Group(1))
+	assert.NoError(t, err, "TestScan failed")
+	resp = rpcpb.AcquireBytesSliceResponse()
+	protoc.MustUnmarshal(resp, data)
+	assert.Equal(t, 2, len(resp.Values), "TestScan failed")
+
+	req = rpcpb.AcquireScanRequest()
+	req.Start = []byte("k4")
+	req.End = []byte("k9")
+	req.Limit = 2
+	data, err = store.ExecCommandWithGroup(req, metapb.Group(1))
+	assert.NoError(t, err, "TestScan failed")
+	resp = rpcpb.AcquireBytesSliceResponse()
+	protoc.MustUnmarshal(resp, data)
+	assert.Equal(t, 1, len(resp.Values), "TestScan failed")
+
+	req = rpcpb.AcquireScanRequest()
+	req.Start = []byte("k5")
+	req.End = []byte("k9")
+	req.Limit = 2
+	data, err = store.ExecCommandWithGroup(req, metapb.Group(1))
+	assert.NoError(t, err, "TestScan failed")
+	resp = rpcpb.AcquireBytesSliceResponse()
+	protoc.MustUnmarshal(resp, data)
+	assert.Equal(t, 2, len(resp.Values), "TestScan failed")
+
+	req = rpcpb.AcquireScanRequest()
+	req.Start = []byte("k5")
+	req.End = []byte("k9")
+	req.Limit = 10
+	data, err = store.ExecCommandWithGroup(req, metapb.Group(1))
+	assert.NoError(t, err, "TestScan failed")
+	resp = rpcpb.AcquireBytesSliceResponse()
+	protoc.MustUnmarshal(resp, data)
+	assert.Equal(t, 4, len(resp.Values), "TestScan failed")
 }
 
 func TestAllocIDAndReset(t *testing.T) {

@@ -13,6 +13,7 @@ enum Type {
     Set           = 0;
     Get           = 1;
     Delete        = 2;
+    Scan          = 3;
    
     BMCreate      = 100;
     BMAdd         = 101;
@@ -73,6 +74,7 @@ message Request {
     FetchNotifyRequest        fetchNotify   = 23 [(gogoproto.nullable) = false];
     AllocIDRequest            allocID       = 24 [(gogoproto.nullable) = false];
     ResetIDRequest            resetID       = 25 [(gogoproto.nullable) = false];
+    ScanRequest               scan          = 26 [(gogoproto.nullable) = false];
 }
 
 // Response the busybee response
@@ -262,6 +264,13 @@ message ResetIDRequest {
     uint64 startWith = 2;
 }
 
+// ScanRequest scan request
+message ScanRequest {
+    bytes  start = 1;
+    bytes  end   = 2;
+    uint64 limit = 3;
+}
+
 // ErrorResponse error response 
 message ErrorResponse {
     string error = 1;
@@ -299,8 +308,8 @@ message Uint32SliceResponse {
 
 // BytesSliceResponse response
 message BytesSliceResponse {
-    repeated bytes items      = 1;
-    uint64         lastOffset = 2;
+    repeated bytes values     = 1;
+    uint64         lastValue  = 2;
 }
 
 // Uint32Response uint32 response

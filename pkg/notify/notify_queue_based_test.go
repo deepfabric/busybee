@@ -42,5 +42,5 @@ func TestNotify(t *testing.T) {
 
 	resp := rpcpb.AcquireBytesSliceResponse()
 	protoc.MustUnmarshal(resp, data)
-	assert.Equal(t, 1, len(resp.Items), "TestNotify failed")
+	assert.Equal(t, 1, len(resp.Values), "TestNotify failed")
 }

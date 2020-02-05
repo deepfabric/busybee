@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/deepfabric/beehive/pb"
+	bhmetapb "github.com/deepfabric/beehive/pb/metapb"
 	"github.com/deepfabric/beehive/pb/raftcmdpb"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
@@ -12,14 +13,14 @@ import (
 	"github.com/fagongzi/util/protoc"
 )
 
-func (h *beeStorage) startingInstance(shard uint64, req *raftcmdpb.Request, buf *goetty.ByteBuf) (uint64, int64, *raftcmdpb.Response) {
+func (h *beeStorage) startingInstance(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *goetty.ByteBuf) (uint64, int64, *raftcmdpb.Response) {
 	resp := pb.AcquireResponse()
 	cmd := rpcpb.StartingInstanceRequest{}
 	protoc.MustUnmarshal(&cmd, req.Cmd)
 
 	resp.Value = rpcpb.EmptyRespBytes
 
-	value, err := h.getValue(shard, req.Key)
+	value, err := h.getValue(shard.ID, req.Key)
 	if err != nil {
 		log.Fatalf("save workflow instance %+v failed with %+v", cmd, err)
 	}
@@ -28,12 +29,12 @@ func (h *beeStorage) startingInstance(shard uint64, req *raftcmdpb.Request, buf 
 	}
 
 	value = protoc.MustMarshal(&cmd.Instance)
-	err = h.getStore(shard).Set(req.Key, appendValuePrefix(buf, value, instanceStartingType))
+	err = h.getStore(shard.ID).Set(req.Key, appendValuePrefix(buf, value, instanceStartingType))
 	if err != nil {
 		log.Fatalf("save workflow instance %+v failed with %+v", cmd, err)
 	}
 
-	if h.store.MaybeLeader(shard) {
+	if h.store.MaybeLeader(shard.ID) {
 		h.eventC <- Event{
 			EventType: InstanceLoadedEvent,
 			Data:      cmd.Instance,
@@ -45,14 +46,14 @@ func (h *beeStorage) startingInstance(shard uint64, req *raftcmdpb.Request, buf 
 	return writtenBytes, changedBytes, resp
 }
 
-func (h *beeStorage) startedInstance(shard uint64, req *raftcmdpb.Request, buf *goetty.ByteBuf) (uint64, int64, *raftcmdpb.Response) {
+func (h *beeStorage) startedInstance(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *goetty.ByteBuf) (uint64, int64, *raftcmdpb.Response) {
 	resp := pb.AcquireResponse()
 	cmd := rpcpb.StartedInstanceRequest{}
 	protoc.MustUnmarshal(&cmd, req.Cmd)
 
 	resp.Value = rpcpb.EmptyRespBytes
 
-	value, err := h.getValueWithPrefix(shard, req.Key)
+	value, err := h.getValueWithPrefix(shard.ID, req.Key)
 	if err != nil {
 		log.Fatalf("get workflow instance %d failed with %+v",
 			cmd.WorkflowID, err)
@@ -71,13 +72,13 @@ func (h *beeStorage) startedInstance(shard uint64, req *raftcmdpb.Request, buf *
 	protoc.MustUnmarshal(&instance, value[1:])
 	instance.StartedAt = time.Now().Unix()
 
-	err = h.getStore(shard).Set(req.Key, appendValuePrefix(buf, protoc.MustMarshal(&instance), instanceStartedType))
+	err = h.getStore(shard.ID).Set(req.Key, appendValuePrefix(buf, protoc.MustMarshal(&instance), instanceStartedType))
 	if err != nil {
 		log.Fatalf("set workflow instance %d started failed with %+v",
 			cmd.WorkflowID, err)
 	}
 
-	if h.store.MaybeLeader(shard) {
+	if h.store.MaybeLeader(shard.ID) {
 		h.eventC <- Event{
 			EventType: InstanceStartedEvent,
 			Data:      instance,
@@ -87,14 +88,14 @@ func (h *beeStorage) startedInstance(shard uint64, req *raftcmdpb.Request, buf *
 	return uint64(len(req.Key) + len(value)), 0, resp
 }
 
-func (h *beeStorage) stopInstance(shard uint64, req *raftcmdpb.Request, buf *goetty.ByteBuf) (uint64, int64, *raftcmdpb.Response) {
+func (h *beeStorage) stopInstance(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *goetty.ByteBuf) (uint64, int64, *raftcmdpb.Response) {
 	resp := pb.AcquireResponse()
 	cmd := rpcpb.StopInstanceRequest{}
 	protoc.MustUnmarshal(&cmd, req.Cmd)
 
 	resp.Value = rpcpb.EmptyRespBytes
 
-	value, err := h.getValueWithPrefix(shard, req.Key)
+	value, err := h.getValueWithPrefix(shard.ID, req.Key)
 	if err != nil {
 		log.Fatalf("get workflow instance %d failed with %+v",
 			cmd.WorkflowID, err)
@@ -112,14 +113,14 @@ func (h *beeStorage) stopInstance(shard uint64, req *raftcmdpb.Request, buf *goe
 	protoc.MustUnmarshal(&instance, value[1:])
 	instance.StoppedAt = time.Now().Unix()
 
-	err = h.getStore(shard).Set(req.Key,
+	err = h.getStore(shard.ID).Set(req.Key,
 		appendValuePrefix(buf, protoc.MustMarshal(&instance), instanceStoppingType))
 	if err != nil {
 		log.Fatalf("set workflow instance %d stopped failed with %+v",
 			cmd.WorkflowID, err)
 	}
 
-	if h.store.MaybeLeader(shard) {
+	if h.store.MaybeLeader(shard.ID) {
 		h.eventC <- Event{
 			EventType: InstanceStoppingEvent,
 			Data:      instance,
@@ -129,14 +130,14 @@ func (h *beeStorage) stopInstance(shard uint64, req *raftcmdpb.Request, buf *goe
 	return uint64(len(req.Key) + len(value)), 0, resp
 }
 
-func (h *beeStorage) createState(shard uint64, req *raftcmdpb.Request, buf *goetty.ByteBuf) (uint64, int64, *raftcmdpb.Response) {
+func (h *beeStorage) createState(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *goetty.ByteBuf) (uint64, int64, *raftcmdpb.Response) {
 	resp := pb.AcquireResponse()
 	cmd := rpcpb.CreateInstanceStateShardRequest{}
 	protoc.MustUnmarshal(&cmd, req.Cmd)
 
 	resp.Value = rpcpb.EmptyRespBytes
 
-	value, err := h.getValue(shard, req.Key)
+	value, err := h.getValue(shard.ID, req.Key)
 	if err != nil {
 		log.Fatalf("create workflow instance state %+v failed with %+v", cmd, err)
 	}
@@ -148,12 +149,12 @@ func (h *beeStorage) createState(shard uint64, req *raftcmdpb.Request, buf *goet
 	buf.WriteByte(runingStateType)
 	buf.WriteUInt64(cmd.State.Version)
 	buf.Write(protoc.MustMarshal(&cmd.State))
-	err = h.getStore(shard).Set(req.Key, buf.RawBuf()[idx:buf.GetWriteIndex()])
+	err = h.getStore(shard.ID).Set(req.Key, buf.RawBuf()[idx:buf.GetWriteIndex()])
 	if err != nil {
 		log.Fatalf("save workflow instance %+v failed with %+v", cmd, err)
 	}
 
-	if h.store.MaybeLeader(shard) {
+	if h.store.MaybeLeader(shard.ID) {
 		h.eventC <- Event{
 			EventType: InstanceStateLoadedEvent,
 			Data:      cmd.State,
@@ -165,14 +166,14 @@ func (h *beeStorage) createState(shard uint64, req *raftcmdpb.Request, buf *goet
 	return writtenBytes, changedBytes, resp
 }
 
-func (h *beeStorage) updateState(shard uint64, req *raftcmdpb.Request, buf *goetty.ByteBuf) (uint64, int64, *raftcmdpb.Response) {
+func (h *beeStorage) updateState(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *goetty.ByteBuf) (uint64, int64, *raftcmdpb.Response) {
 	resp := pb.AcquireResponse()
 	cmd := rpcpb.UpdateInstanceStateShardRequest{}
 	protoc.MustUnmarshal(&cmd, req.Cmd)
 
 	resp.Value = rpcpb.EmptyRespBytes
 
-	value, err := h.getValueWithPrefix(shard, req.Key)
+	value, err := h.getValueWithPrefix(shard.ID, req.Key)
 	if err != nil {
 		log.Fatalf("update workflow instance state %+v failed with %+v", cmd, err)
 	}
@@ -194,7 +195,7 @@ func (h *beeStorage) updateState(shard uint64, req *raftcmdpb.Request, buf *goet
 	buf.WriteByte(runingStateType)
 	buf.WriteUInt64(cmd.State.Version)
 	buf.Write(protoc.MustMarshal(&cmd.State))
-	err = h.getStore(shard).Set(req.Key, buf.RawBuf()[idx:buf.GetWriteIndex()])
+	err = h.getStore(shard.ID).Set(req.Key, buf.RawBuf()[idx:buf.GetWriteIndex()])
 	if err != nil {
 		log.Fatalf("update workflow instance state %+v failed with %+v", cmd, err)
 	}
@@ -204,14 +205,14 @@ func (h *beeStorage) updateState(shard uint64, req *raftcmdpb.Request, buf *goet
 	return writtenBytes, changedBytes, resp
 }
 
-func (h *beeStorage) removeState(shard uint64, req *raftcmdpb.Request, buf *goetty.ByteBuf) (uint64, int64, *raftcmdpb.Response) {
+func (h *beeStorage) removeState(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *goetty.ByteBuf) (uint64, int64, *raftcmdpb.Response) {
 	resp := pb.AcquireResponse()
 	cmd := rpcpb.RemoveInstanceStateShardRequest{}
 	protoc.MustUnmarshal(&cmd, req.Cmd)
 
 	resp.Value = rpcpb.EmptyRespBytes
 
-	value, err := h.getValueWithPrefix(shard, req.Key)
+	value, err := h.getValueWithPrefix(shard.ID, req.Key)
 	if err != nil {
 		log.Fatalf("remove workflow instance state %+v failed with %+v", cmd, err)
 	}
@@ -225,7 +226,7 @@ func (h *beeStorage) removeState(shard uint64, req *raftcmdpb.Request, buf *goet
 	}
 
 	value[0] = stoppedStateType
-	err = h.getStore(shard).Set(req.Key, value)
+	err = h.getStore(shard.ID).Set(req.Key, value)
 	if err != nil {
 		log.Fatalf("remove workflow instance state %d/[%d,%d) failed with %+v",
 			cmd.WorkflowID,
@@ -234,7 +235,7 @@ func (h *beeStorage) removeState(shard uint64, req *raftcmdpb.Request, buf *goet
 			err)
 	}
 
-	if h.store.MaybeLeader(shard) {
+	if h.store.MaybeLeader(shard.ID) {
 		h.eventC <- Event{
 			EventType: InstanceStoppedEvent,
 			Data:      cmd.WorkflowID,

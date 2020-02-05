@@ -94,7 +94,7 @@ github.com/coreos/go-systemd/journal
 github.com/coreos/pkg/capnslog
 # github.com/davecgh/go-spew v1.1.1
 github.com/davecgh/go-spew/spew
-# github.com/deepfabric/beehive v0.0.0-20200128110234-f7c4e080c46f
+# github.com/deepfabric/beehive v0.0.0-20200205103359-796376e893cd
 github.com/deepfabric/beehive
 github.com/deepfabric/beehive/metric
 github.com/deepfabric/beehive/pb
@@ -128,7 +128,6 @@ github.com/fagongzi/util/hack
 github.com/fagongzi/util/protoc
 github.com/fagongzi/util/task
 github.com/fagongzi/util/uuid
-github.com/fagongzi/util/version
 # github.com/funny/slab v0.0.0-20180511031532-b1fad5e5d478
 github.com/funny/slab
 # github.com/glycerine/go-unsnap-stream v0.0.0-20181221182339-f9677308dec2

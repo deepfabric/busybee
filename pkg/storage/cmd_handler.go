@@ -11,6 +11,7 @@ import (
 
 func (h *beeStorage) init() {
 	h.AddReadFunc("get", uint64(rpcpb.Get), h.get)
+	h.AddReadFunc("scan", uint64(rpcpb.Scan), h.scan)
 	h.AddWriteFunc("allocid", uint64(rpcpb.AllocID), h.allocID)
 	h.AddWriteFunc("resetid", uint64(rpcpb.ResetID), h.resetID)
 	h.AddReadFunc("bm-contains", uint64(rpcpb.BMContains), h.bmcontains)
@@ -51,6 +52,13 @@ func (h *beeStorage) BuildRequest(req *raftcmdpb.Request, cmd interface{}) error
 		req.Type = raftcmdpb.Write
 		req.Cmd = protoc.MustMarshal(msg)
 		rpcpb.ReleaseDeleteRequest(msg)
+	case *rpcpb.ScanRequest:
+		msg := cmd.(*rpcpb.ScanRequest)
+		req.Key = msg.Start
+		req.CustemType = uint64(rpcpb.Scan)
+		req.Type = raftcmdpb.Read
+		req.Cmd = protoc.MustMarshal(msg)
+		rpcpb.ReleaseScanRequest(msg)
 	case *rpcpb.AllocIDRequest:
 		msg := cmd.(*rpcpb.AllocIDRequest)
 		req.Key = msg.Key
