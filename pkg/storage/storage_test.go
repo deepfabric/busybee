@@ -136,8 +136,8 @@ func TestAllocIDAndReset(t *testing.T) {
 
 	resp := rpcpb.AcquireUint32RangeResponse()
 	protoc.MustUnmarshal(resp, data)
-	assert.Equal(t, uint64(1), resp.From, "TestAllocID failed")
-	assert.Equal(t, uint64(1), resp.To, "TestAllocID failed")
+	assert.Equal(t, uint32(1), resp.From, "TestAllocID failed")
+	assert.Equal(t, uint32(1), resp.To, "TestAllocID failed")
 
 	data, err = store.ExecCommand(&rpcpb.AllocIDRequest{
 		Key:   key,
@@ -147,8 +147,8 @@ func TestAllocIDAndReset(t *testing.T) {
 	assert.NotEmpty(t, data, "TestAllocID failed")
 
 	protoc.MustUnmarshal(resp, data)
-	assert.Equal(t, uint64(2), resp.From, "TestAllocID failed")
-	assert.Equal(t, uint64(3), resp.To, "TestAllocID failed")
+	assert.Equal(t, uint32(2), resp.From, "TestAllocID failed")
+	assert.Equal(t, uint32(3), resp.To, "TestAllocID failed")
 
 	_, err = store.ExecCommand(&rpcpb.ResetIDRequest{
 		Key:       key,
@@ -159,8 +159,8 @@ func TestAllocIDAndReset(t *testing.T) {
 		Batch: 2,
 	})
 	protoc.MustUnmarshal(resp, data)
-	assert.Equal(t, uint64(1), resp.From, "TestAllocID failed")
-	assert.Equal(t, uint64(2), resp.To, "TestAllocID failed")
+	assert.Equal(t, uint32(1), resp.From, "TestAllocID failed")
+	assert.Equal(t, uint32(2), resp.To, "TestAllocID failed")
 }
 
 func TestBMCreate(t *testing.T) {
@@ -375,10 +375,10 @@ func TestUpdateMapping(t *testing.T) {
 
 	req := rpcpb.AcquireUpdateMappingRequest()
 	req.Set.Values = append(req.Set.Values, metapb.IDValue{
-		Type:  0,
+		Type:  "c0",
 		Value: "id0-v1",
 	}, metapb.IDValue{
-		Type:  1,
+		Type:  "c1",
 		Value: "id1-v1",
 	})
 	data, err := store.ExecCommand(req)
@@ -390,10 +390,10 @@ func TestUpdateMapping(t *testing.T) {
 
 	req = rpcpb.AcquireUpdateMappingRequest()
 	req.Set.Values = append(req.Set.Values, metapb.IDValue{
-		Type:  0,
+		Type:  "c0",
 		Value: "id0-v2",
 	}, metapb.IDValue{
-		Type:  2,
+		Type:  "c2",
 		Value: "id2-v1",
 	})
 	data, err = store.ExecCommand(req)
@@ -403,11 +403,11 @@ func TestUpdateMapping(t *testing.T) {
 	protoc.MustUnmarshal(resp, data)
 	assert.Equal(t, 3, len(resp.Values), "TestUpdateMapping failed")
 	for _, value := range resp.Values {
-		if value.Type == 0 {
+		if value.Type == "c0" {
 			assert.Equal(t, "id0-v2", value.Value, "TestUpdateMapping failed")
-		} else if value.Type == 1 {
+		} else if value.Type == "c1" {
 			assert.Equal(t, "id1-v1", value.Value, "TestUpdateMapping failed")
-		} else if value.Type == 2 {
+		} else if value.Type == "c2" {
 			assert.Equal(t, "id2-v1", value.Value, "TestUpdateMapping failed")
 		}
 	}

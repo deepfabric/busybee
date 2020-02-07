@@ -58,6 +58,8 @@ func (s *server) onReq(sid interface{}, req *rpcpb.Request) error {
 		return s.doUpdateProfile(ctx)
 	case rpcpb.ScanMapping:
 		return s.doScanMapping(ctx)
+	case rpcpb.GetIDSet:
+		return s.doGetIDSet(ctx)
 	case rpcpb.GetProfile:
 		return s.doGetProfile(ctx)
 	case rpcpb.AddEvent:
@@ -203,6 +205,12 @@ func (s *server) doScanMapping(ctx ctx) error {
 	return nil
 }
 
+func (s *server) doGetIDSet(ctx ctx) error {
+	ctx.req.Get.Key = storage.MappingIDKey(ctx.req.GetIDSet.ID, ctx.req.GetIDSet.UserID)
+	s.engine.Storage().AsyncExecCommand(&ctx.req.Get, s.onResp, ctx)
+	return nil
+}
+
 func (s *server) doUpdateProfile(ctx ctx) error {
 	err := s.engine.Service().UpdateProfile(ctx.req.UpdateProfile.ID,
 		ctx.req.UpdateProfile.UserID,
@@ -291,7 +299,7 @@ func (s *server) onResp(arg interface{}, value []byte, err error) {
 			rpcpb.StopInstance, rpcpb.UpdateMapping, rpcpb.UpdateProfile,
 			rpcpb.AddEvent, rpcpb.ResetID:
 			// empty response
-		case rpcpb.Get:
+		case rpcpb.Get, rpcpb.GetIDSet:
 			protoc.MustUnmarshal(&resp.BytesResp, value)
 		case rpcpb.BMRange:
 			protoc.MustUnmarshal(&resp.Uint32SliceResp, value)

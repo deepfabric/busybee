@@ -56,14 +56,17 @@ func MappingIDKey(tenantID uint64, userID uint32) []byte {
 }
 
 // MappingKey returns a mapping key
-func MappingKey(tenantID uint64, from metapb.IDValue, to uint32) []byte {
-	size := 17 + len(from.Value)
+func MappingKey(tenantID uint64, from metapb.IDValue, to string) []byte {
+	size := 9 + len(from.Value) + len(from.Type) + len(to)
 	key := make([]byte, size, size)
 	key[0] = mappingPrefix
 	goetty.Uint64ToBytesTo(tenantID, key[1:])
-	goetty.Uint32ToBytesTo(from.Type, key[9:])
-	goetty.Uint32ToBytesTo(to, key[13:])
-	copy(key[17:], hack.StringToSlice(from.Value))
+	idx := 9
+	copy(key[idx:], hack.StringToSlice(from.Type))
+	idx += len(from.Type)
+	copy(key[idx:], hack.StringToSlice(to))
+	idx += len(to)
+	copy(key[idx:], hack.StringToSlice(from.Value))
 	return key
 }
 

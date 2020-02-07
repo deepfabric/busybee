@@ -12,7 +12,7 @@ import (
 // Service crm service
 type Service interface {
 	UpdateMapping(*rpcpb.UpdateMappingRequest) error
-	GetIDValue(uint64, metapb.IDValue, uint32) ([]byte, error)
+	GetIDValue(uint64, metapb.IDValue, string) ([]byte, error)
 	UpdateProfile(uint64, uint32, []byte) error
 	GetProfileField(uint64, uint32, string) ([]byte, error)
 }
@@ -55,7 +55,7 @@ func (s *service) UpdateMapping(req *rpcpb.UpdateMappingRequest) error {
 	return nil
 }
 
-func (s *service) GetIDValue(tid uint64, from metapb.IDValue, to uint32) ([]byte, error) {
+func (s *service) GetIDValue(tid uint64, from metapb.IDValue, to string) ([]byte, error) {
 	value, err := s.store.Get(storage.MappingKey(tid, from, to))
 	if err != nil {
 		return nil, err

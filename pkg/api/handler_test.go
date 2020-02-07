@@ -420,15 +420,28 @@ func TestUpdateAndScanMapping(t *testing.T) {
 	req.UpdateMapping.ID = tid
 	req.UpdateMapping.UserID = userID
 	req.UpdateMapping.Set.Values = []metapb.IDValue{
-		metapb.IDValue{Value: "v1", Type: 1},
-		metapb.IDValue{Value: "v2", Type: 2},
-		metapb.IDValue{Value: "v3", Type: 3},
+		metapb.IDValue{Value: "v1", Type: "1"},
+		metapb.IDValue{Value: "v2", Type: "2"},
+		metapb.IDValue{Value: "v3", Type: "3"},
 	}
 	assert.NoError(t, conn.WriteAndFlush(req), "TestMapping failed")
 	data, err := conn.ReadTimeout(time.Second * 10)
 	assert.NoError(t, err, "TestMapping failed")
 	resp := data.(*rpcpb.Response)
 	assert.Empty(t, resp.Error.Error, "TestMapping failed")
+
+	req.Reset()
+	req.Type = rpcpb.GetIDSet
+	req.GetIDSet.ID = tid
+	req.GetIDSet.UserID = userID
+	assert.NoError(t, conn.WriteAndFlush(req), "TestMapping failed")
+	data, err = conn.ReadTimeout(time.Second * 10)
+	assert.NoError(t, err, "TestMapping failed")
+	resp = data.(*rpcpb.Response)
+	assert.Empty(t, resp.Error.Error, "TestMapping failed")
+	set := &metapb.IDSet{}
+	protoc.MustUnmarshal(set, resp.BytesResp.Value)
+	assert.Equal(t, 3, len(set.Values), "TestMapping failed")
 
 	for i := uint32(1); i <= 3; i++ {
 		value := fmt.Sprintf("v%d", i)
@@ -441,8 +454,8 @@ func TestUpdateAndScanMapping(t *testing.T) {
 				req.Type = rpcpb.GetMapping
 				req.GetMapping.ID = tid
 				req.GetMapping.From.Value = value
-				req.GetMapping.From.Type = i
-				req.GetMapping.To = j
+				req.GetMapping.From.Type = fmt.Sprintf("%d", i)
+				req.GetMapping.To = fmt.Sprintf("%d", j)
 
 				assert.NoError(t, conn.WriteAndFlush(req), "TestMapping failed")
 				data, err = conn.ReadTimeout(time.Second * 10)
@@ -459,9 +472,9 @@ func TestUpdateAndScanMapping(t *testing.T) {
 	req.UpdateMapping.ID = tid
 	req.UpdateMapping.UserID = userID
 	req.UpdateMapping.Set.Values = []metapb.IDValue{
-		metapb.IDValue{Value: "v11", Type: 1},
-		metapb.IDValue{Value: "v22", Type: 2},
-		metapb.IDValue{Value: "v33", Type: 3},
+		metapb.IDValue{Value: "v11", Type: "1"},
+		metapb.IDValue{Value: "v22", Type: "2"},
+		metapb.IDValue{Value: "v33", Type: "3"},
 	}
 	assert.NoError(t, conn.WriteAndFlush(req), "TestMapping failed")
 	data, err = conn.ReadTimeout(time.Second * 10)
@@ -480,8 +493,8 @@ func TestUpdateAndScanMapping(t *testing.T) {
 				req.Type = rpcpb.GetMapping
 				req.GetMapping.ID = tid
 				req.GetMapping.From.Value = value
-				req.GetMapping.From.Type = i
-				req.GetMapping.To = j
+				req.GetMapping.From.Type = fmt.Sprintf("%d", i)
+				req.GetMapping.To = fmt.Sprintf("%d", j)
 
 				assert.NoError(t, conn.WriteAndFlush(req), "TestMapping failed")
 				data, err = conn.ReadTimeout(time.Second * 10)

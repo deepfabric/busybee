@@ -43,6 +43,7 @@ enum Type {
     AddEvent      = 405;
     FetchNotify   = 406;
     ScanMapping   = 407;
+    GetIDSet      = 408;
 
     AllocID       = 501;
     ResetID       = 502;
@@ -76,6 +77,7 @@ message Request {
     AllocIDRequest            allocID       = 24 [(gogoproto.nullable) = false];
     ResetIDRequest            resetID       = 25 [(gogoproto.nullable) = false];
     ScanMappingRequest        scanMapping   = 26 [(gogoproto.nullable) = false];
+    GetIDSetRequest           getIDSet      = 27 [(gogoproto.nullable) = false];
 }
 
 // Response the busybee response
@@ -221,6 +223,12 @@ message ScanMappingRequest {
     uint64 limit = 4;
 }
 
+// GetIDSet get id set
+message GetIDSetRequest {
+    uint64 id     = 1 [(gogoproto.customname) = "ID"];
+    uint32 userID = 2;
+}
+
 // UpdateMappingRequest update id mapping request
 message UpdateMappingRequest {
     uint64       id     = 1 [(gogoproto.customname) = "ID"];
@@ -232,7 +240,7 @@ message UpdateMappingRequest {
 message GetMappingRequest {
     uint64           id   = 1 [(gogoproto.customname) = "ID"];
     metapb.IDValue   from = 2 [(gogoproto.nullable) = false];
-    uint32           to   = 3;
+    string           to   = 3;
 }
 
 // UpdateProfileRequest update profile request
