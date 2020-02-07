@@ -405,7 +405,7 @@ func TestProfile(t *testing.T) {
 	assert.Equal(t, "18", string(resp.BytesResp.Value), "TestProfile failed")
 }
 
-func TestMapping(t *testing.T) {
+func TestUpdateAndScanMapping(t *testing.T) {
 	deferFunc := newTestServer(t)
 	defer deferFunc()
 
@@ -413,11 +413,13 @@ func TestMapping(t *testing.T) {
 	defer conn.Close()
 
 	tid := uint64(1)
+	userID := uint32(100)
 
 	req := rpcpb.AcquireRequest()
 	req.Type = rpcpb.UpdateMapping
 	req.UpdateMapping.ID = tid
-	req.UpdateMapping.Values = []metapb.IDValue{
+	req.UpdateMapping.UserID = userID
+	req.UpdateMapping.Set.Values = []metapb.IDValue{
 		metapb.IDValue{Value: "v1", Type: 1},
 		metapb.IDValue{Value: "v2", Type: 2},
 		metapb.IDValue{Value: "v3", Type: 3},
@@ -450,6 +452,60 @@ func TestMapping(t *testing.T) {
 				assert.Equal(t, expect, string(resp.BytesResp.Value), "TestMapping failed")
 			}
 		}
-
 	}
+
+	req.Reset()
+	req.Type = rpcpb.UpdateMapping
+	req.UpdateMapping.ID = tid
+	req.UpdateMapping.UserID = userID
+	req.UpdateMapping.Set.Values = []metapb.IDValue{
+		metapb.IDValue{Value: "v11", Type: 1},
+		metapb.IDValue{Value: "v22", Type: 2},
+		metapb.IDValue{Value: "v33", Type: 3},
+	}
+	assert.NoError(t, conn.WriteAndFlush(req), "TestMapping failed")
+	data, err = conn.ReadTimeout(time.Second * 10)
+	assert.NoError(t, err, "TestMapping failed")
+	resp = data.(*rpcpb.Response)
+	assert.Empty(t, resp.Error.Error, "TestMapping failed")
+
+	for i := uint32(1); i <= 3; i++ {
+		value := fmt.Sprintf("v%d%d", i, i)
+
+		for j := uint32(1); j <= 3; j++ {
+			if i != j {
+				expect := fmt.Sprintf("v%d%d", j, j)
+
+				req = rpcpb.AcquireRequest()
+				req.Type = rpcpb.GetMapping
+				req.GetMapping.ID = tid
+				req.GetMapping.From.Value = value
+				req.GetMapping.From.Type = i
+				req.GetMapping.To = j
+
+				assert.NoError(t, conn.WriteAndFlush(req), "TestMapping failed")
+				data, err = conn.ReadTimeout(time.Second * 10)
+				assert.NoError(t, err, "TestMapping failed")
+				resp = data.(*rpcpb.Response)
+				assert.Empty(t, resp.Error.Error, "TestMapping failed")
+				assert.Equal(t, expect, string(resp.BytesResp.Value), "TestMapping failed")
+			}
+		}
+	}
+
+	req = rpcpb.AcquireRequest()
+	req.Type = rpcpb.ScanMapping
+	req.ScanMapping.ID = tid
+	req.ScanMapping.From = userID
+	req.ScanMapping.To = userID + 1
+	req.ScanMapping.Limit = 10
+	assert.NoError(t, conn.WriteAndFlush(req), "TestMapping failed")
+	data, err = conn.ReadTimeout(time.Second * 10)
+	assert.NoError(t, err, "TestMapping failed")
+	resp = data.(*rpcpb.Response)
+	assert.Empty(t, resp.Error.Error, "TestMapping failed")
+	assert.Equal(t, 1, len(resp.BytesSliceResp.Values), "TestMapping failed")
+	idValue := &metapb.IDSet{}
+	protoc.MustUnmarshal(idValue, resp.BytesSliceResp.Values[0])
+	assert.Equal(t, 3, len(idValue.Values), "TestMapping failed")
 }

@@ -3,13 +3,15 @@ package crm
 import (
 	"github.com/buger/jsonparser"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
+	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/deepfabric/busybee/pkg/storage"
 	"github.com/fagongzi/util/hack"
+	"github.com/fagongzi/util/protoc"
 )
 
 // Service crm service
 type Service interface {
-	UpdateMapping(uint64, ...metapb.IDValue) error
+	UpdateMapping(*rpcpb.UpdateMappingRequest) error
 	GetIDValue(uint64, metapb.IDValue, uint32) ([]byte, error)
 	UpdateProfile(uint64, uint32, []byte) error
 	GetProfileField(uint64, uint32, string) ([]byte, error)
@@ -26,21 +28,30 @@ type service struct {
 	store storage.Storage
 }
 
-func (s *service) UpdateMapping(tid uint64, values ...metapb.IDValue) error {
-	n := len(values)
+func (s *service) UpdateMapping(req *rpcpb.UpdateMappingRequest) error {
+	tid := req.ID
+
+	value, err := s.store.ExecCommand(req)
+	if err != nil {
+		return err
+	}
+
+	resp := metapb.IDSet{}
+	protoc.MustUnmarshal(&resp, value)
+
+	n := len(resp.Values)
 	for i := 0; i < n; i++ {
 		for j := 0; j < n; j++ {
 			if i == j {
 				continue
 			}
 
-			err := s.update(tid, values[i], values[j])
+			err := s.update(tid, resp.Values[i], resp.Values[j])
 			if err != nil {
 				return err
 			}
 		}
 	}
-
 	return nil
 }
 

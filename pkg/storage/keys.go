@@ -7,10 +7,11 @@ import (
 )
 
 const (
-	mappingPrefix        byte = 0
-	profilePrefix        byte = 1
-	queueMetadataPrefix  byte = 2
-	workflowMetataPrefix byte = 3
+	mappingIDPrefix      byte = 0
+	mappingPrefix        byte = 1
+	profilePrefix        byte = 2
+	queueMetadataPrefix  byte = 3
+	workflowMetataPrefix byte = 4
 
 	instance      byte = 1
 	instanceShard byte = 2
@@ -42,6 +43,15 @@ func InstanceShardKey(id uint64, start uint32, end uint32) []byte {
 	goetty.Uint64ToBytesTo(id, key[2:])
 	goetty.Uint32ToBytesTo(start, key[10:])
 	goetty.Uint32ToBytesTo(end, key[14:])
+	return key
+}
+
+// MappingIDKey returns a user id key,
+func MappingIDKey(tenantID uint64, userID uint32) []byte {
+	key := make([]byte, 13, 13)
+	key[0] = mappingIDPrefix
+	goetty.Uint64ToBytesTo(tenantID, key[1:])
+	goetty.Uint32ToBytesTo(userID, key[9:])
 	return key
 }
 

@@ -7,6 +7,7 @@ import (
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/deepfabric/busybee/pkg/queue"
+	"github.com/deepfabric/busybee/pkg/storage"
 	"github.com/fagongzi/util/protoc"
 )
 
@@ -55,6 +56,8 @@ func (s *server) onReq(sid interface{}, req *rpcpb.Request) error {
 		return s.doGetMapping(ctx)
 	case rpcpb.UpdateProfile:
 		return s.doUpdateProfile(ctx)
+	case rpcpb.ScanMapping:
+		return s.doScanMapping(ctx)
 	case rpcpb.GetProfile:
 		return s.doGetProfile(ctx)
 	case rpcpb.AddEvent:
@@ -170,8 +173,7 @@ func (s *server) doCrowdInstance(ctx ctx) error {
 }
 
 func (s *server) doUpdateMapping(ctx ctx) error {
-	err := s.engine.Service().UpdateMapping(ctx.req.UpdateMapping.ID,
-		ctx.req.UpdateMapping.Values...)
+	err := s.engine.Service().UpdateMapping(&ctx.req.UpdateMapping)
 	if err != nil {
 		return err
 	}
@@ -188,6 +190,16 @@ func (s *server) doGetMapping(ctx ctx) error {
 	}
 
 	s.onResp(ctx, value, nil)
+	return nil
+}
+
+func (s *server) doScanMapping(ctx ctx) error {
+	scanReq := rpcpb.AcquireScanRequest()
+	scanReq.Start = storage.MappingIDKey(ctx.req.ScanMapping.ID, ctx.req.ScanMapping.From)
+	scanReq.End = storage.MappingIDKey(ctx.req.ScanMapping.ID, ctx.req.ScanMapping.To)
+	scanReq.Limit = ctx.req.ScanMapping.Limit
+
+	s.engine.Storage().AsyncExecCommand(scanReq, s.onResp, ctx)
 	return nil
 }
 
@@ -290,7 +302,7 @@ func (s *server) onResp(arg interface{}, value []byte, err error) {
 		case rpcpb.InstanceCountState, rpcpb.InstanceCrowdState,
 			rpcpb.GetMapping, rpcpb.GetProfile:
 			resp.BytesResp.Value = value
-		case rpcpb.FetchNotify:
+		case rpcpb.FetchNotify, rpcpb.ScanMapping:
 			protoc.MustUnmarshal(&resp.BytesSliceResp, value)
 		case rpcpb.AllocID:
 			protoc.MustUnmarshal(&resp.Uint32RangeResp, value)

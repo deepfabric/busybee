@@ -368,3 +368,47 @@ func TestBMRange(t *testing.T) {
 	assert.Equal(t, uint32(1), resp.Values[0], "TestBMCount failed")
 	assert.Equal(t, uint32(2), resp.Values[1], "TestBMCount failed")
 }
+
+func TestUpdateMapping(t *testing.T) {
+	store, deferFunc := NewTestStorage(t, true)
+	defer deferFunc()
+
+	req := rpcpb.AcquireUpdateMappingRequest()
+	req.Set.Values = append(req.Set.Values, metapb.IDValue{
+		Type:  0,
+		Value: "id0-v1",
+	}, metapb.IDValue{
+		Type:  1,
+		Value: "id1-v1",
+	})
+	data, err := store.ExecCommand(req)
+	assert.NoError(t, err, "TestUpdateMapping failed")
+	assert.NotEmpty(t, data, "TestUpdateMapping failed")
+	resp := &metapb.IDSet{}
+	protoc.MustUnmarshal(resp, data)
+	assert.Equal(t, 2, len(resp.Values), "TestUpdateMapping failed")
+
+	req = rpcpb.AcquireUpdateMappingRequest()
+	req.Set.Values = append(req.Set.Values, metapb.IDValue{
+		Type:  0,
+		Value: "id0-v2",
+	}, metapb.IDValue{
+		Type:  2,
+		Value: "id2-v1",
+	})
+	data, err = store.ExecCommand(req)
+	assert.NoError(t, err, "TestUpdateMapping failed")
+	assert.NotEmpty(t, data, "TestUpdateMapping failed")
+	resp.Reset()
+	protoc.MustUnmarshal(resp, data)
+	assert.Equal(t, 3, len(resp.Values), "TestUpdateMapping failed")
+	for _, value := range resp.Values {
+		if value.Type == 0 {
+			assert.Equal(t, "id0-v2", value.Value, "TestUpdateMapping failed")
+		} else if value.Type == 1 {
+			assert.Equal(t, "id1-v1", value.Value, "TestUpdateMapping failed")
+		} else if value.Type == 2 {
+			assert.Equal(t, "id2-v1", value.Value, "TestUpdateMapping failed")
+		}
+	}
+}

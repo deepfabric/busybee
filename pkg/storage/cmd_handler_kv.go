@@ -41,8 +41,8 @@ func (h *beeStorage) allocID(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *
 	}
 
 	customResp := rpcpb.AcquireUint32RangeResponse()
-	customResp.From = uint64(start)
-	customResp.To = uint64(end)
+	customResp.From = start
+	customResp.To = end
 	resp.Value = protoc.MustMarshal(customResp)
 	rpcpb.ReleaseUint32RangeResponse(customResp)
 
@@ -97,15 +97,17 @@ func (h *beeStorage) scan(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *goe
 	}
 	end := buf.RawBuf()[idx:buf.GetWriteIndex()]
 
-	idx = buf.GetWriteIndex()
-	if len(prefix) > 0 {
-		buf.Write(prefix)
-		buf.Write(shard.End)
-	}
-	max := buf.RawBuf()[idx:buf.GetWriteIndex()]
+	if len(shard.End) > 0 {
+		idx = buf.GetWriteIndex()
+		if len(prefix) > 0 {
+			buf.Write(prefix)
+			buf.Write(shard.End)
+		}
+		max := buf.RawBuf()[idx:buf.GetWriteIndex()]
 
-	if bytes.Compare(end, max) > 0 {
-		end = max
+		if bytes.Compare(end, max) > 0 {
+			end = max
+		}
 	}
 
 	customResp := rpcpb.AcquireBytesSliceResponse()
@@ -207,4 +209,46 @@ func (h *beeStorage) bmrange(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *
 	resp.Value = protoc.MustMarshal(customResp)
 	rpcpb.ReleaseUint32SliceResponse(customResp)
 	return resp
+}
+
+func (h *beeStorage) updateMapping(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *goetty.ByteBuf) (uint64, int64, *raftcmdpb.Response) {
+	resp := pb.AcquireResponse()
+	customReq := rpcpb.UpdateMappingRequest{}
+	protoc.MustUnmarshal(&customReq, req.Cmd)
+
+	set := customReq.Set
+	data, err := h.getStore(shard.ID).Get(req.Key)
+	if err != nil {
+		log.Fatalf("update mapping failed with %+v", err)
+	}
+
+	written := uint64(0)
+	if len(data) > 0 {
+		set.Values = nil
+		protoc.MustUnmarshal(&set, data)
+
+		for i := range customReq.Set.Values {
+			found := false
+			for j := range set.Values {
+				if customReq.Set.Values[i].Type == set.Values[j].Type {
+					set.Values[j].Value = customReq.Set.Values[i].Value
+					found = true
+					break
+				}
+			}
+
+			if !found {
+				set.Values = append(set.Values, customReq.Set.Values[i])
+			}
+		}
+	}
+
+	err = h.getStore(shard.ID).Set(req.Key, protoc.MustMarshal(&set))
+	if err != nil {
+		log.Fatalf("set mapping id failed with %+v", err)
+	}
+
+	written += uint64(len(req.Key)) + uint64(set.Size())
+	resp.Value = protoc.MustMarshal(&set)
+	return written, int64(written), resp
 }

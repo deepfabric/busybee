@@ -1,8 +1,9 @@
 package rpcpb
 
 import (
-	"github.com/fagongzi/util/protoc"
 	"sync"
+
+	"github.com/fagongzi/util/protoc"
 )
 
 var (
@@ -35,6 +36,8 @@ var (
 	queueAddPool                 sync.Pool
 	queueFetchPool               sync.Pool
 	tenantInitPool               sync.Pool
+	updateMappingPool            sync.Pool
+	scanMappingPool              sync.Pool
 
 	uint64Pool      sync.Pool
 	bytesPool       sync.Pool
@@ -422,6 +425,36 @@ func AcquireQueueFetchRequest() *QueueFetchRequest {
 func ReleaseQueueFetchRequest(value *QueueFetchRequest) {
 	value.Reset()
 	queueFetchPool.Put(value)
+}
+
+// AcquireUpdateMappingRequest returns value from pool
+func AcquireUpdateMappingRequest() *UpdateMappingRequest {
+	value := updateMappingPool.Get()
+	if value == nil {
+		return &UpdateMappingRequest{}
+	}
+	return value.(*UpdateMappingRequest)
+}
+
+// ReleaseUpdateMappingRequest returns the value to pool
+func ReleaseUpdateMappingRequest(value *UpdateMappingRequest) {
+	value.Reset()
+	updateMappingPool.Put(value)
+}
+
+// AcquireScanMappingRequest returns value from pool
+func AcquireScanMappingRequest() *ScanMappingRequest {
+	value := scanMappingPool.Get()
+	if value == nil {
+		return &ScanMappingRequest{}
+	}
+	return value.(*ScanMappingRequest)
+}
+
+// ReleaseScanMappingRequest returns the value to pool
+func ReleaseScanMappingRequest(value *ScanMappingRequest) {
+	value.Reset()
+	scanMappingPool.Put(value)
 }
 
 // AcquireStartingInstanceRequest returns value from pool

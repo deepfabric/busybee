@@ -14,6 +14,7 @@ func (h *beeStorage) init() {
 	h.AddReadFunc("scan", uint64(rpcpb.Scan), h.scan)
 	h.AddWriteFunc("allocid", uint64(rpcpb.AllocID), h.allocID)
 	h.AddWriteFunc("resetid", uint64(rpcpb.ResetID), h.resetID)
+	h.AddWriteFunc("update-mapping", uint64(rpcpb.UpdateMapping), h.updateMapping)
 	h.AddReadFunc("bm-contains", uint64(rpcpb.BMContains), h.bmcontains)
 	h.AddReadFunc("bm-count", uint64(rpcpb.BMCount), h.bmcount)
 	h.AddReadFunc("bm-range", uint64(rpcpb.BMRange), h.bmrange)
@@ -178,6 +179,13 @@ func (h *beeStorage) BuildRequest(req *raftcmdpb.Request, cmd interface{}) error
 		req.Type = raftcmdpb.Write
 		req.Cmd = protoc.MustMarshal(msg)
 		rpcpb.ReleaseQueueFetchRequest(msg)
+	case *rpcpb.UpdateMappingRequest:
+		msg := cmd.(*rpcpb.UpdateMappingRequest)
+		req.Key = MappingIDKey(msg.ID, msg.UserID)
+		req.CustemType = uint64(rpcpb.UpdateMapping)
+		req.Type = raftcmdpb.Write
+		req.Cmd = protoc.MustMarshal(msg)
+		rpcpb.ReleaseUpdateMappingRequest(msg)
 	default:
 		log.Fatalf("not support request %+v(%+T)", cmd, cmd)
 	}
