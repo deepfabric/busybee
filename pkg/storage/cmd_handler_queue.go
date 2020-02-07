@@ -25,7 +25,10 @@ func (h *beeStorage) queueFetch(shard bhmetapb.Shard, req *raftcmdpb.Request, bu
 			log.Fatalf("get consumer committed offset failed with %+v", err)
 		}
 		if len(value) > 0 {
-			offset = goetty.Byte2UInt64(value)
+			committed := goetty.Byte2UInt64(value)
+			if committed < offset {
+				offset = committed
+			}
 		}
 	}
 
