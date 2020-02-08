@@ -16,21 +16,26 @@ import (
 
 const (
 	countToClean     = uint64(4096)
-	maxConsumerAlive = int64(24 * 60 * 60) // 24h
+	maxConsumerAlive = int64(7 * 24 * 60 * 60) // 7 day
 )
 
 type queueBatch struct {
 	loaded                 bool
 	maxOffset              uint64
 	removedOffset          uint64
+	queueKey               []byte
+	consumerStartKey       []byte
+	consumerEndKey         []byte
 	maxAndCleanOffsetValue []byte
 	maxAndCleanOffsetKey   []byte
 	pairs                  [][]byte
+	buf                    *goetty.ByteBuf
 }
 
 func newQueueBatch() batchType {
 	return &queueBatch{
 		maxAndCleanOffsetValue: make([]byte, 16, 16),
+		buf:                    goetty.NewByteBuf(256),
 	}
 }
 
@@ -58,28 +63,47 @@ func (qb *queueBatch) addReq(req *raftcmdpb.Request, resp *raftcmdpb.Response, b
 	}
 }
 
-func (qb *queueBatch) exec(s bhstorage.MetadataStorage, wb bhutil.WriteBatch, b *batch) error {
+func (qb *queueBatch) add(req *rpcpb.QueueAddRequest, b *batch) {
+	if !qb.loaded {
+		qb.queueKey = copyKey(req.Key, qb.buf)
+		qb.consumerStartKey = consumerStartKey(req.Key, qb.buf)
+		qb.consumerEndKey = consumerEndKey(req.Key, qb.buf)
+		qb.maxAndCleanOffsetKey = maxAndCleanOffsetKey(req.Key, qb.buf)
+		value, err := b.bs.getStore(b.shard).Get(qb.maxAndCleanOffsetKey)
+		if err != nil {
+			log.Fatalf("load max queue offset failed with %+v", err)
+		}
+
+		if len(value) > 0 {
+			copy(qb.maxAndCleanOffsetValue, value)
+			qb.maxOffset = goetty.Byte2UInt64(qb.maxAndCleanOffsetValue)
+			qb.removedOffset = goetty.Byte2UInt64(qb.maxAndCleanOffsetValue[8:])
+		}
+
+		qb.loaded = true
+	}
+
+	for _, item := range req.Items {
+		qb.maxOffset++
+		qb.pairs = append(qb.pairs, itemKey(req.Key, qb.maxOffset, qb.buf), item)
+	}
+}
+
+func (qb *queueBatch) exec(s bhstorage.DataStorage, wb bhutil.WriteBatch, b *batch) error {
 	if len(qb.pairs)%2 != 0 {
 		return fmt.Errorf("queue batch pairs len must pow of 2, but %d", len(qb.pairs))
 	}
 
 	if qb.maxOffset > 0 {
+		// clean [last clean offset, minimum committed offset in all consumers]
 		if qb.maxOffset-qb.removedOffset > countToClean {
 			now := time.Now().Unix()
-			start, end := committedOffsetKeyRange(qb.maxAndCleanOffsetKey)
 			low := uint64(math.MaxUint64)
-			err := s.Scan(start, end, func(key, value []byte) (bool, error) {
-				v, err := goetty.BytesToUint64(value)
-				if err != nil {
-					return false, err
-				}
+			err := s.Scan(qb.consumerStartKey, qb.consumerEndKey, func(key, value []byte) (bool, error) {
+				v := goetty.Byte2UInt64(value)
+				ts := goetty.Byte2Int64(value[8:])
 
-				ts, err := goetty.BytesToUint64(value[8:])
-				if err != nil {
-					return false, err
-				}
-
-				if (now-int64(ts) < maxConsumerAlive) &&
+				if (now-ts < maxConsumerAlive) &&
 					v < low {
 					low = v
 				}
@@ -91,7 +115,8 @@ func (qb *queueBatch) exec(s bhstorage.MetadataStorage, wb bhutil.WriteBatch, b 
 			}
 
 			if low > qb.removedOffset {
-				from, to := removedOffsetKeyRange(qb.maxAndCleanOffsetKey, qb.removedOffset, low+1)
+				from := itemKey(qb.queueKey, qb.removedOffset, qb.buf)
+				to := itemKey(qb.queueKey, low+1, qb.buf)
 				err = s.RangeDelete(from, to)
 				log.Fatalf("exec queue add batch failed with %+v", err)
 				qb.removedOffset = low
@@ -114,31 +139,11 @@ func (qb *queueBatch) reset() {
 	qb.loaded = false
 	qb.maxOffset = 0
 	qb.removedOffset = 0
+	qb.queueKey = qb.queueKey[:0]
+	qb.consumerStartKey = qb.consumerStartKey[:0]
+	qb.consumerEndKey = qb.consumerEndKey[:0]
 	qb.maxAndCleanOffsetKey = qb.maxAndCleanOffsetKey[:0]
 	qb.maxAndCleanOffsetValue = qb.maxAndCleanOffsetValue[:0]
 	qb.pairs = qb.pairs[:0]
-}
-
-func (qb *queueBatch) add(req *rpcpb.QueueAddRequest, b *batch) {
-	if !qb.loaded {
-		qb.maxAndCleanOffsetKey = maxAndCleanOffsetKey(req.Key)
-
-		value, err := b.bs.getStore(b.shard).Get(qb.maxAndCleanOffsetKey)
-		if err != nil {
-			log.Fatalf("load max queue offset failed with %+v", err)
-		}
-
-		if len(value) > 0 {
-			copy(qb.maxAndCleanOffsetValue, value)
-			qb.maxOffset = goetty.Byte2UInt64(qb.maxAndCleanOffsetValue)
-			qb.removedOffset = goetty.Byte2UInt64(qb.maxAndCleanOffsetValue[8:])
-		}
-
-		qb.loaded = true
-	}
-
-	for _, item := range req.Items {
-		qb.maxOffset++
-		qb.pairs = append(qb.pairs, itemKey(req.Key, qb.maxOffset), item)
-	}
+	qb.buf.Clear()
 }

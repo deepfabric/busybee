@@ -1,6 +1,8 @@
 package storage
 
 import (
+	"time"
+
 	"github.com/fagongzi/goetty"
 )
 
@@ -25,4 +27,23 @@ func appendValuePrefix(buf *goetty.ByteBuf, value []byte, prefix byte) []byte {
 // OriginInstanceStatePBValue returns origin instance state pb value
 func OriginInstanceStatePBValue(value []byte) []byte {
 	return value[8:]
+}
+
+func consumerCommittedValue(offset uint64, buf *goetty.ByteBuf) []byte {
+	idx := buf.GetWriteIndex()
+	buf.WriteUint64(offset)
+	buf.WriteInt64(time.Now().Unix())
+	return buf.RawBuf()[idx:buf.GetWriteIndex()]
+}
+
+func int64Value(value int64, buf *goetty.ByteBuf) []byte {
+	idx := buf.GetWriteIndex()
+	buf.WriteInt64(value)
+	return buf.RawBuf()[idx:buf.GetWriteIndex()]
+}
+
+func uint64Value(value uint64, buf *goetty.ByteBuf) []byte {
+	idx := buf.GetWriteIndex()
+	buf.WriteUint64(value)
+	return buf.RawBuf()[idx:buf.GetWriteIndex()]
 }

@@ -1,8 +1,6 @@
 package storage
 
 import (
-	"time"
-
 	"github.com/deepfabric/beehive/pb"
 	bhmetapb "github.com/deepfabric/beehive/pb/metapb"
 	"github.com/deepfabric/beehive/pb/raftcmdpb"
@@ -20,7 +18,8 @@ func (h *beeStorage) queueFetch(shard bhmetapb.Shard, req *raftcmdpb.Request, bu
 	customResp := rpcpb.AcquireBytesSliceResponse()
 	offset := queueFetch.AfterOffset
 	if offset == 0 {
-		value, err := h.getStore(shard.ID).Get(committedOffsetKey(req.Key, queueFetch.Consumer))
+		value, err := h.getStore(shard.ID).Get(committedOffsetKey(req.Key,
+			queueFetch.Consumer, buf))
 		if err != nil {
 			log.Fatalf("get consumer committed offset failed with %+v", err)
 		}
@@ -32,14 +31,11 @@ func (h *beeStorage) queueFetch(shard bhmetapb.Shard, req *raftcmdpb.Request, bu
 		}
 	}
 
-	from := itemKey(req.Key, offset+1)
-	to := itemKey(req.Key, offset+1+uint64(queueFetch.Count))
+	from := itemKey(req.Key, offset+1, buf)
+	to := itemKey(req.Key, offset+1+uint64(queueFetch.Count), buf)
 
-	idx := buf.GetWriteIndex()
-	buf.WriteUInt64(offset)
-	buf.WriteInt64(time.Now().Unix())
-	err := h.getStore(shard.ID).Set(committedOffsetKey(req.Key, queueFetch.Consumer),
-		buf.RawBuf()[idx:buf.GetWriteIndex()])
+	err := h.getStore(shard.ID).Set(committedOffsetKey(req.Key, queueFetch.Consumer, buf),
+		consumerCommittedValue(offset, buf))
 	if err != nil {
 		log.Fatalf("set consumer committed offset failed with %+v", err)
 	}

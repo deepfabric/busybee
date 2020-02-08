@@ -15,6 +15,11 @@ const (
 
 	instance      byte = 1
 	instanceShard byte = 2
+
+	queueOffsetField      byte = 0
+	queueItemField        byte = 1
+	queueCommittedField   byte = 2
+	queuePrefixAllocField byte = 3
 )
 
 // QueueMetadataKey returns queue metadata key
@@ -79,55 +84,55 @@ func ProfileKey(tenantID uint64, uid uint32) []byte {
 	return key
 }
 
-func maxAndCleanOffsetKey(src []byte) []byte {
-	n := len(src) + 1
-	key := make([]byte, n, n)
-	copy(key, src)
-	key[len(src)] = 0x00
-	return key
+// maxAndCleanOffsetKey store the max offset and already clean offset of the current queue
+func maxAndCleanOffsetKey(src []byte, buf *goetty.ByteBuf) []byte {
+	idx := buf.GetWriteIndex()
+	buf.Write(src)
+	buf.WriteByte(queueOffsetField)
+	return buf.RawBuf()[idx:buf.GetWriteIndex()]
 }
 
-func itemKey(src []byte, offset uint64) []byte {
-	n := len(src) + 9
-	key := make([]byte, n, n)
-	copy(key, src)
-	key[len(src)] = 0x01
-	goetty.Uint64ToBytesTo(offset, key[len(src)+1:])
-	return key
+// itemKey store the item at the offset in the queue
+func itemKey(src []byte, offset uint64, buf *goetty.ByteBuf) []byte {
+	idx := buf.GetWriteIndex()
+	buf.Write(src)
+	buf.WriteByte(queueItemField)
+	buf.WriteUint64(offset)
+	return buf.RawBuf()[idx:buf.GetWriteIndex()]
 }
 
-func committedOffsetKey(src []byte, consumer []byte) []byte {
-	n := len(src) + len(consumer)
-	key := make([]byte, n, n)
-	copy(key, src)
-	key[len(src)] = 0x02
-	copy(key[len(src)+1:], consumer)
-	return key
+// committedOffsetKey store the commttied offset per consumer
+func committedOffsetKey(src []byte, consumer []byte, buf *goetty.ByteBuf) []byte {
+	idx := buf.GetWriteIndex()
+	buf.Write(src)
+	buf.WriteByte(queueCommittedField)
+	buf.Write(consumer)
+	return buf.RawBuf()[idx:buf.GetWriteIndex()]
 }
 
-func committedOffsetKeyRange(src []byte) ([]byte, []byte) {
-	n := len(src)
-	start := make([]byte, n, n)
-	copy(start, src)
-	start[n-1] = 0x02
-
-	end := make([]byte, n, n)
-	copy(end, src)
-	end[n-1] = 0x03
-
-	return start, end
+func prefixAllocKey(src []byte, buf *goetty.ByteBuf) []byte {
+	idx := buf.GetWriteIndex()
+	buf.Write(src)
+	buf.WriteByte(queuePrefixAllocField)
+	return buf.RawBuf()[idx:buf.GetWriteIndex()]
 }
 
-func removedOffsetKeyRange(src []byte, from, to uint64) ([]byte, []byte) {
-	n := len(src) + 8
-	start := make([]byte, n, n)
-	copy(start, src)
-	start[n-1] = 0x01
-	goetty.Uint64ToBytesTo(from, start[n:])
+func consumerStartKey(src []byte, buf *goetty.ByteBuf) []byte {
+	idx := buf.GetWriteIndex()
+	buf.Write(src)
+	buf.WriteByte(queueCommittedField)
+	return buf.RawBuf()[idx:buf.GetWriteIndex()]
+}
 
-	end := make([]byte, n, n)
-	copy(start, src)
-	end[n-1] = 0x01
-	goetty.Uint64ToBytesTo(to, end[n:])
-	return start, end
+func consumerEndKey(src []byte, buf *goetty.ByteBuf) []byte {
+	idx := buf.GetWriteIndex()
+	buf.Write(src)
+	buf.WriteByte(queueCommittedField + 1)
+	return buf.RawBuf()[idx:buf.GetWriteIndex()]
+}
+
+func copyKey(key []byte, buf *goetty.ByteBuf) []byte {
+	idx := buf.GetWriteIndex()
+	buf.Write(key)
+	return buf.RawBuf()[idx:buf.GetWriteIndex()]
 }

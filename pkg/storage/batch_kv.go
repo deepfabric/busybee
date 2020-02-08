@@ -53,7 +53,7 @@ func (kv *kvBatch) addReq(req *raftcmdpb.Request, resp *raftcmdpb.Response, b *b
 	}
 }
 
-func (kv *kvBatch) exec(s bhstorage.MetadataStorage, wb bhutil.WriteBatch, b *batch) error {
+func (kv *kvBatch) exec(s bhstorage.DataStorage, wb bhutil.WriteBatch, b *batch) error {
 	if len(kv.ops) > 0 {
 		idx := 0
 		for _, op := range kv.ops {

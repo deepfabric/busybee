@@ -161,7 +161,7 @@ func (rb *bitmapBatch) reset() {
 	rb.bitmapRemoves = rb.bitmapRemoves[:0]
 }
 
-func (rb *bitmapBatch) exec(s bhstorage.MetadataStorage, wb bhutil.WriteBatch, b *batch) error {
+func (rb *bitmapBatch) exec(s bhstorage.DataStorage, wb bhutil.WriteBatch, b *batch) error {
 	if len(rb.ops) > 0 {
 		bm := util.AcquireBitmap()
 		for idx, ops := range rb.ops {

@@ -21,7 +21,7 @@ const (
 type batchType interface {
 	support() []rpcpb.Type
 	addReq(*raftcmdpb.Request, *raftcmdpb.Response, *batch, *goetty.ByteBuf)
-	exec(bhstorage.MetadataStorage, bhutil.WriteBatch, *batch) error
+	exec(bhstorage.DataStorage, bhutil.WriteBatch, *batch) error
 	reset()
 }
 
