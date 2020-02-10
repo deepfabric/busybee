@@ -16,10 +16,9 @@ const (
 	instance      byte = 1
 	instanceShard byte = 2
 
-	queueOffsetField      byte = 0
-	queueItemField        byte = 1
-	queueCommittedField   byte = 2
-	queuePrefixAllocField byte = 3
+	queueOffsetField    byte = 0
+	queueItemField      byte = 1
+	queueCommittedField byte = 2
 )
 
 // QueueMetadataKey returns queue metadata key
@@ -107,13 +106,6 @@ func committedOffsetKey(src []byte, consumer []byte, buf *goetty.ByteBuf) []byte
 	buf.Write(src)
 	buf.WriteByte(queueCommittedField)
 	buf.Write(consumer)
-	return buf.RawBuf()[idx:buf.GetWriteIndex()]
-}
-
-func prefixAllocKey(src []byte, buf *goetty.ByteBuf) []byte {
-	idx := buf.GetWriteIndex()
-	buf.Write(src)
-	buf.WriteByte(queuePrefixAllocField)
 	return buf.RawBuf()[idx:buf.GetWriteIndex()]
 }
 

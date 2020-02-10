@@ -259,8 +259,9 @@ func (s *server) doAddEvent(ctx ctx) error {
 func (s *server) doFetchNotify(ctx ctx) error {
 	req := rpcpb.AcquireQueueFetchRequest()
 	req.Key = queue.PartitionKey(ctx.req.FetchNotify.ID, 0)
-	req.AfterOffset = ctx.req.FetchNotify.After
+	req.CompletedOffset = ctx.req.FetchNotify.CompletedOffset
 	req.Count = ctx.req.FetchNotify.Count
+	req.Concurrency = ctx.req.FetchNotify.Concurrency
 	req.Consumer = []byte(ctx.req.FetchNotify.Consumer)
 	s.engine.Storage().AsyncExecCommandWithGroup(req, metapb.TenantOutputGroup, s.onResp, ctx)
 	return nil

@@ -3,13 +3,14 @@ package queue
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/deepfabric/busybee/pkg/storage"
 	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/log"
 	"github.com/fagongzi/util/protoc"
-	"time"
 )
 
 var (
@@ -88,7 +89,7 @@ func (c *consumer) startPartition(ctx context.Context, idx, batch uint64, fn fun
 			default:
 				req := rpcpb.AcquireQueueFetchRequest()
 				req.Key = key
-				req.AfterOffset = offset
+				req.CompletedOffset = offset
 				req.Consumer = c.consumer
 				req.Count = batch
 

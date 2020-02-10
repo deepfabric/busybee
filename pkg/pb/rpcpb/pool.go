@@ -11,6 +11,8 @@ var (
 	EmptyResp = EmptyResponse{}
 	// EmptyRespBytes empty resp bytes
 	EmptyRespBytes = protoc.MustMarshal(&EmptyResp)
+	// EmptyBytesSliceBytes empty bytes slice response
+	EmptyBytesSliceBytes = protoc.MustMarshal(&BytesSliceResponse{})
 )
 
 var (

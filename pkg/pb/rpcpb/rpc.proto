@@ -203,10 +203,11 @@ message QueueAddRequest {
 
 // QueueFetchResponse add items into a queue
 message QueueFetchRequest {
-    bytes  key         = 1;
-    bytes  consumer    = 2;
-    uint64 afterOffset = 3;
-    uint64 count       = 4;
+    bytes  key             = 1;
+    bytes  consumer        = 2;
+    uint64 completedOffset = 3;
+    uint64 count           = 4;
+    uint64 concurrency     = 5;
 }
 
 // TenantInitRequest init tenant
@@ -264,10 +265,11 @@ message AddEventRequest {
 
 // FetchNotifyRequest fetch notify request
 message FetchNotifyRequest {
-    uint64 id       = 1 [(gogoproto.customname) = "ID"];
-    uint64 after    = 2;
-    uint64 count    = 3;
-    string consumer = 4;
+    uint64 id              = 1 [(gogoproto.customname) = "ID"];
+    uint64 completedOffset = 2;
+    uint64 count           = 3;
+    string consumer        = 4;
+    uint64 concurrency     = 5;
 }
 
 // AllocIDRequest alloc id request

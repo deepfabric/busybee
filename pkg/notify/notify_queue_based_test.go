@@ -33,7 +33,7 @@ func TestNotify(t *testing.T) {
 
 	req := rpcpb.AcquireQueueFetchRequest()
 	req.Key = queue.PartitionKey(tenantID, 0)
-	req.AfterOffset = 0
+	req.CompletedOffset = 0
 	req.Consumer = []byte("c")
 	req.Count = 1
 

@@ -8,6 +8,7 @@ import (
 	"github.com/deepfabric/busybee/pkg/core"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
+	"github.com/deepfabric/busybee/pkg/queue"
 	"github.com/deepfabric/busybee/pkg/storage"
 	"github.com/deepfabric/busybee/pkg/util"
 	"github.com/fagongzi/goetty"
@@ -15,7 +16,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func newTestServer(t *testing.T) func() {
+func newTestServer(t *testing.T) (core.Engine, func()) {
 	store, deferFunc := storage.NewTestStorage(t, false)
 
 	eng, err := core.NewEngine(store, nil)
@@ -26,7 +27,7 @@ func newTestServer(t *testing.T) func() {
 	assert.NoError(t, err, "newTestServer failed")
 	assert.NoError(t, s.Start(), "newTestServer failed")
 
-	return func() {
+	return eng, func() {
 		s.Stop()
 		eng.Stop()
 		deferFunc()
@@ -73,7 +74,7 @@ func createConn(t *testing.T) goetty.IOSession {
 }
 
 func TestGetAndSetAndDelete(t *testing.T) {
-	deferFunc := newTestServer(t)
+	_, deferFunc := newTestServer(t)
 	defer deferFunc()
 
 	conn := createConn(t)
@@ -121,7 +122,7 @@ func TestGetAndSetAndDelete(t *testing.T) {
 }
 
 func TestBMCreate(t *testing.T) {
-	deferFunc := newTestServer(t)
+	_, deferFunc := newTestServer(t)
 	defer deferFunc()
 
 	conn := createConn(t)
@@ -153,7 +154,7 @@ func TestBMCreate(t *testing.T) {
 }
 
 func TestBMAdd(t *testing.T) {
-	deferFunc := newTestServer(t)
+	_, deferFunc := newTestServer(t)
 	defer deferFunc()
 
 	conn := createConn(t)
@@ -185,7 +186,7 @@ func TestBMAdd(t *testing.T) {
 }
 
 func TestBMRemove(t *testing.T) {
-	deferFunc := newTestServer(t)
+	_, deferFunc := newTestServer(t)
 	defer deferFunc()
 
 	conn := createConn(t)
@@ -224,7 +225,7 @@ func TestBMRemove(t *testing.T) {
 }
 
 func TestBMClear(t *testing.T) {
-	deferFunc := newTestServer(t)
+	_, deferFunc := newTestServer(t)
 	defer deferFunc()
 
 	conn := createConn(t)
@@ -262,7 +263,7 @@ func TestBMClear(t *testing.T) {
 }
 
 func TestBMRange(t *testing.T) {
-	deferFunc := newTestServer(t)
+	_, deferFunc := newTestServer(t)
 	defer deferFunc()
 
 	conn := createConn(t)
@@ -293,7 +294,7 @@ func TestBMRange(t *testing.T) {
 }
 
 func TestBMCount(t *testing.T) {
-	deferFunc := newTestServer(t)
+	_, deferFunc := newTestServer(t)
 	defer deferFunc()
 
 	conn := createConn(t)
@@ -320,7 +321,7 @@ func TestBMCount(t *testing.T) {
 }
 
 func TestBMContains(t *testing.T) {
-	deferFunc := newTestServer(t)
+	_, deferFunc := newTestServer(t)
 	defer deferFunc()
 
 	conn := createConn(t)
@@ -348,7 +349,7 @@ func TestBMContains(t *testing.T) {
 }
 
 func TestProfile(t *testing.T) {
-	deferFunc := newTestServer(t)
+	_, deferFunc := newTestServer(t)
 	defer deferFunc()
 
 	conn := createConn(t)
@@ -406,7 +407,7 @@ func TestProfile(t *testing.T) {
 }
 
 func TestUpdateAndScanMapping(t *testing.T) {
-	deferFunc := newTestServer(t)
+	_, deferFunc := newTestServer(t)
 	defer deferFunc()
 
 	conn := createConn(t)
@@ -521,4 +522,90 @@ func TestUpdateAndScanMapping(t *testing.T) {
 	idValue := &metapb.IDSet{}
 	protoc.MustUnmarshal(idValue, resp.BytesSliceResp.Values[0])
 	assert.Equal(t, 3, len(idValue.Values), "TestMapping failed")
+}
+
+func TestConcurrencyFetchOutput(t *testing.T) {
+	eng, deferFunc := newTestServer(t)
+	defer deferFunc()
+
+	conn := createConn(t)
+	defer conn.Close()
+
+	tid := uint64(1)
+
+	req := rpcpb.AcquireRequest()
+	req.Type = rpcpb.TenantInit
+	req.TenantInit.ID = tid
+	req.TenantInit.InputQueuePartitions = 1
+	assert.NoError(t, conn.WriteAndFlush(req), "TestConcurrencyFetchOutput failed")
+
+	_, err := conn.ReadTimeout(time.Second * 10)
+	assert.NoError(t, err, "TestConcurrencyFetchOutput failed")
+
+	time.Sleep(time.Second)
+
+	_, err = eng.Storage().ExecCommandWithGroup(&rpcpb.QueueAddRequest{
+		Key: queue.PartitionKey(tid, 0),
+		Items: [][]byte{[]byte("1"), []byte("2"), []byte("3"),
+			[]byte("4"), []byte("5"), []byte("6"),
+			[]byte("7"), []byte("8"), []byte("9")},
+	}, metapb.TenantOutputGroup)
+	assert.NoError(t, err, "TestConcurrencyFetchOutput failed")
+
+	req.Reset()
+	req.Type = rpcpb.FetchNotify
+	req.FetchNotify.ID = tid
+	req.FetchNotify.CompletedOffset = 0
+	req.FetchNotify.Concurrency = 3
+	req.FetchNotify.Count = 10
+	req.FetchNotify.Consumer = "c1"
+	assert.NoError(t, conn.WriteAndFlush(req), "TestConcurrencyFetchOutput failed")
+	data, err := conn.ReadTimeout(time.Second * 10)
+	assert.NoError(t, err, "TestConcurrencyFetchOutput failed")
+	resp := data.(*rpcpb.Response)
+	assert.Equal(t, 3, len(resp.BytesSliceResp.Values), "TestConcurrencyFetchOutput failed")
+	assert.Equal(t, uint64(3), resp.BytesSliceResp.LastValue, "TestConcurrencyFetchOutput failed")
+
+	req.Reset()
+	req.Type = rpcpb.FetchNotify
+	req.FetchNotify.ID = tid
+	req.FetchNotify.CompletedOffset = 0
+	req.FetchNotify.Concurrency = 3
+	req.FetchNotify.Count = 10
+	req.FetchNotify.Consumer = "c1"
+	assert.NoError(t, conn.WriteAndFlush(req), "TestConcurrencyFetchOutput failed")
+	data, err = conn.ReadTimeout(time.Second * 10)
+	assert.NoError(t, err, "TestConcurrencyFetchOutput failed")
+	resp = data.(*rpcpb.Response)
+	assert.Equal(t, 3, len(resp.BytesSliceResp.Values), "TestConcurrencyFetchOutput failed")
+	assert.Equal(t, uint64(6), resp.BytesSliceResp.LastValue, "TestConcurrencyFetchOutput failed")
+
+	req.Reset()
+	req.Type = rpcpb.FetchNotify
+	req.FetchNotify.ID = tid
+	req.FetchNotify.CompletedOffset = 0
+	req.FetchNotify.Concurrency = 3
+	req.FetchNotify.Count = 10
+	req.FetchNotify.Consumer = "c1"
+	assert.NoError(t, conn.WriteAndFlush(req), "TestConcurrencyFetchOutput failed")
+	data, err = conn.ReadTimeout(time.Second * 10)
+	assert.NoError(t, err, "TestConcurrencyFetchOutput failed")
+	resp = data.(*rpcpb.Response)
+	assert.Equal(t, 3, len(resp.BytesSliceResp.Values), "TestConcurrencyFetchOutput failed")
+	assert.Equal(t, uint64(9), resp.BytesSliceResp.LastValue, "TestConcurrencyFetchOutput failed")
+
+	req.Reset()
+	req.Type = rpcpb.FetchNotify
+	req.FetchNotify.ID = tid
+	req.FetchNotify.CompletedOffset = 0
+	req.FetchNotify.Concurrency = 3
+	req.FetchNotify.Count = 10
+	req.FetchNotify.Consumer = "c1"
+	assert.NoError(t, conn.WriteAndFlush(req), "TestConcurrencyFetchOutput failed")
+	data, err = conn.ReadTimeout(time.Second * 10)
+	assert.NoError(t, err, "TestConcurrencyFetchOutput failed")
+	resp = data.(*rpcpb.Response)
+	assert.Equal(t, 0, len(resp.BytesSliceResp.Values), "TestConcurrencyFetchOutput failed")
+	assert.Equal(t, uint64(0), resp.BytesSliceResp.LastValue, "TestConcurrencyFetchOutput failed")
+
 }

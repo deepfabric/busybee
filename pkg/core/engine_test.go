@@ -142,7 +142,7 @@ func TestStartInstance(t *testing.T) {
 
 	fetch := rpcpb.AcquireQueueFetchRequest()
 	fetch.Key = queue.PartitionKey(10001, 0)
-	fetch.AfterOffset = 0
+	fetch.CompletedOffset = 0
 	fetch.Count = 1
 	fetch.Consumer = []byte("ccccccccccccccccccccccccccc")
 	data, err := ng.Storage().ExecCommandWithGroup(fetch, metapb.TenantOutputGroup)
@@ -283,7 +283,7 @@ func TestStartInstanceWithNotifyError(t *testing.T) {
 
 	fetch := rpcpb.AcquireQueueFetchRequest()
 	fetch.Key = queue.PartitionKey(10001, 0)
-	fetch.AfterOffset = 0
+	fetch.CompletedOffset = 0
 	fetch.Count = 1
 	fetch.Consumer = []byte("ccccccccccccccccccccccccccc")
 	data, err := ng.Storage().ExecCommandWithGroup(fetch, metapb.TenantOutputGroup)
