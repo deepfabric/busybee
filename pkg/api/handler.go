@@ -25,6 +25,8 @@ func (s *server) onReq(sid interface{}, req *rpcpb.Request) error {
 		return s.doGet(ctx)
 	case rpcpb.Delete:
 		return s.doDelete(ctx)
+	case rpcpb.Scan:
+		return s.doScanKey(ctx)
 	case rpcpb.BMCreate:
 		return s.doBMCreate(ctx)
 	case rpcpb.BMAdd:
@@ -194,6 +196,12 @@ func (s *server) doGetMapping(ctx ctx) error {
 	return nil
 }
 
+func (s *server) doScanKey(ctx ctx) error {
+	s.engine.Storage().AsyncExecCommandWithGroup(&ctx.req.Scan, ctx.req.Scan.Group,
+		s.onResp, ctx)
+	return nil
+}
+
 func (s *server) doScanMapping(ctx ctx) error {
 	scanReq := rpcpb.AcquireScanRequest()
 	scanReq.Start = storage.MappingIDKey(ctx.req.ScanMapping.ID, ctx.req.ScanMapping.From)
@@ -311,7 +319,7 @@ func (s *server) onResp(arg interface{}, value []byte, err error) {
 		case rpcpb.InstanceCountState, rpcpb.InstanceCrowdState,
 			rpcpb.GetMapping, rpcpb.GetProfile:
 			resp.BytesResp.Value = value
-		case rpcpb.FetchNotify, rpcpb.ScanMapping:
+		case rpcpb.FetchNotify, rpcpb.Scan, rpcpb.ScanMapping:
 			protoc.MustUnmarshal(&resp.BytesSliceResp, value)
 		case rpcpb.AllocID:
 			protoc.MustUnmarshal(&resp.Uint32RangeResp, value)

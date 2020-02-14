@@ -56,28 +56,29 @@ message Request {
     SetRequest                set           = 3  [(gogoproto.nullable) = false];
     GetRequest                get           = 4  [(gogoproto.nullable) = false];
     DeleteRequest             delete        = 5  [(gogoproto.nullable) = false];
-    BMCreateRequest           bmCreate      = 6  [(gogoproto.nullable) = false];
-    BMAddRequest              bmAdd         = 7  [(gogoproto.nullable) = false];
-    BMRemoveRequest           bmRemove      = 8  [(gogoproto.nullable) = false];
-    BMClearRequest            bmClear       = 9  [(gogoproto.nullable) = false];
-    BMRangeRequest            bmRange       = 10 [(gogoproto.nullable) = false];
-    BMCountRequest            bmCount       = 11 [(gogoproto.nullable) = false];
-    BMContainsRequest         bmContains    = 12 [(gogoproto.nullable) = false];
-    TenantInitRequest         tenantInit    = 13 [(gogoproto.nullable) = false];
-    StartingInstanceRequest   startInstance = 14 [(gogoproto.nullable) = false];
-    StopInstanceRequest       stopInstance  = 15 [(gogoproto.nullable) = false];
-    InstanceCountStateRequest countInstance = 16 [(gogoproto.nullable) = false];
-    InstanceCrowdStateRequest crowdInstance = 17 [(gogoproto.nullable) = false];
-    UpdateMappingRequest      updateMapping = 18 [(gogoproto.nullable) = false];
-    GetMappingRequest         getMapping    = 19 [(gogoproto.nullable) = false];
-    UpdateProfileRequest      updateProfile = 20 [(gogoproto.nullable) = false];
-    GetProfileRequest         getProfile    = 21 [(gogoproto.nullable) = false];
-    AddEventRequest           addEvent      = 22 [(gogoproto.nullable) = false];
-    FetchNotifyRequest        fetchNotify   = 23 [(gogoproto.nullable) = false];
-    AllocIDRequest            allocID       = 24 [(gogoproto.nullable) = false];
-    ResetIDRequest            resetID       = 25 [(gogoproto.nullable) = false];
-    ScanMappingRequest        scanMapping   = 26 [(gogoproto.nullable) = false];
-    GetIDSetRequest           getIDSet      = 27 [(gogoproto.nullable) = false];
+    ScanRequest               scan          = 6  [(gogoproto.nullable) = false];
+    BMCreateRequest           bmCreate      = 7  [(gogoproto.nullable) = false];
+    BMAddRequest              bmAdd         = 8  [(gogoproto.nullable) = false];
+    BMRemoveRequest           bmRemove      = 9  [(gogoproto.nullable) = false];
+    BMClearRequest            bmClear       = 10  [(gogoproto.nullable) = false];
+    BMRangeRequest            bmRange       = 11 [(gogoproto.nullable) = false];
+    BMCountRequest            bmCount       = 12 [(gogoproto.nullable) = false];
+    BMContainsRequest         bmContains    = 13 [(gogoproto.nullable) = false];
+    TenantInitRequest         tenantInit    = 14 [(gogoproto.nullable) = false];
+    StartingInstanceRequest   startInstance = 15 [(gogoproto.nullable) = false];
+    StopInstanceRequest       stopInstance  = 16 [(gogoproto.nullable) = false];
+    InstanceCountStateRequest countInstance = 17 [(gogoproto.nullable) = false];
+    InstanceCrowdStateRequest crowdInstance = 18 [(gogoproto.nullable) = false];
+    UpdateMappingRequest      updateMapping = 19 [(gogoproto.nullable) = false];
+    GetMappingRequest         getMapping    = 20 [(gogoproto.nullable) = false];
+    UpdateProfileRequest      updateProfile = 21 [(gogoproto.nullable) = false];
+    GetProfileRequest         getProfile    = 22 [(gogoproto.nullable) = false];
+    AddEventRequest           addEvent      = 23 [(gogoproto.nullable) = false];
+    FetchNotifyRequest        fetchNotify   = 24 [(gogoproto.nullable) = false];
+    AllocIDRequest            allocID       = 25 [(gogoproto.nullable) = false];
+    ResetIDRequest            resetID       = 26 [(gogoproto.nullable) = false];
+    ScanMappingRequest        scanMapping   = 27 [(gogoproto.nullable) = false];
+    GetIDSetRequest           getIDSet      = 28 [(gogoproto.nullable) = false];
 }
 
 // Response the busybee response
@@ -285,10 +286,11 @@ message ResetIDRequest {
 
 // ScanRequest scan request
 message ScanRequest {
-    bytes  start = 1;
-    bytes  end   = 2;
-    uint64 limit = 3;
-    int32  skip  = 4;
+    bytes        start = 1;
+    bytes        end   = 2;
+    uint64       limit = 3;
+    int32        skip  = 4;
+    metapb.Group group = 5;
 }
 
 // ErrorResponse error response 
