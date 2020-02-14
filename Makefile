@@ -36,4 +36,5 @@ test: ; $(info ======== test busybee)
 	env GO111MODULE=off go test github.com/deepfabric/busybee/pkg/expr
 	env GO111MODULE=off go test github.com/deepfabric/busybee/pkg/core
 	env GO111MODULE=off go test github.com/deepfabric/busybee/pkg/api
+	env GO111MODULE=off go test github.com/deepfabric/busybee/pkg/util
 .DEFAULT_GOAL := busybee

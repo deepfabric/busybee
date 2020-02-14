@@ -96,8 +96,8 @@ func TestBMSplitAndAlloc(t *testing.T) {
 	assert.Equal(t, uint32(4), shards[2].Minimum(), "TestBMSplitAndAlloc failed")
 
 	BMAlloc(roaring.BitmapOf(1, 2, 3, 5), shards...)
-	assert.Equal(t, uint32(1), shards[0].Minimum(), "TestBMSplitAndAlloc failed")
-	assert.Equal(t, uint32(3), shards[1].Minimum(), "TestBMSplitAndAlloc failed")
-	assert.Equal(t, uint32(2), shards[2].Minimum(), "TestBMSplitAndAlloc failed")
 
+	assert.Equal(t, uint32(2), shards[0].Minimum(), "TestBMSplitAndAlloc failed")
+	assert.Equal(t, uint32(3), shards[1].Minimum(), "TestBMSplitAndAlloc failed")
+	assert.Equal(t, uint32(1), shards[2].Minimum(), "TestBMSplitAndAlloc failed")
 }

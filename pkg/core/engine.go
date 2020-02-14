@@ -44,8 +44,10 @@ type Engine interface {
 	// so an instance will be divided into many shards, each shard handles some
 	// people's events.
 	StartInstance(workflow metapb.Workflow, crowd []byte, workers uint64) error
-	// UpdateInstanceCrowd update instance crowd
-	UpdateInstanceCrowd(id uint64, crowd []byte) error
+	// UpdateCrowd update instance crowd
+	UpdateCrowd(id uint64, crowd []byte) error
+	// UpdateInstance update running workflow
+	UpdateWorkflow(workflow metapb.Workflow) error
 	// StopInstance stop instance
 	StopInstance(id uint64) error
 	// InstanceCountState returns instance count state
@@ -161,7 +163,38 @@ func (eng *engine) StartInstance(workflow metapb.Workflow, crow []byte, workers 
 	return err
 }
 
-func (eng *engine) UpdateInstanceCrowd(id uint64, crowd []byte) error {
+func (eng *engine) UpdateWorkflow(workflow metapb.Workflow) error {
+	if err := checkExcution(workflow); err != nil {
+		return err
+	}
+
+	value, err := eng.store.Get(storage.StartedInstanceKey(workflow.ID))
+	if err != nil {
+		return err
+	}
+	if len(value) == 0 {
+		return fmt.Errorf("workflow-%d is not started", workflow.ID)
+	}
+
+	instance := metapb.WorkflowInstance{}
+	protoc.MustUnmarshal(&instance, value)
+
+	instance.Snapshot = workflow
+	err = eng.doUpdateInstance(instance)
+	if err != nil {
+		return err
+	}
+
+	return eng.store.PutToQueue(instance.Snapshot.TenantID, 0,
+		metapb.TenantInputGroup, protoc.MustMarshal(&metapb.Event{
+			Type: metapb.UpdateWorkflowType,
+			UpdateWorkflow: &metapb.UpdateWorkflowEvent{
+				Workflow: workflow,
+			},
+		}))
+}
+
+func (eng *engine) UpdateCrowd(id uint64, crowd []byte) error {
 	value, err := eng.store.Get(storage.StartedInstanceKey(id))
 	if err != nil {
 		return err
@@ -172,6 +205,12 @@ func (eng *engine) UpdateInstanceCrowd(id uint64, crowd []byte) error {
 
 	instance := metapb.WorkflowInstance{}
 	protoc.MustUnmarshal(&instance, value)
+
+	instance.Crowd = crowd
+	err = eng.doUpdateInstance(instance)
+	if err != nil {
+		return err
+	}
 
 	shards, err := eng.getInstanceShards(instance)
 	if err != nil {
@@ -252,7 +291,9 @@ func (eng *engine) InstanceCountState(id uint64) (metapb.InstanceCountState, err
 
 	for _, stepState := range shards {
 		for _, ss := range stepState.States {
-			m[ss.Step.Name].Count += bbutil.MustParseBM(ss.Crowd).GetCardinality()
+			if _, ok := m[ss.Step.Name]; ok {
+				m[ss.Step.Name].Count += bbutil.MustParseBM(ss.Crowd).GetCardinality()
+			}
 		}
 	}
 
@@ -346,6 +387,14 @@ func (eng *engine) AddCronJob(cronExpr string, fn func()) (cron.EntryID, error) 
 
 func (eng *engine) StopCronJob(id cron.EntryID) {
 	eng.cronRunner.Remove(id)
+}
+
+func (eng *engine) doUpdateInstance(instance metapb.WorkflowInstance) error {
+	instance.Version++
+	req := rpcpb.AcquireUpdateInstanceRequest()
+	req.Instance = instance
+	_, err := eng.store.ExecCommand(req)
+	return err
 }
 
 func (eng *engine) getInstanceShards(instance metapb.WorkflowInstance) ([]metapb.WorkflowInstanceState, error) {

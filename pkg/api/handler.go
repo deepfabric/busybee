@@ -45,6 +45,10 @@ func (s *server) onReq(sid interface{}, req *rpcpb.Request) error {
 		return s.doTenantInit(ctx)
 	case rpcpb.StartingInstance:
 		return s.doStartInstance(ctx)
+	case rpcpb.UpdateCrowd:
+		return s.doUpdateCrowd(ctx)
+	case rpcpb.UpdateWorkflow:
+		return s.doUpdateWorkflow(ctx)
 	case rpcpb.StopInstance:
 		return s.doStopInstance(ctx)
 	case rpcpb.InstanceCountState:
@@ -136,6 +140,27 @@ func (s *server) doStartInstance(ctx ctx) error {
 	err := s.engine.StartInstance(ctx.req.StartInstance.Instance.Snapshot,
 		ctx.req.StartInstance.Instance.Crowd,
 		ctx.req.StartInstance.Instance.Workers)
+	if err != nil {
+		return err
+	}
+
+	s.onResp(ctx, nil, nil)
+	return nil
+}
+
+func (s *server) doUpdateWorkflow(ctx ctx) error {
+	err := s.engine.UpdateWorkflow(ctx.req.UpdateWorkflow.Workflow)
+	if err != nil {
+		return err
+	}
+
+	s.onResp(ctx, nil, nil)
+	return nil
+}
+
+func (s *server) doUpdateCrowd(ctx ctx) error {
+	err := s.engine.UpdateCrowd(ctx.req.UpdateCrowd.ID,
+		ctx.req.UpdateCrowd.Crowd)
 	if err != nil {
 		return err
 	}
@@ -305,8 +330,9 @@ func (s *server) onResp(arg interface{}, value []byte, err error) {
 		switch ctx.req.Type {
 		case rpcpb.Set, rpcpb.Delete, rpcpb.BMCreate, rpcpb.BMAdd,
 			rpcpb.BMRemove, rpcpb.BMClear, rpcpb.StartingInstance,
-			rpcpb.StopInstance, rpcpb.UpdateMapping, rpcpb.UpdateProfile,
-			rpcpb.AddEvent, rpcpb.ResetID:
+			rpcpb.UpdateCrowd, rpcpb.UpdateWorkflow, rpcpb.StopInstance,
+			rpcpb.UpdateMapping, rpcpb.UpdateProfile, rpcpb.AddEvent,
+			rpcpb.ResetID:
 			// empty response
 		case rpcpb.Get, rpcpb.GetIDSet:
 			protoc.MustUnmarshal(&resp.BytesResp, value)

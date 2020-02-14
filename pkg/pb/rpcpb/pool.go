@@ -30,6 +30,7 @@ var (
 	bmCountPool                  sync.Pool
 	bmRangePool                  sync.Pool
 	startingInstancePool         sync.Pool
+	updateInstancePool           sync.Pool
 	startedInstancePool          sync.Pool
 	stopInstancePool             sync.Pool
 	createInstanceStateShardPool sync.Pool
@@ -472,6 +473,21 @@ func AcquireStartingInstanceRequest() *StartingInstanceRequest {
 func ReleaseStartingInstanceRequest(value *StartingInstanceRequest) {
 	value.Reset()
 	startingInstancePool.Put(value)
+}
+
+// AcquireUpdateInstanceRequest returns value from pool
+func AcquireUpdateInstanceRequest() *UpdateInstanceRequest {
+	value := updateInstancePool.Get()
+	if value == nil {
+		return &UpdateInstanceRequest{}
+	}
+	return value.(*UpdateInstanceRequest)
+}
+
+// ReleaseUpdateInstanceRequest returns the value to pool
+func ReleaseUpdateInstanceRequest(value *UpdateInstanceRequest) {
+	value.Reset()
+	updateInstancePool.Put(value)
 }
 
 // AcquireStartedInstanceRequest returns value from pool

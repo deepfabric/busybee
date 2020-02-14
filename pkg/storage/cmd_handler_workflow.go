@@ -46,6 +46,42 @@ func (h *beeStorage) startingInstance(shard bhmetapb.Shard, req *raftcmdpb.Reque
 	return writtenBytes, changedBytes, resp
 }
 
+func (h *beeStorage) updateInstance(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *goetty.ByteBuf) (uint64, int64, *raftcmdpb.Response) {
+	resp := pb.AcquireResponse()
+	cmd := rpcpb.UpdateInstanceRequest{}
+	protoc.MustUnmarshal(&cmd, req.Cmd)
+
+	resp.Value = rpcpb.EmptyRespBytes
+
+	value, err := h.getValueWithPrefix(shard.ID, req.Key)
+	if err != nil {
+		log.Fatalf("save workflow instance %+v failed with %+v", cmd, err)
+	}
+	if len(value) == 0 {
+		return 0, 0, resp
+	}
+
+	switch value[0] {
+	case instanceStoppingType, instanceStoppedType:
+		return 0, 0, resp
+	}
+
+	old := metapb.WorkflowInstance{}
+	protoc.MustUnmarshal(&old, value[1:])
+
+	if old.Version >= cmd.Instance.Version {
+		return 0, 0, resp
+	}
+
+	err = h.getStore(shard.ID).Set(req.Key, appendValuePrefix(buf, protoc.MustMarshal(&cmd.Instance), instanceStartedType))
+	if err != nil {
+		log.Fatalf("set workflow instance %d started failed with %+v",
+			cmd.Instance.Snapshot.ID, err)
+	}
+
+	return uint64(len(req.Key) + len(value)), 0, resp
+}
+
 func (h *beeStorage) startedInstance(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *goetty.ByteBuf) (uint64, int64, *raftcmdpb.Response) {
 	resp := pb.AcquireResponse()
 	cmd := rpcpb.StartedInstanceRequest{}

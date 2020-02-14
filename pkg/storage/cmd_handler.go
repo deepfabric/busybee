@@ -20,6 +20,7 @@ func (h *beeStorage) init() {
 	h.AddReadFunc("bm-range", uint64(rpcpb.BMRange), h.bmrange)
 
 	h.AddWriteFunc("starting-instance", uint64(rpcpb.StartingInstance), h.startingInstance)
+	h.AddWriteFunc("update-instance", uint64(rpcpb.UpdateInstance), h.updateInstance)
 	h.AddWriteFunc("started-instance", uint64(rpcpb.StartedInstance), h.startedInstance)
 	h.AddWriteFunc("stop-instance", uint64(rpcpb.StopInstance), h.stopInstance)
 	h.AddWriteFunc("create-state", uint64(rpcpb.CreateInstanceStateShard), h.createInstanceStateShard)
@@ -130,6 +131,13 @@ func (h *beeStorage) BuildRequest(req *raftcmdpb.Request, cmd interface{}) error
 		req.Type = raftcmdpb.Write
 		req.Cmd = protoc.MustMarshal(msg)
 		rpcpb.ReleaseStartingInstanceRequest(msg)
+	case *rpcpb.UpdateInstanceRequest:
+		msg := cmd.(*rpcpb.UpdateInstanceRequest)
+		req.Key = StartedInstanceKey(msg.Instance.Snapshot.ID)
+		req.CustemType = uint64(rpcpb.UpdateInstance)
+		req.Type = raftcmdpb.Write
+		req.Cmd = protoc.MustMarshal(msg)
+		rpcpb.ReleaseUpdateInstanceRequest(msg)
 	case *rpcpb.StartedInstanceRequest:
 		msg := cmd.(*rpcpb.StartedInstanceRequest)
 		req.Key = StartedInstanceKey(msg.WorkflowID)

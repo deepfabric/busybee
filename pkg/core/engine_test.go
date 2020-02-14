@@ -291,7 +291,7 @@ func TestUpdateCrowd(t *testing.T) {
 	assert.Equal(t, uint64(0), m["step_end_1"], "TestUpdateCrowd failed")
 	assert.Equal(t, uint64(3), m["step_end_else"], "TestUpdateCrowd failed")
 
-	err = ng.UpdateInstanceCrowd(wid, util.MustMarshalBM(roaring.BitmapOf(1, 2, 3, 5)))
+	err = ng.UpdateCrowd(wid, util.MustMarshalBM(roaring.BitmapOf(1, 2, 3, 5)))
 	assert.NoError(t, err, "TestUpdateCrowd failed")
 
 	err = ng.Storage().PutToQueue(tid, 0, metapb.TenantInputGroup, protoc.MustMarshal(&metapb.Event{
@@ -320,6 +320,268 @@ func TestUpdateCrowd(t *testing.T) {
 	assert.Equal(t, uint64(1), m["step_start"], "TestUpdateCrowd failed")
 	assert.Equal(t, uint64(1), m["step_end_1"], "TestUpdateCrowd failed")
 	assert.Equal(t, uint64(2), m["step_end_else"], "TestUpdateCrowd failed")
+}
+
+func TestUpdateWorkflow(t *testing.T) {
+	store, deferFunc := storage.NewTestStorage(t, false)
+	defer deferFunc()
+
+	tid := uint64(10001)
+	wid := uint64(10000)
+
+	ng, err := NewEngine(store, notify.NewQueueBasedNotifier(store))
+	assert.NoError(t, err, "TestUpdateWorkflow failed")
+	assert.NoError(t, ng.Start(), "TestUpdateWorkflow failed")
+
+	err = ng.CreateTenantQueue(tid, 1)
+	assert.NoError(t, err, "TestUpdateWorkflow failed")
+	time.Sleep(time.Second)
+
+	bm := roaring.BitmapOf(1, 2, 3, 4)
+	err = ng.StartInstance(metapb.Workflow{
+		ID:       wid,
+		TenantID: tid,
+		Name:     "test_wf",
+		Steps: []metapb.Step{
+			metapb.Step{
+				Name: "step_start",
+				Execution: metapb.Execution{
+					Type: metapb.Branch,
+					Branches: []metapb.ConditionExecution{
+						metapb.ConditionExecution{
+							Condition: metapb.Expr{
+								Value: []byte("{num: event.uid} == 1"),
+							},
+							NextStep: "step_end_1",
+						},
+						metapb.ConditionExecution{
+							Condition: metapb.Expr{
+								Value: []byte("{num: event.uid} == 2"),
+							},
+							NextStep: "step_end_2",
+						},
+						metapb.ConditionExecution{
+							Condition: metapb.Expr{
+								Value: []byte("{num: event.uid} == 3"),
+							},
+							NextStep: "step_end_3",
+						},
+						metapb.ConditionExecution{
+							Condition: metapb.Expr{
+								Value: []byte("{num: event.uid} == 4"),
+							},
+							NextStep: "step_end_4",
+						},
+						metapb.ConditionExecution{
+							Condition: metapb.Expr{
+								Value: []byte("1 == 1"),
+							},
+							NextStep: "step_end_else",
+						},
+					},
+				},
+			},
+			metapb.Step{
+				Name: "step_end_1",
+				Execution: metapb.Execution{
+					Type:   metapb.Direct,
+					Direct: &metapb.DirectExecution{},
+				},
+			},
+			metapb.Step{
+				Name: "step_end_2",
+				Execution: metapb.Execution{
+					Type:   metapb.Direct,
+					Direct: &metapb.DirectExecution{},
+				},
+			},
+			metapb.Step{
+				Name: "step_end_3",
+				Execution: metapb.Execution{
+					Type:   metapb.Direct,
+					Direct: &metapb.DirectExecution{},
+				},
+			},
+			metapb.Step{
+				Name: "step_end_4",
+				Execution: metapb.Execution{
+					Type:   metapb.Direct,
+					Direct: &metapb.DirectExecution{},
+				},
+			},
+			metapb.Step{
+				Name: "step_end_else",
+				Execution: metapb.Execution{
+					Type:   metapb.Direct,
+					Direct: &metapb.DirectExecution{},
+				},
+			},
+		},
+	}, util.MustMarshalBM(bm), 3)
+	assert.NoError(t, err, "TestUpdateWorkflow failed")
+
+	time.Sleep(time.Second * 2)
+	c := 0
+	ng.(*engine).workers.Range(func(key, value interface{}) bool {
+		c++
+		return true
+	})
+	assert.Equal(t, 3, c, "TestUpdateWorkflow failed")
+
+	err = ng.Storage().PutToQueue(tid, 0, metapb.TenantInputGroup, protoc.MustMarshal(&metapb.Event{
+		Type: metapb.UserType,
+		User: &metapb.UserEvent{
+			TenantID: tid,
+			UserID:   1,
+			Data: []metapb.KV{
+				metapb.KV{
+					Key:   []byte("uid"),
+					Value: []byte("1"),
+				},
+			},
+		},
+	}), protoc.MustMarshal(&metapb.Event{
+		Type: metapb.UserType,
+		User: &metapb.UserEvent{
+			TenantID: tid,
+			UserID:   2,
+			Data: []metapb.KV{
+				metapb.KV{
+					Key:   []byte("uid"),
+					Value: []byte("2"),
+				},
+			},
+		},
+	}), protoc.MustMarshal(&metapb.Event{
+		Type: metapb.UserType,
+		User: &metapb.UserEvent{
+			TenantID: tid,
+			UserID:   3,
+			Data: []metapb.KV{
+				metapb.KV{
+					Key:   []byte("uid"),
+					Value: []byte("3"),
+				},
+			},
+		},
+	}))
+	assert.NoError(t, err, "TestUpdateWorkflow failed")
+
+	time.Sleep(time.Second * 2)
+
+	states, err := ng.InstanceCountState(wid)
+	assert.NoError(t, err, "TestUpdateWorkflow failed")
+	m := make(map[string]uint64)
+	for _, state := range states.States {
+		m[state.Step] = state.Count
+	}
+	assert.Equal(t, uint64(1), m["step_start"], "TestUpdateWorkflow failed")
+	assert.Equal(t, uint64(1), m["step_end_1"], "TestUpdateWorkflow failed")
+	assert.Equal(t, uint64(1), m["step_end_2"], "TestUpdateWorkflow failed")
+	assert.Equal(t, uint64(1), m["step_end_3"], "TestUpdateWorkflow failed")
+	assert.Equal(t, uint64(0), m["step_end_4"], "TestUpdateWorkflow failed")
+	assert.Equal(t, uint64(0), m["step_end_else"], "TestUpdateWorkflow failed")
+
+	err = ng.UpdateCrowd(wid, util.MustMarshalBM(roaring.BitmapOf(1, 2, 3, 5)))
+	assert.NoError(t, err, "TestUpdateCrowd failed")
+
+	err = ng.UpdateWorkflow(metapb.Workflow{
+		ID:       wid,
+		TenantID: tid,
+		Name:     "test_wf",
+		Steps: []metapb.Step{
+			metapb.Step{
+				Name: "step_start",
+				Execution: metapb.Execution{
+					Type: metapb.Branch,
+					Branches: []metapb.ConditionExecution{
+						metapb.ConditionExecution{
+							Condition: metapb.Expr{
+								Value: []byte("{num: event.uid} == 1"),
+							},
+							NextStep: "step_end_1",
+						},
+						metapb.ConditionExecution{
+							Condition: metapb.Expr{
+								Value: []byte("{num: event.uid} == 5"),
+							},
+							NextStep: "step_end_5",
+						},
+						metapb.ConditionExecution{
+							Condition: metapb.Expr{
+								Value: []byte("{num: event.uid} == 3"),
+							},
+							NextStep: "step_end_3",
+						},
+						metapb.ConditionExecution{
+							Condition: metapb.Expr{
+								Value: []byte("{num: event.uid} == 4"),
+							},
+							NextStep: "step_end_4",
+						},
+						metapb.ConditionExecution{
+							Condition: metapb.Expr{
+								Value: []byte("1 == 1"),
+							},
+							NextStep: "step_end_else",
+						},
+					},
+				},
+			},
+			metapb.Step{
+				Name: "step_end_1",
+				Execution: metapb.Execution{
+					Type:   metapb.Direct,
+					Direct: &metapb.DirectExecution{},
+				},
+			},
+			metapb.Step{
+				Name: "step_end_5",
+				Execution: metapb.Execution{
+					Type:   metapb.Direct,
+					Direct: &metapb.DirectExecution{},
+				},
+			},
+			metapb.Step{
+				Name: "step_end_3",
+				Execution: metapb.Execution{
+					Type:   metapb.Direct,
+					Direct: &metapb.DirectExecution{},
+				},
+			},
+			metapb.Step{
+				Name: "step_end_4",
+				Execution: metapb.Execution{
+					Type:   metapb.Direct,
+					Direct: &metapb.DirectExecution{},
+				},
+			},
+			metapb.Step{
+				Name: "step_end_else",
+				Execution: metapb.Execution{
+					Type:   metapb.Direct,
+					Direct: &metapb.DirectExecution{},
+				},
+			},
+		},
+	})
+	assert.NoError(t, err, "TestUpdateCrowd failed")
+
+	time.Sleep(time.Second * 2)
+
+	states, err = ng.InstanceCountState(wid)
+	assert.NoError(t, err, "TestUpdateCrowd failed")
+	m = make(map[string]uint64)
+	for _, state := range states.States {
+		m[state.Step] = state.Count
+	}
+
+	assert.Equal(t, uint64(1), m["step_start"], "TestUpdateWorkflow failed")
+	assert.Equal(t, uint64(1), m["step_end_1"], "TestUpdateWorkflow failed")
+	assert.Equal(t, uint64(0), m["step_end_5"], "TestUpdateWorkflow failed")
+	assert.Equal(t, uint64(1), m["step_end_3"], "TestUpdateWorkflow failed")
+	assert.Equal(t, uint64(0), m["step_end_4"], "TestUpdateWorkflow failed")
+	assert.Equal(t, uint64(0), m["step_end_else"], "TestUpdateWorkflow failed")
 }
 
 type errorNotify struct {

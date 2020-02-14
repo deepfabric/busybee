@@ -26,6 +26,7 @@ const (
 	timerAction
 	userEventAction
 	updateCrowdEventAction
+	updateWorkflowEventAction
 )
 
 type item struct {
@@ -154,6 +155,8 @@ func (w *stateWorker) run() {
 					w.doStepEvents(value.value.([]metapb.UserEvent), batch)
 				case updateCrowdEventAction:
 					value.cb.complete(w.doUpdateCrowd(value.value.([]byte)))
+				case updateWorkflowEventAction:
+					value.cb.complete(w.doUpdateWorkflow(value.value.(metapb.Workflow)))
 				}
 			}
 
@@ -190,34 +193,49 @@ func (w *stateWorker) onEvent(offset uint64, items ...[]byte) error {
 		case metapb.UpdateCrowdType:
 			if event.UpdateCrowd.WorkflowID == w.state.WorkflowID &&
 				event.UpdateCrowd.Index == w.state.Index {
-				err := w.doUserEvents(userEvents...)
+				err := w.doSystemEvent(updateCrowdEventAction,
+					event.UpdateCrowd.Crowd, userEvents)
 				if err != nil {
 					return err
 				}
 				userEvents = userEvents[:0]
-
-				err = w.doUpdateCrowdEvent(*event.UpdateCrowd)
+			}
+		case metapb.UpdateWorkflowType:
+			if event.UpdateWorkflow.Workflow.ID == w.state.WorkflowID {
+				err := w.doSystemEvent(updateWorkflowEventAction,
+					event.UpdateWorkflow.Workflow, userEvents)
 				if err != nil {
 					return err
 				}
+				userEvents = userEvents[:0]
 			}
 		}
 	}
 
-	return w.doUserEvents(userEvents...)
-}
-
-func (w *stateWorker) doUpdateCrowdEvent(event metapb.UpdateCrowdEvent) error {
-	if event.WorkflowID != w.state.WorkflowID &&
-		event.Index != w.state.Index {
-		return nil
+	if len(userEvents) > 0 {
+		return w.doEvent(userEventAction, userEvents)
 	}
 
+	return nil
+}
+
+func (w *stateWorker) doSystemEvent(action int, data interface{}, userEvents []metapb.UserEvent) error {
+	if len(userEvents) > 0 {
+		err := w.doEvent(userEventAction, userEvents)
+		if err != nil {
+			return err
+		}
+	}
+
+	return w.doEvent(action, data)
+}
+
+func (w *stateWorker) doEvent(action int, data interface{}) error {
 	cb := acquireCB()
 	cb.reset()
 	err := w.queue.Put(item{
-		action: updateCrowdEventAction,
-		value:  event.Crowd,
+		action: action,
+		value:  data,
 		cb:     cb,
 	})
 	if err != nil {
@@ -229,30 +247,6 @@ func (w *stateWorker) doUpdateCrowdEvent(event metapb.UpdateCrowdEvent) error {
 	releaseCB(cb)
 	if err != nil {
 		return err
-	}
-
-	return nil
-}
-
-func (w *stateWorker) doUserEvents(userEvents ...metapb.UserEvent) error {
-	if len(userEvents) > 0 {
-		cb := acquireCB()
-		cb.reset()
-		err := w.queue.Put(item{
-			action: userEventAction,
-			value:  userEvents,
-			cb:     cb,
-		})
-		if err != nil {
-			releaseCB(cb)
-			return err
-		}
-
-		err = cb.wait()
-		releaseCB(cb)
-		if err != nil {
-			return err
-		}
 	}
 
 	return nil
@@ -390,6 +384,53 @@ func (w *stateWorker) doUpdateCrowd(crowd []byte) error {
 	log.Infof("worker %s crowd updated to %d numbers",
 		w.key,
 		w.totalCrowds.GetCardinality())
+	return nil
+}
+
+func (w *stateWorker) doUpdateWorkflow(workflow metapb.Workflow) error {
+	oldCrowds := make(map[string]*roaring.Bitmap)
+	for idx, step := range w.state.States {
+		oldCrowds[step.Step.Name] = w.stepCrowds[idx]
+	}
+
+	w.steps = make(map[string]excution)
+	w.entryActions = make(map[string]string)
+	w.leaveActions = make(map[string]string)
+
+	var newStates []metapb.StepState
+	var newCrowds []*roaring.Bitmap
+	for _, step := range workflow.Steps {
+		exec, err := newExcution(step.Name, step.Execution)
+		if err != nil {
+			return err
+		}
+
+		w.steps[step.Name] = exec
+		w.entryActions[step.Name] = step.EnterAction
+		w.leaveActions[step.Name] = step.LeaveAction
+
+		if bm, ok := oldCrowds[step.Name]; ok {
+			newCrowds = append(newCrowds, bm)
+			newStates = append(newStates, metapb.StepState{
+				Step:  step,
+				Crowd: bbutil.MustMarshalBM(bm),
+			})
+			continue
+		}
+
+		newStates = append(newStates, metapb.StepState{
+			Step:  step,
+			Crowd: emptyBMData.Bytes(),
+		})
+		newCrowds = append(newCrowds, bbutil.AcquireBitmap())
+	}
+	w.stepCrowds = newCrowds
+
+	w.state.States = newStates
+	w.state.Version++
+
+	w.retryDo("exec update workflow", nil, w.execUpdate)
+	log.Infof("worker %s workflow updated", w.key)
 	return nil
 }
 

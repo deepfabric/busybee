@@ -145,28 +145,21 @@ func BMAlloc(new *roaring.Bitmap, shards ...*roaring.Bitmap) {
 	// in old not in new
 	removed := BMMinus(old, new)
 
-	totalRemoved := float64(0)
-	removes := make([]float64, len(shards), len(shards))
 	if removed.GetCardinality() > 0 {
-		for idx, shard := range shards {
-			n := shard.GetCardinality()
+		for _, shard := range shards {
 			BMRemove(shard, removed)
-			n = n - shard.GetCardinality()
-			totalRemoved += float64(n)
-			removes[idx] = float64(n)
 		}
 	}
 
 	totalAdded := float64(added.GetCardinality())
 	if totalAdded > 0 {
-		for i := 0; i < len(removes); i++ {
-			if removes[i] == 0 {
-				continue
-			}
-
-			removes[i] = (totalAdded * removes[i] / totalRemoved)
+		perAdded := make([]float64, len(shards), len(shards))
+		avg := float64(new.GetCardinality()) / float64(len(shards))
+		for idx, shard := range shards {
+			perAdded[idx] = (avg - float64(shard.GetCardinality()))
 		}
 
+		lastOp := len(shards) - 1
 		op := 0
 		itr := added.Iterator()
 		for {
@@ -174,9 +167,12 @@ func BMAlloc(new *roaring.Bitmap, shards ...*roaring.Bitmap) {
 				break
 			}
 
-			if removes[op] > 0 {
+			if perAdded[op] >= 1 || op == lastOp {
 				shards[op].Add(itr.Next())
-				removes[op]--
+				perAdded[op]--
+				if perAdded[op] <= 0 {
+					op++
+				}
 				continue
 			}
 
