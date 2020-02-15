@@ -8,7 +8,6 @@ import (
 	"github.com/deepfabric/busybee/pkg/core"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
-	"github.com/deepfabric/busybee/pkg/queue"
 	"github.com/deepfabric/busybee/pkg/storage"
 	"github.com/deepfabric/busybee/pkg/util"
 	"github.com/fagongzi/goetty"
@@ -544,12 +543,10 @@ func TestConcurrencyFetchOutput(t *testing.T) {
 
 	time.Sleep(time.Second)
 
-	_, err = eng.Storage().ExecCommandWithGroup(&rpcpb.QueueAddRequest{
-		Key: queue.PartitionKey(tid, 0),
-		Items: [][]byte{[]byte("1"), []byte("2"), []byte("3"),
-			[]byte("4"), []byte("5"), []byte("6"),
-			[]byte("7"), []byte("8"), []byte("9")},
-	}, metapb.TenantOutputGroup)
+	err = eng.Storage().PutToQueue(tid, 0, metapb.TenantOutputGroup,
+		[]byte("1"), []byte("2"), []byte("3"),
+		[]byte("4"), []byte("5"), []byte("6"),
+		[]byte("7"), []byte("8"), []byte("9"))
 	assert.NoError(t, err, "TestConcurrencyFetchOutput failed")
 
 	req.Reset()

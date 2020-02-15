@@ -14,19 +14,28 @@ func TestPreAlloc(t *testing.T) {
 	buf := goetty.NewByteBuf(256)
 	// [0,10)
 	preAllocRange(0, 10, 2, 0, buf)
-	assert.Equal(t, 2, buf.Readable()/25, "TestPreAlloc failed")
-	assert.Equal(t, uint64(0), goetty.Byte2UInt64(buf.RawBuf()[9:]))
-	assert.Equal(t, uint64(5), goetty.Byte2UInt64(buf.RawBuf()[17:]))
-	assert.Equal(t, uint64(5), goetty.Byte2UInt64(buf.RawBuf()[9+25:]))
-	assert.Equal(t, uint64(10), goetty.Byte2UInt64(buf.RawBuf()[17+25:]))
+	data := buf.RawBuf()[16:buf.GetWriteIndex()]
+	assert.Equal(t, 2, len(data)/rangeLength, "TestPreAlloc failed")
+	assert.Equal(t, uint64(0), goetty.Byte2UInt64(data[rangeStartOffset:]))
+	assert.Equal(t, uint64(5), goetty.Byte2UInt64(data[rangeEndOffset:]))
+	assert.Equal(t, uint64(5), goetty.Byte2UInt64(data[rangeStartOffset+25:]))
+	assert.Equal(t, uint64(10), goetty.Byte2UInt64(data[rangeEndOffset+25:]))
 
 	buf.Clear()
 	preAllocRange(0, 11, 2, 0, buf)
-	assert.Equal(t, 2, buf.Readable()/25, "TestPreAlloc failed")
-	assert.Equal(t, uint64(0), goetty.Byte2UInt64(buf.RawBuf()[9:]))
-	assert.Equal(t, uint64(6), goetty.Byte2UInt64(buf.RawBuf()[17:]))
-	assert.Equal(t, uint64(6), goetty.Byte2UInt64(buf.RawBuf()[9+25:]))
-	assert.Equal(t, uint64(11), goetty.Byte2UInt64(buf.RawBuf()[17+25:]))
+	data = buf.RawBuf()[16:buf.GetWriteIndex()]
+	assert.Equal(t, 2, len(data)/rangeLength, "TestPreAlloc failed")
+	assert.Equal(t, uint64(0), goetty.Byte2UInt64(data[rangeStartOffset:]))
+	assert.Equal(t, uint64(6), goetty.Byte2UInt64(data[rangeEndOffset:]))
+	assert.Equal(t, uint64(6), goetty.Byte2UInt64(data[rangeStartOffset+25:]))
+	assert.Equal(t, uint64(11), goetty.Byte2UInt64(data[rangeEndOffset+25:]))
+
+	buf.Clear()
+	preAllocRange(1, 2, 1, 0, buf)
+	data = buf.RawBuf()[16:buf.GetWriteIndex()]
+	assert.Equal(t, 1, len(data)/rangeLength, "TestPreAlloc failed")
+	assert.Equal(t, uint64(1), goetty.Byte2UInt64(data[rangeStartOffset:]))
+	assert.Equal(t, uint64(2), goetty.Byte2UInt64(data[rangeEndOffset:]))
 }
 
 func TestAllocRange(t *testing.T) {

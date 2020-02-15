@@ -7,7 +7,7 @@ import (
 )
 
 type executionbatch struct {
-	event    metapb.Event
+	event    metapb.UserEvent
 	from     string
 	to       string
 	crowd    *roaring.Bitmap
@@ -38,14 +38,14 @@ func (b *executionbatch) next(notify bool) {
 		b.notify()
 	}
 
-	b.event = metapb.Event{}
+	b.event = metapb.UserEvent{}
 	b.from = ""
 	b.to = ""
 	b.crowd = nil
 }
 
 func (b *executionbatch) reset() {
-	b.event = metapb.Event{}
+	b.event = metapb.UserEvent{}
 	b.from = ""
 	b.to = ""
 	b.crowd = nil

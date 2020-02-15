@@ -6,7 +6,6 @@ import (
 	"github.com/deepfabric/beehive/util"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
-	"github.com/deepfabric/busybee/pkg/queue"
 	"github.com/deepfabric/busybee/pkg/storage"
 	"github.com/fagongzi/util/protoc"
 )
@@ -134,7 +133,7 @@ func (s *server) doTenantInit(ctx ctx) error {
 func (s *server) doStartInstance(ctx ctx) error {
 	err := s.engine.StartInstance(ctx.req.StartInstance.Instance.Snapshot,
 		ctx.req.StartInstance.Instance.Crowd,
-		ctx.req.StartInstance.Instance.MaxPerShard)
+		ctx.req.StartInstance.Instance.Workers)
 	if err != nil {
 		return err
 	}
@@ -200,6 +199,7 @@ func (s *server) doScanMapping(ctx ctx) error {
 	scanReq.Start = storage.MappingIDKey(ctx.req.ScanMapping.ID, ctx.req.ScanMapping.From)
 	scanReq.End = storage.MappingIDKey(ctx.req.ScanMapping.ID, ctx.req.ScanMapping.To)
 	scanReq.Limit = ctx.req.ScanMapping.Limit
+	scanReq.Skip = 1
 
 	s.engine.Storage().AsyncExecCommand(scanReq, s.onResp, ctx)
 	return nil
@@ -258,7 +258,7 @@ func (s *server) doAddEvent(ctx ctx) error {
 
 func (s *server) doFetchNotify(ctx ctx) error {
 	req := rpcpb.AcquireQueueFetchRequest()
-	req.Key = queue.PartitionKey(ctx.req.FetchNotify.ID, 0)
+	req.Key = storage.PartitionKey(ctx.req.FetchNotify.ID, 0)
 	req.CompletedOffset = ctx.req.FetchNotify.CompletedOffset
 	req.Count = ctx.req.FetchNotify.Count
 	req.Concurrency = ctx.req.FetchNotify.Concurrency

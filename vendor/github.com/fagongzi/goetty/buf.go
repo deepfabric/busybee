@@ -231,6 +231,16 @@ func (b *ByteBuf) SetWriterIndex(newWriterIndex int) error {
 	return nil
 }
 
+// MarkWrite mark current write index
+func (b *ByteBuf) MarkWrite() {
+	b.markedIndex = b.writerIndex
+}
+
+// WrittenDataAfterMark returns the data after mark write
+func (b *ByteBuf) WrittenDataAfterMark() []byte {
+	return b.buf[b.markedIndex:b.writerIndex]
+}
+
 // MarkN mark a index offset based by currently read index
 func (b *ByteBuf) MarkN(n int) error {
 	return b.MarkIndex(b.readerIndex + n)

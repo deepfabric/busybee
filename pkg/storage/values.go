@@ -13,15 +13,20 @@ var (
 	instanceStoppingType byte = 0x03
 	instanceStoppedType  byte = 0x04
 
-	runingStateType  byte = 0x05
+	runningStateType byte = 0x05
 	stoppedStateType byte = 0x06
 )
 
 func appendValuePrefix(buf *goetty.ByteBuf, value []byte, prefix byte) []byte {
-	idx := buf.GetWriteIndex()
+	buf.WrittenDataAfterMark()
 	buf.WriteByte(prefix)
 	buf.Write(value)
-	return buf.RawBuf()[idx:buf.GetWriteIndex()]
+	return buf.WrittenDataAfterMark()
+}
+
+// RunningInstanceState returns the  is running state key
+func RunningInstanceState(value []byte) bool {
+	return value[0] == runningStateType
 }
 
 // OriginInstanceStatePBValue returns origin instance state pb value
@@ -30,20 +35,20 @@ func OriginInstanceStatePBValue(value []byte) []byte {
 }
 
 func consumerCommittedValue(offset uint64, buf *goetty.ByteBuf) []byte {
-	idx := buf.GetWriteIndex()
+	buf.WrittenDataAfterMark()
 	buf.WriteUint64(offset)
 	buf.WriteInt64(time.Now().Unix())
-	return buf.RawBuf()[idx:buf.GetWriteIndex()]
+	return buf.WrittenDataAfterMark()
 }
 
 func int64Value(value int64, buf *goetty.ByteBuf) []byte {
-	idx := buf.GetWriteIndex()
+	buf.WrittenDataAfterMark()
 	buf.WriteInt64(value)
-	return buf.RawBuf()[idx:buf.GetWriteIndex()]
+	return buf.WrittenDataAfterMark()
 }
 
 func uint64Value(value uint64, buf *goetty.ByteBuf) []byte {
-	idx := buf.GetWriteIndex()
+	buf.WrittenDataAfterMark()
 	buf.WriteUint64(value)
-	return buf.RawBuf()[idx:buf.GetWriteIndex()]
+	return buf.WrittenDataAfterMark()
 }

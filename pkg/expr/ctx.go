@@ -6,7 +6,7 @@ import (
 
 // Ctx expr excution ctx
 type Ctx interface {
-	Event() metapb.Event
+	Event() metapb.UserEvent
 	Profile([]byte) ([]byte, error)
 	KV([]byte) ([]byte, error)
 }

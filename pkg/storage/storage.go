@@ -6,7 +6,6 @@ import (
 	"github.com/deepfabric/beehive"
 	"github.com/deepfabric/beehive/raftstore"
 	"github.com/deepfabric/beehive/server"
-	beehiveStorage "github.com/deepfabric/beehive/storage"
 	bhstorage "github.com/deepfabric/beehive/storage"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
@@ -24,7 +23,7 @@ type Storage interface {
 	Start() error
 	// Close close the storage
 	Close()
-	// WatchInstance watch instance
+	// WatchInstance watch instance event
 	WatchEvent() chan Event
 	// Set set key value
 	Set([]byte, []byte) error
@@ -32,6 +31,10 @@ type Storage interface {
 	Get([]byte) ([]byte, error)
 	// Delete remove the key from the store
 	Delete([]byte) error
+	// Scan scan [start,end) data
+	Scan([]byte, []byte, uint64, int32) ([][]byte, error)
+	// PutToQueue put data to queue
+	PutToQueue(id uint64, partition uint64, group metapb.Group, data ...[]byte) error
 	// ExecCommand exec command
 	ExecCommand(cmd interface{}) ([]byte, error)
 	// AsyncExecCommand async exec command
@@ -54,8 +57,8 @@ type beeStorage struct {
 
 // NewStorage returns a beehive request handler
 func NewStorage(dataPath string,
-	metadataStorages []beehiveStorage.MetadataStorage,
-	dataStorages []beehiveStorage.DataStorage) (Storage, error) {
+	metadataStorages []bhstorage.MetadataStorage,
+	dataStorages []bhstorage.DataStorage) (Storage, error) {
 
 	h := &beeStorage{
 		eventC: make(chan Event, 1024),
@@ -127,6 +130,35 @@ func (h *beeStorage) Delete(key []byte) error {
 	req.Key = key
 
 	_, err := h.ExecCommand(req)
+	return err
+}
+
+func (h *beeStorage) Scan(start []byte, end []byte, limit uint64, skipPrefix int32) ([][]byte, error) {
+	req := rpcpb.AcquireScanRequest()
+	req.Start = start
+	req.End = end
+	req.Limit = limit
+	req.Skip = skipPrefix
+
+	data, err := h.ExecCommand(req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := rpcpb.AcquireBytesSliceResponse()
+	protoc.MustUnmarshal(resp, data)
+	items := resp.Values
+
+	rpcpb.ReleaseBytesSliceResponse(resp)
+	return items, nil
+}
+
+func (h *beeStorage) PutToQueue(id uint64, partition uint64, group metapb.Group, data ...[]byte) error {
+	req := rpcpb.AcquireQueueAddRequest()
+	req.Key = PartitionKey(id, partition)
+	req.Items = data
+
+	_, err := h.ExecCommandWithGroup(req, group)
 	return err
 }
 

@@ -24,7 +24,7 @@ func init() {
 // Consumer a simple queue consumer
 type Consumer interface {
 	// Start start the consumer
-	Start(batch uint64, fn func(uint64, ...[]byte) error)
+	Start(batch, concurrency uint64, fn func(uint64, ...[]byte) error)
 	// Stop stop consumer
 	Stop()
 }
@@ -61,10 +61,10 @@ func NewConsumer(id uint64, group metapb.Group, store storage.Storage, name []by
 	}, nil
 }
 
-func (c *consumer) Start(batch uint64, fn func(uint64, ...[]byte) error) {
+func (c *consumer) Start(batch, concurrency uint64, fn func(uint64, ...[]byte) error) {
 	for i := uint64(0); i < c.partitions; i++ {
 		ctx, cancel := context.WithCancel(context.Background())
-		c.startPartition(ctx, i, batch, fn)
+		c.startPartition(ctx, i, batch, concurrency, fn)
 		c.cancels = append(c.cancels, cancel)
 	}
 }
@@ -75,9 +75,9 @@ func (c *consumer) Stop() {
 	}
 }
 
-func (c *consumer) startPartition(ctx context.Context, idx, batch uint64, fn func(uint64, ...[]byte) error) {
+func (c *consumer) startPartition(ctx context.Context, idx, batch, concurrency uint64, fn func(uint64, ...[]byte) error) {
 	offset := uint64(0)
-	key := PartitionKey(c.id, idx)
+	key := storage.PartitionKey(c.id, idx)
 	go func() {
 		for {
 			select {
@@ -92,6 +92,7 @@ func (c *consumer) startPartition(ctx context.Context, idx, batch uint64, fn fun
 				req.CompletedOffset = offset
 				req.Consumer = c.consumer
 				req.Count = batch
+				req.Concurrency = concurrency
 
 				value, err := c.store.ExecCommandWithGroup(req, c.group)
 				if err != nil {

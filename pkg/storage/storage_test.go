@@ -9,6 +9,7 @@ import (
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/deepfabric/busybee/pkg/util"
+	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/util/protoc"
 	"github.com/stretchr/testify/assert"
 )
@@ -411,4 +412,88 @@ func TestUpdateMapping(t *testing.T) {
 			assert.Equal(t, "id2-v1", value.Value, "TestUpdateMapping failed")
 		}
 	}
+}
+
+func TestPutToQueue(t *testing.T) {
+	store, deferFunc := NewTestStorage(t, true)
+	defer deferFunc()
+
+	err := store.RaftStore().AddShards(bhmetapb.Shard{
+		Start:        goetty.Uint64ToBytes(10),
+		End:          goetty.Uint64ToBytes(11),
+		Group:        uint64(metapb.TenantInputGroup),
+		DisableSplit: true,
+	})
+	assert.NoError(t, err, "TestPutToQueue failed")
+
+	time.Sleep(time.Second * 1)
+
+	err = store.PutToQueue(10, 0, metapb.TenantInputGroup, protoc.MustMarshal(&metapb.Event{
+		Type: metapb.UserType,
+		User: &metapb.UserEvent{
+			TenantID: 10000,
+			UserID:   1,
+			Data: []metapb.KV{
+				metapb.KV{
+					Key:   []byte("uid"),
+					Value: []byte("1"),
+				},
+			},
+		},
+	}), protoc.MustMarshal(&metapb.Event{
+		Type: metapb.UserType,
+		User: &metapb.UserEvent{
+			TenantID: 10000,
+			UserID:   2,
+			Data: []metapb.KV{
+				metapb.KV{
+					Key:   []byte("uid"),
+					Value: []byte("2"),
+				},
+			},
+		},
+	}), protoc.MustMarshal(&metapb.Event{
+		Type: metapb.UserType,
+		User: &metapb.UserEvent{
+			TenantID: 10000,
+			UserID:   3,
+			Data: []metapb.KV{
+				metapb.KV{
+					Key:   []byte("uid"),
+					Value: []byte("3"),
+				},
+			},
+		},
+	}))
+	assert.NoError(t, err, "TestPutToQueue failed")
+
+	req := rpcpb.AcquireQueueFetchRequest()
+	req.Key = PartitionKey(10, 0)
+	req.Count = 3
+	req.Consumer = []byte("c")
+	data, err := store.ExecCommandWithGroup(req, metapb.TenantInputGroup)
+	assert.NoError(t, err, "TestPutToQueue failed")
+
+	resp := rpcpb.AcquireBytesSliceResponse()
+	protoc.MustUnmarshal(resp, data)
+	assert.Equal(t, 3, len(resp.Values), "TestPutToQueue failed")
+	for idx, v := range resp.Values {
+		evt := &metapb.Event{}
+		protoc.MustUnmarshal(evt, v)
+
+		assert.Equal(t, metapb.UserType, evt.Type, "TestPutToQueue failed")
+		assert.Equal(t, 1, len(evt.User.Data), "TestPutToQueue failed")
+		assert.Equal(t, fmt.Sprintf("%d", idx+1), string(evt.User.Data[0].Value), "TestPutToQueue failed")
+	}
+
+	req.Reset()
+	req.Key = PartitionKey(10, 0)
+	req.Count = 3
+	req.Consumer = []byte("c")
+	req.CompletedOffset = resp.LastValue
+	data, err = store.ExecCommandWithGroup(req, metapb.TenantInputGroup)
+	assert.NoError(t, err, "TestPutToQueue failed")
+	resp.Reset()
+	protoc.MustUnmarshal(resp, data)
+	assert.Equal(t, 0, len(resp.Values), "TestPutToQueue failed")
 }

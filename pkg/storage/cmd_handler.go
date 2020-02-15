@@ -22,7 +22,7 @@ func (h *beeStorage) init() {
 	h.AddWriteFunc("starting-instance", uint64(rpcpb.StartingInstance), h.startingInstance)
 	h.AddWriteFunc("started-instance", uint64(rpcpb.StartedInstance), h.startedInstance)
 	h.AddWriteFunc("stop-instance", uint64(rpcpb.StopInstance), h.stopInstance)
-	h.AddWriteFunc("create-state", uint64(rpcpb.CreateInstanceStateShard), h.createState)
+	h.AddWriteFunc("create-state", uint64(rpcpb.CreateInstanceStateShard), h.createInstanceStateShard)
 	h.AddWriteFunc("update-state", uint64(rpcpb.UpdateInstanceStateShard), h.updateState)
 	h.AddWriteFunc("remove-state", uint64(rpcpb.RemoveInstanceStateShard), h.removeState)
 	h.AddWriteFunc("queue-fetch", uint64(rpcpb.QueueFetch), h.queueFetch)
@@ -146,21 +146,21 @@ func (h *beeStorage) BuildRequest(req *raftcmdpb.Request, cmd interface{}) error
 		rpcpb.ReleaseStopInstanceRequest(msg)
 	case *rpcpb.CreateInstanceStateShardRequest:
 		msg := cmd.(*rpcpb.CreateInstanceStateShardRequest)
-		req.Key = InstanceShardKey(msg.State.WorkflowID, msg.State.Start, msg.State.End)
+		req.Key = InstanceShardKey(msg.State.WorkflowID, msg.State.Index)
 		req.CustemType = uint64(rpcpb.CreateInstanceStateShard)
 		req.Type = raftcmdpb.Write
 		req.Cmd = protoc.MustMarshal(msg)
 		rpcpb.ReleaseCreateInstanceStateShardRequest(msg)
 	case *rpcpb.UpdateInstanceStateShardRequest:
 		msg := cmd.(*rpcpb.UpdateInstanceStateShardRequest)
-		req.Key = InstanceShardKey(msg.State.WorkflowID, msg.State.Start, msg.State.End)
+		req.Key = InstanceShardKey(msg.State.WorkflowID, msg.State.Index)
 		req.CustemType = uint64(rpcpb.UpdateInstanceStateShard)
 		req.Type = raftcmdpb.Write
 		req.Cmd = protoc.MustMarshal(msg)
 		rpcpb.ReleaseUpdateInstanceStateShardRequest(msg)
 	case *rpcpb.RemoveInstanceStateShardRequest:
 		msg := cmd.(*rpcpb.RemoveInstanceStateShardRequest)
-		req.Key = InstanceShardKey(msg.WorkflowID, msg.Start, msg.End)
+		req.Key = InstanceShardKey(msg.WorkflowID, msg.Index)
 		req.CustemType = uint64(rpcpb.RemoveInstanceStateShard)
 		req.Type = raftcmdpb.Write
 		req.Cmd = protoc.MustMarshal(msg)

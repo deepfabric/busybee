@@ -8,6 +8,12 @@ option (gogoproto.sizer_all) = true;
 option (gogoproto.unmarshaler_all) = true;
 option (gogoproto.goproto_enum_prefix_all) = false;
 
+// EventType tenant input event type
+enum EventType {
+    UserType        = 0;
+    UpdateCrowdType = 1;
+}
+
 // IDValue is a id value
 message IDValue {
     string value  = 1;
@@ -19,8 +25,22 @@ message IDSet {
     repeated IDValue values = 1 [(gogoproto.nullable) = false];
 }
 
-// Event is process definition
+// Event tenant event
 message Event {
+    EventType         type         = 1;
+    UserEvent         user         = 2;
+    UpdateCrowdEvent  updateCrowd  = 3;
+}
+
+// UpdateCrowdEvent update crowd event
+message UpdateCrowdEvent {
+    uint64 workflowID = 1;
+    uint32 index      = 2;
+    bytes  crowd      = 3;
+}
+
+// UserEvent is process definition
+message UserEvent {
     uint32 userID     = 1;
     uint64 tenantID   = 2;
     uint64 workflowID = 3;
@@ -65,20 +85,19 @@ message Workflow {
 message WorkflowInstance {
     Workflow snapshot    = 1 [(gogoproto.nullable) = false];
     bytes    crowd       = 2;
-    uint64   maxPerShard = 3;
+    uint64   workers     = 3;
     int64    startedAt   = 4;
     int64    stoppedAt   = 5;
 }
 
-// WorkflowInstanceState workflow instance state, uid in [start,end). instance : instanceState = 1 : N
+// WorkflowInstanceState workflow instance state. instance : instanceState = 1 : N
 message WorkflowInstanceState {
     uint64             tenantID   = 1;
     uint64             workflowID = 2;
-    uint32             start      = 3;
-    uint32             end        = 4;
-    repeated StepState states     = 5 [(gogoproto.nullable) = false];
-    uint64             version    = 6;
-    int64              stopAt     = 7;
+    uint32             index      = 3;
+    repeated StepState states     = 4 [(gogoproto.nullable) = false];
+    uint64             version    = 5;
+    int64              stopAt     = 6;
 }
 
 // CountState step count state

@@ -180,8 +180,7 @@ message UpdateInstanceStateShardRequest {
 // RemoveInstanceStateShardRequest remove a instance state
 message RemoveInstanceStateShardRequest {
     uint64 workflowID = 1;
-    uint32 start      = 2;
-    uint32 end        = 3;
+    uint32 index      = 2;
 }
 
 // InstanceCountStateRequest instance count state
@@ -260,7 +259,7 @@ message GetProfileRequest {
 
 // AddEventRequest add event
 message AddEventRequest {
-    metapb.Event event = 1 [(gogoproto.nullable) = false];
+    metapb.UserEvent event = 1 [(gogoproto.nullable) = false];
 }
 
 // FetchNotifyRequest fetch notify request
@@ -289,6 +288,7 @@ message ScanRequest {
     bytes  start = 1;
     bytes  end   = 2;
     uint64 limit = 3;
+    int32  skip  = 4;
 }
 
 // ErrorResponse error response 

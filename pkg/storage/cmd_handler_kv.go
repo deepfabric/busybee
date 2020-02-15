@@ -92,20 +92,20 @@ func (h *beeStorage) scan(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *goe
 	protoc.MustUnmarshal(&customReq, req.Cmd)
 
 	prefix := req.Key[0 : len(req.Key)-len(customReq.End)]
-	idx := buf.GetWriteIndex()
+	buf.MarkWrite()
 	if len(prefix) > 0 {
 		buf.Write(prefix)
 		buf.Write(customReq.End)
 	}
-	end := buf.RawBuf()[idx:buf.GetWriteIndex()]
+	end := buf.WrittenDataAfterMark()
 
 	if len(shard.End) > 0 {
-		idx = buf.GetWriteIndex()
+		buf.MarkWrite()
 		if len(prefix) > 0 {
 			buf.Write(prefix)
 			buf.Write(shard.End)
 		}
-		max := buf.RawBuf()[idx:buf.GetWriteIndex()]
+		max := buf.WrittenDataAfterMark()
 
 		if bytes.Compare(end, max) > 0 {
 			end = max
@@ -114,7 +114,7 @@ func (h *beeStorage) scan(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *goe
 
 	customResp := rpcpb.AcquireBytesSliceResponse()
 	err := h.getStore(shard.ID).Scan(req.Key, end, func(key, value []byte) (bool, error) {
-		customResp.Values = append(customResp.Values, value[1:])
+		customResp.Values = append(customResp.Values, value[customReq.Skip:])
 		if uint64(len(customResp.Values)) >= customReq.Limit {
 			return false, nil
 		}

@@ -7,7 +7,6 @@ import (
 	hbmetapb "github.com/deepfabric/beehive/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
-	"github.com/deepfabric/busybee/pkg/queue"
 	"github.com/deepfabric/busybee/pkg/storage"
 	"github.com/fagongzi/util/protoc"
 	"github.com/stretchr/testify/assert"
@@ -20,8 +19,8 @@ func TestNotify(t *testing.T) {
 	tenantID := uint64(1)
 	assert.NoError(t, s.RaftStore().AddShards(hbmetapb.Shard{
 		Group: uint64(metapb.TenantOutputGroup),
-		Start: queue.PartitionKey(tenantID, 0),
-		End:   queue.PartitionKey(tenantID, 1),
+		Start: storage.PartitionKey(tenantID, 0),
+		End:   storage.PartitionKey(tenantID, 1),
 	}), "TestNotify failed")
 
 	time.Sleep(time.Second * 2)
@@ -32,7 +31,7 @@ func TestNotify(t *testing.T) {
 	}), "TestNotify failed")
 
 	req := rpcpb.AcquireQueueFetchRequest()
-	req.Key = queue.PartitionKey(tenantID, 0)
+	req.Key = storage.PartitionKey(tenantID, 0)
 	req.CompletedOffset = 0
 	req.Consumer = []byte("c")
 	req.Count = 1

@@ -28,4 +28,12 @@ docker: ; $(info ======== compiled busybee docker)
 	docker build -t deepfabric/busybee:$(VERSION) -f Dockerfile .
 	docker tag deepfabric/busybee:$(VERSION) deepfabric/busybee
 
+.PHONY: test
+test: ; $(info ======== test busybee)
+	env GO111MODULE=off go test github.com/deepfabric/busybee/pkg/storage
+	env GO111MODULE=off go test github.com/deepfabric/busybee/pkg/queue
+	env GO111MODULE=off go test github.com/deepfabric/busybee/pkg/notify
+	env GO111MODULE=off go test github.com/deepfabric/busybee/pkg/expr
+	env GO111MODULE=off go test github.com/deepfabric/busybee/pkg/core
+	env GO111MODULE=off go test github.com/deepfabric/busybee/pkg/api
 .DEFAULT_GOAL := busybee

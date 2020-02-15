@@ -130,7 +130,7 @@ func (h *beeStorage) stopInstance(shard bhmetapb.Shard, req *raftcmdpb.Request, 
 	return uint64(len(req.Key) + len(value)), 0, resp
 }
 
-func (h *beeStorage) createState(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *goetty.ByteBuf) (uint64, int64, *raftcmdpb.Response) {
+func (h *beeStorage) createInstanceStateShard(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *goetty.ByteBuf) (uint64, int64, *raftcmdpb.Response) {
 	resp := pb.AcquireResponse()
 	cmd := rpcpb.CreateInstanceStateShardRequest{}
 	protoc.MustUnmarshal(&cmd, req.Cmd)
@@ -145,11 +145,11 @@ func (h *beeStorage) createState(shard bhmetapb.Shard, req *raftcmdpb.Request, b
 		return 0, 0, resp
 	}
 
-	idx := buf.GetWriteIndex()
-	buf.WriteByte(runingStateType)
+	buf.MarkWrite()
+	buf.WriteByte(runningStateType)
 	buf.WriteUInt64(cmd.State.Version)
 	buf.Write(protoc.MustMarshal(&cmd.State))
-	err = h.getStore(shard.ID).Set(req.Key, buf.RawBuf()[idx:buf.GetWriteIndex()])
+	err = h.getStore(shard.ID).Set(req.Key, buf.WrittenDataAfterMark())
 	if err != nil {
 		log.Fatalf("save workflow instance %+v failed with %+v", cmd, err)
 	}
@@ -191,11 +191,11 @@ func (h *beeStorage) updateState(shard bhmetapb.Shard, req *raftcmdpb.Request, b
 		return 0, 0, resp
 	}
 
-	idx := buf.GetWriteIndex()
-	buf.WriteByte(runingStateType)
+	buf.MarkWrite()
+	buf.WriteByte(runningStateType)
 	buf.WriteUInt64(cmd.State.Version)
 	buf.Write(protoc.MustMarshal(&cmd.State))
-	err = h.getStore(shard.ID).Set(req.Key, buf.RawBuf()[idx:buf.GetWriteIndex()])
+	err = h.getStore(shard.ID).Set(req.Key, buf.WrittenDataAfterMark())
 	if err != nil {
 		log.Fatalf("update workflow instance state %+v failed with %+v", cmd, err)
 	}
@@ -228,10 +228,9 @@ func (h *beeStorage) removeState(shard bhmetapb.Shard, req *raftcmdpb.Request, b
 	value[0] = stoppedStateType
 	err = h.getStore(shard.ID).Set(req.Key, value)
 	if err != nil {
-		log.Fatalf("remove workflow instance state %d/[%d,%d) failed with %+v",
+		log.Fatalf("remove workflow instance state %d/%d failed with %+v",
 			cmd.WorkflowID,
-			cmd.Start,
-			cmd.End,
+			cmd.Index,
 			err)
 	}
 

@@ -72,11 +72,11 @@ func (h *beeStorage) queueFetch(shard bhmetapb.Shard, req *raftcmdpb.Request, bu
 
 	if allocNewRanges {
 		now := time.Now().Unix()
-		idx := buf.GetWriteIndex()
+		buf.MarkWrite()
 		buf.WriteUint64(start - 1)
 		buf.WriteInt64(now)
 		end = preAllocRange(start, end, queueFetch.Concurrency, now, buf)
-		wb.Set(key, buf.RawBuf()[idx:buf.GetWriteIndex()])
+		wb.Set(key, buf.WrittenDataAfterMark())
 		items = items[:int(end-start)]
 	}
 
@@ -219,7 +219,7 @@ func allocRange(key []byte, store storage.DataStorage, wb util.WriteBatch,
 
 func preAllocRange(start, end, concurrency uint64, now int64, buf *goetty.ByteBuf) uint64 {
 	if concurrency == 0 {
-		return 0
+		return end
 	}
 
 	buf.WriteUint64(start)

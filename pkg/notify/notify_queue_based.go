@@ -2,8 +2,6 @@ package notify
 
 import (
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
-	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
-	"github.com/deepfabric/busybee/pkg/queue"
 	"github.com/deepfabric/busybee/pkg/storage"
 	"github.com/fagongzi/util/protoc"
 )
@@ -25,9 +23,5 @@ func (n *queueNotifier) Notify(id uint64, notifies ...metapb.Notify) error {
 		items = append(items, protoc.MustMarshal(&nt))
 	}
 
-	req := rpcpb.AcquireQueueAddRequest()
-	req.Items = items
-	req.Key = queue.PartitionKey(id, 0)
-	_, err := n.store.ExecCommandWithGroup(req, metapb.TenantOutputGroup)
-	return err
+	return n.store.PutToQueue(id, 0, metapb.TenantOutputGroup, items...)
 }

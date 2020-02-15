@@ -12,7 +12,7 @@ import (
 )
 
 type testCtx struct {
-	event metapb.Event
+	event metapb.UserEvent
 	kvs   map[string]string
 }
 
@@ -36,7 +36,7 @@ func (c *testCtx) setEventKV(key, value string) {
 	})
 }
 
-func (c *testCtx) Event() metapb.Event {
+func (c *testCtx) Event() metapb.UserEvent {
 	return c.event
 }
 

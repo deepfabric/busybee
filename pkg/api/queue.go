@@ -9,8 +9,6 @@ import (
 
 	"github.com/deepfabric/busybee/pkg/core"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
-	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
-	"github.com/deepfabric/busybee/pkg/queue"
 	"github.com/deepfabric/busybee/pkg/storage"
 	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/util/protoc"
@@ -91,7 +89,6 @@ func (q *tenantQueue) stop() {
 
 func (q *tenantQueue) startPartition(partition uint64, pq *task.Queue) {
 	q.runner.RunCancelableTask(func(c context.Context) {
-		key := queue.PartitionKey(q.id, partition)
 		items := make([]interface{}, 16, 16)
 		var events [][]byte
 
@@ -112,14 +109,14 @@ func (q *tenantQueue) startPartition(partition uint64, pq *task.Queue) {
 					return
 				}
 
-				events = append(events, protoc.MustMarshal(&item.(ctx).req.AddEvent.Event))
+				events = append(events, protoc.MustMarshal(&metapb.Event{
+					Type: metapb.UserType,
+					User: &item.(ctx).req.AddEvent.Event,
+				}))
 			}
 
-			req := rpcpb.AcquireQueueAddRequest()
-			req.Items = events
-			req.Key = key
-			_, err = q.eng.Storage().ExecCommandWithGroup(req, metapb.TenantInputGroup)
-
+			err = q.eng.Storage().PutToQueue(q.id, partition,
+				metapb.TenantInputGroup, events...)
 			for i := int64(0); i < n; i++ {
 				q.cb(items[i], nil, err)
 			}
