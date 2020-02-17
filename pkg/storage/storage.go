@@ -27,6 +27,8 @@ type Storage interface {
 	WatchEvent() chan Event
 	// Set set key value
 	Set([]byte, []byte) error
+	// Set set key value with a TTL in seconds
+	SetWithTTL([]byte, []byte, int64) error
 	// Get returns the value of key
 	Get([]byte) ([]byte, error)
 	// Delete remove the key from the store
@@ -105,9 +107,14 @@ func (h *beeStorage) Close() {
 }
 
 func (h *beeStorage) Set(key, value []byte) error {
+	return h.SetWithTTL(key, value, 0)
+}
+
+func (h *beeStorage) SetWithTTL(key, value []byte, ttl int64) error {
 	req := rpcpb.AcquireSetRequest()
 	req.Key = key
 	req.Value = value
+	req.TTL = ttl
 	_, err := h.ExecCommand(req)
 	return err
 }

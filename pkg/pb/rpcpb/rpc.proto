@@ -105,6 +105,7 @@ message Response {
 message SetRequest {
     bytes  key   = 1;
     bytes  value = 2;
+    int64  ttl   = 3 [(gogoproto.customname) = "TTL"];
 }
 
 // GetRequest get value by key

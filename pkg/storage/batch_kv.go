@@ -13,6 +13,7 @@ import (
 type kvBatch struct {
 	pairs [][]byte
 	ops   []int
+	ttl   []int64
 }
 
 func newKVBatch() batchType {
@@ -56,10 +57,10 @@ func (kv *kvBatch) addReq(req *raftcmdpb.Request, resp *raftcmdpb.Response, b *b
 func (kv *kvBatch) exec(s bhstorage.DataStorage, wb bhutil.WriteBatch, b *batch) error {
 	if len(kv.ops) > 0 {
 		idx := 0
-		for _, op := range kv.ops {
+		for i, op := range kv.ops {
 			switch op {
 			case opSet:
-				wb.Set(kv.pairs[idx], kv.pairs[idx+1])
+				wb.SetWithTTL(kv.pairs[idx], kv.pairs[idx+1], kv.ttl[i])
 				idx += 2
 
 			case opDel:
@@ -75,14 +76,17 @@ func (kv *kvBatch) exec(s bhstorage.DataStorage, wb bhutil.WriteBatch, b *batch)
 func (kv *kvBatch) reset() {
 	kv.pairs = kv.pairs[:0]
 	kv.ops = kv.ops[:0]
+	kv.ttl = kv.ttl[:0]
 }
 
 func (kv *kvBatch) set(req *rpcpb.SetRequest, buf *goetty.ByteBuf) {
 	kv.pairs = append(kv.pairs, req.Key, appendValuePrefix(buf, req.Value, kvType))
 	kv.ops = append(kv.ops, opSet)
+	kv.ttl = append(kv.ttl, req.TTL)
 }
 
 func (kv *kvBatch) delete(req *rpcpb.DeleteRequest) {
 	kv.pairs = append(kv.pairs, req.Key)
 	kv.ops = append(kv.ops, opDel)
+	kv.ttl = append(kv.ttl, 0)
 }

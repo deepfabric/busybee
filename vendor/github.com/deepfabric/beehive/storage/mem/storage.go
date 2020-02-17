@@ -24,6 +24,12 @@ func NewStorage() *Storage {
 
 // Set put the key, value pair to the storage
 func (s *Storage) Set(key []byte, value []byte) error {
+	return s.SetWithTTL(key, value, 0)
+}
+
+// SetWithTTL put the key, value pair to the storage with a ttl in seconds
+func (s *Storage) SetWithTTL(key []byte, value []byte, ttl int64) error {
+	// Memory storage not support SetWithTTL
 	s.kv.Put(key, value)
 	return nil
 }
@@ -35,7 +41,7 @@ func (s *Storage) BatchSet(pairs ...[]byte) error {
 	}
 
 	for i := 0; i < len(pairs)/2; i++ {
-		s.kv.Put(pairs[2*i], pairs[2*i+1])
+		s.Set(pairs[2*i], pairs[2*i+1])
 	}
 
 	return nil
@@ -116,7 +122,7 @@ func (s *Storage) Write(wb util.WriteBatch, sync bool) error {
 		if opt.isDelete {
 			s.Delete(opt.key)
 		} else {
-			s.Set(opt.key, opt.value)
+			s.SetWithTTL(opt.key, opt.value, opt.ttl)
 		}
 	}
 
@@ -214,9 +220,14 @@ func (s *Storage) Close() error {
 	return nil
 }
 
+func (s *Storage) onTimeout(arg interface{}) {
+	s.Delete(arg.([]byte))
+}
+
 type opt struct {
 	key      []byte
 	value    []byte
+	ttl      int64
 	isDelete bool
 }
 
@@ -233,9 +244,14 @@ func (wb *writeBatch) Delete(key []byte) error {
 }
 
 func (wb *writeBatch) Set(key []byte, value []byte) error {
+	return wb.SetWithTTL(key, value, 0)
+}
+
+func (wb *writeBatch) SetWithTTL(key []byte, value []byte, ttl int64) error {
 	wb.opts = append(wb.opts, opt{
 		key:   key,
 		value: value,
+		ttl:   ttl,
 	})
 	return nil
 }
