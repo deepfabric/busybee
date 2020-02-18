@@ -8,6 +8,7 @@ import (
 	"github.com/deepfabric/beehive/pb/raftcmdpb"
 	"github.com/deepfabric/beehive/storage"
 	"github.com/deepfabric/beehive/util"
+	bhutil "github.com/deepfabric/beehive/util"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/log"
@@ -42,7 +43,7 @@ func (h *beeStorage) queueFetch(shard bhmetapb.Shard, req *raftcmdpb.Request, bu
 
 	key := committedOffsetKey(req.Key, queueFetch.Consumer, buf)
 	store := h.getStore(shard.ID)
-	wb := store.NewWriteBatch()
+	wb := bhutil.NewWriteBatch()
 	allocNewRanges, start, end := allocRange(key, store, wb, queueFetch, buf)
 	if start == end {
 		resp.Value = rpcpb.EmptyBytesSliceBytes
@@ -92,7 +93,7 @@ func (h *beeStorage) queueFetch(shard bhmetapb.Shard, req *raftcmdpb.Request, bu
 	return 0, 0, resp
 }
 
-func allocRange(key []byte, store storage.DataStorage, wb util.WriteBatch,
+func allocRange(key []byte, store storage.DataStorage, wb *util.WriteBatch,
 	req rpcpb.QueueFetchRequest, buf *goetty.ByteBuf) (bool, uint64, uint64) {
 	completed := req.CompletedOffset
 	// committedOffsetKey -> offset(0~7) + last ts(8~15) + min(16~23) + max(24~31)

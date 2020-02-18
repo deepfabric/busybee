@@ -1,7 +1,6 @@
 package raftstore
 
 import (
-	"context"
 	"time"
 
 	"github.com/coreos/etcd/raft"
@@ -102,25 +101,21 @@ func (pr *peerReplica) onRaftTick(arg interface{}) {
 	util.DefaultTimeoutWheel().Schedule(pr.store.opts.raftTickDuration, pr.onRaftTick, nil)
 }
 
-func (pr *peerReplica) readyToServeRaft(ctx context.Context) {
-	pr.onRaftTick(nil)
-	items := make([]interface{}, readyBatch, readyBatch)
+func (pr *peerReplica) handleEvent() bool {
+	if pr.events.Len() == 0 && !pr.events.IsDisposed() {
+		return false
+	}
 
-	for {
-		if pr.events.Len() == 0 && !pr.events.IsDisposed() {
-			time.Sleep(time.Millisecond * 10)
-			continue
-		}
+	stop := false
+	select {
+	case <-pr.ctx.Done():
+		stop = true
+	default:
+	}
 
-		stop := false
-		select {
-		case <-ctx.Done():
-			stop = true
-		default:
-		}
-
-		_, err := pr.events.Get()
-		if err != nil || stop {
+	_, err := pr.events.Get()
+	if err != nil || stop {
+		pr.stopOnce.Do(func() {
 			pr.metrics.flush()
 			pr.actions.Dispose()
 			pr.ticks.Dispose()
@@ -157,21 +152,22 @@ func (pr *peerReplica) readyToServeRaft(ctx context.Context) {
 			logger.Infof("shard %d handle serve raft stopped",
 				pr.shardID)
 			pr.store.prStopped()
-			return
-		}
-
-		pr.handleStep(items)
-		pr.handleTick(items)
-		pr.handleReport(items)
-		pr.handleApplyResult(items)
-		pr.handleRequest(items)
-
-		if pr.rn.HasReadySince(pr.ps.lastReadyIndex) {
-			pr.handleReady()
-		}
-
-		pr.handleAction(items)
+		})
+		return false
 	}
+
+	pr.handleStep(pr.items)
+	pr.handleTick(pr.items)
+	pr.handleReport(pr.items)
+	pr.handleApplyResult(pr.items)
+	pr.handleRequest(pr.items)
+
+	if pr.rn.HasReadySince(pr.ps.lastReadyIndex) {
+		pr.handleReady()
+	}
+
+	pr.handleAction(pr.items)
+	return true
 }
 
 func (pr *peerReplica) handleAction(items []interface{}) {

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/deepfabric/beehive/storage/mem"
+	bhutil "github.com/deepfabric/beehive/util"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/fagongzi/goetty"
 	"github.com/stretchr/testify/assert"
@@ -71,21 +72,21 @@ func TestAllocRange(t *testing.T) {
 	req.Count = 10
 	req.CompletedOffset = 0
 
-	alloc, start, end := allocRange(key, store, store.NewWriteBatch(), *req, buf)
+	alloc, start, end := allocRange(key, store, bhutil.NewWriteBatch(), *req, buf)
 	assert.False(t, alloc, "TestPreAlloc failed")
 	assert.Equal(t, byte(processingState), range1[rangeStateOffset], "TestPreAlloc failed")
 	assert.Equal(t, byte(availableState), range2[rangeStateOffset], "TestPreAlloc failed")
 	assert.Equal(t, uint64(1), start, "TestPreAlloc failed")
 	assert.Equal(t, uint64(10), end, "TestPreAlloc failed")
 
-	alloc, start, end = allocRange(key, store, store.NewWriteBatch(), *req, buf)
+	alloc, start, end = allocRange(key, store, bhutil.NewWriteBatch(), *req, buf)
 	assert.False(t, alloc, "TestPreAlloc failed")
 	assert.Equal(t, byte(processingState), range1[rangeStateOffset], "TestPreAlloc failed")
 	assert.Equal(t, byte(processingState), range2[rangeStateOffset], "TestPreAlloc failed")
 	assert.Equal(t, uint64(10), start, "TestPreAlloc failed")
 	assert.Equal(t, uint64(20), end, "TestPreAlloc failed")
 
-	alloc, start, end = allocRange(key, store, store.NewWriteBatch(), *req, buf)
+	alloc, start, end = allocRange(key, store, bhutil.NewWriteBatch(), *req, buf)
 	assert.False(t, alloc, "TestPreAlloc failed")
 	assert.Equal(t, byte(processingState), range1[rangeStateOffset], "TestPreAlloc failed")
 	assert.Equal(t, byte(processingState), range2[rangeStateOffset], "TestPreAlloc failed")
@@ -95,9 +96,9 @@ func TestAllocRange(t *testing.T) {
 	// part completed
 	range1[rangeStateOffset] = availableState
 	range2[rangeStateOffset] = availableState
-	allocRange(key, store, store.NewWriteBatch(), *req, buf)
+	allocRange(key, store, bhutil.NewWriteBatch(), *req, buf)
 	req.CompletedOffset = 5
-	alloc, start, end = allocRange(key, store, store.NewWriteBatch(), *req, buf)
+	alloc, start, end = allocRange(key, store, bhutil.NewWriteBatch(), *req, buf)
 	assert.False(t, alloc, "TestPreAlloc failed")
 	assert.Equal(t, byte(processingState), range1[rangeStateOffset], "TestPreAlloc failed")
 	assert.Equal(t, byte(availableState), range2[rangeStateOffset], "TestPreAlloc failed")
@@ -105,7 +106,7 @@ func TestAllocRange(t *testing.T) {
 	assert.Equal(t, uint64(10), end, "TestPreAlloc failed")
 
 	req.CompletedOffset = 0
-	alloc, start, end = allocRange(key, store, store.NewWriteBatch(), *req, buf)
+	alloc, start, end = allocRange(key, store, bhutil.NewWriteBatch(), *req, buf)
 	assert.False(t, alloc, "TestPreAlloc failed")
 	assert.Equal(t, byte(processingState), range1[rangeStateOffset], "TestPreAlloc failed")
 	assert.Equal(t, byte(processingState), range2[rangeStateOffset], "TestPreAlloc failed")
@@ -113,7 +114,7 @@ func TestAllocRange(t *testing.T) {
 	assert.Equal(t, uint64(20), end, "TestPreAlloc failed")
 
 	req.CompletedOffset = 0
-	alloc, start, end = allocRange(key, store, store.NewWriteBatch(), *req, buf)
+	alloc, start, end = allocRange(key, store, bhutil.NewWriteBatch(), *req, buf)
 	assert.False(t, alloc, "TestPreAlloc failed")
 	assert.Equal(t, byte(processingState), range1[rangeStateOffset], "TestPreAlloc failed")
 	assert.Equal(t, byte(processingState), range2[rangeStateOffset], "TestPreAlloc failed")
@@ -122,7 +123,7 @@ func TestAllocRange(t *testing.T) {
 
 	ts := time.Now().Unix() - completedTimeout - 1
 	goetty.Int64ToBytesTo(ts, range1[rangeAllocTSOffset:])
-	alloc, start, end = allocRange(key, store, store.NewWriteBatch(), *req, buf)
+	alloc, start, end = allocRange(key, store, bhutil.NewWriteBatch(), *req, buf)
 	assert.False(t, alloc, "TestPreAlloc failed")
 	assert.Equal(t, byte(processingState), range1[rangeStateOffset], "TestPreAlloc failed")
 	assert.Equal(t, byte(processingState), range2[rangeStateOffset], "TestPreAlloc failed")
@@ -131,7 +132,7 @@ func TestAllocRange(t *testing.T) {
 
 	ts = time.Now().Unix() - completedTimeout - 1
 	goetty.Int64ToBytesTo(ts, range2[rangeAllocTSOffset:])
-	alloc, start, end = allocRange(key, store, store.NewWriteBatch(), *req, buf)
+	alloc, start, end = allocRange(key, store, bhutil.NewWriteBatch(), *req, buf)
 	assert.False(t, alloc, "TestPreAlloc failed")
 	assert.Equal(t, byte(processingState), range1[rangeStateOffset], "TestPreAlloc failed")
 	assert.Equal(t, byte(processingState), range2[rangeStateOffset], "TestPreAlloc failed")

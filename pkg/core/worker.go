@@ -10,6 +10,7 @@ import (
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/deepfabric/busybee/pkg/queue"
 	bbutil "github.com/deepfabric/busybee/pkg/util"
+	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/log"
 	"github.com/fagongzi/util/hack"
 	"github.com/fagongzi/util/protoc"
@@ -39,6 +40,7 @@ type stateWorker struct {
 	stopped      uint32
 	key          string
 	eng          Engine
+	buf          *goetty.ByteBuf
 	state        metapb.WorkflowInstanceState
 	totalCrowds  *roaring.Bitmap
 	stepCrowds   []*roaring.Bitmap
@@ -58,28 +60,39 @@ func newStateWorker(key string, state metapb.WorkflowInstanceState, eng Engine) 
 		return nil, err
 	}
 
-	var stepCrowds []*roaring.Bitmap
-	for _, state := range state.States {
-		stepCrowds = append(stepCrowds, bbutil.MustParseBM(state.Crowd))
-	}
-
 	w := &stateWorker{
-		key:          key,
-		state:        state,
-		eng:          eng,
-		stepCrowds:   stepCrowds,
-		totalCrowds:  bbutil.BMOr(stepCrowds...),
-		steps:        make(map[string]excution),
-		queue:        task.New(1024),
-		entryActions: make(map[string]string),
-		leaveActions: make(map[string]string),
-		consumer:     consumer,
+		key:         key,
+		state:       state,
+		eng:         eng,
+		buf:         goetty.NewByteBuf(32),
+		totalCrowds: bbutil.AcquireBitmap(),
+		queue:       task.New(1024),
+		consumer:    consumer,
 	}
 
-	for _, stepState := range state.States {
+	err = w.resetByState()
+	if err != nil {
+		return nil, err
+	}
+
+	return w, nil
+}
+
+func (w *stateWorker) resetByState() error {
+	w.totalCrowds.Clear()
+	w.stepCrowds = w.stepCrowds[:0]
+	w.steps = make(map[string]excution)
+	w.entryActions = make(map[string]string)
+	w.leaveActions = make(map[string]string)
+
+	for _, stepState := range w.state.States {
+		bm := bbutil.MustParseBM(stepState.Crowd)
+		w.stepCrowds = append(w.stepCrowds, bm)
+		w.totalCrowds.Or(bm)
+
 		exec, err := newExcution(stepState.Step.Name, stepState.Step.Execution)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		if stepState.Step.Execution.Timer != nil {
@@ -91,7 +104,7 @@ func newStateWorker(key string, state metapb.WorkflowInstanceState, eng Engine) 
 				})
 			})
 			if err != nil {
-				return nil, err
+				return err
 			}
 
 			w.cronIDs = append(w.cronIDs, id)
@@ -102,7 +115,7 @@ func newStateWorker(key string, state metapb.WorkflowInstanceState, eng Engine) 
 		w.leaveActions[stepState.Step.Name] = stepState.Step.LeaveAction
 	}
 
-	return w, nil
+	return nil
 }
 
 func (w *stateWorker) stop() {
@@ -320,6 +333,8 @@ func (w *stateWorker) execUpdate(batch *executionbatch) error {
 }
 
 func (w *stateWorker) stepChanged(batch *executionbatch) error {
+	// the batch.crowd is the timer step to filter a crowd on the all workflow crowd,
+	// so it's contains other shards crowds.
 	if batch.crowd != nil {
 		// filter other shard state crowds
 		batch.crowd.And(w.totalCrowds)
@@ -388,6 +403,11 @@ func (w *stateWorker) doUpdateCrowd(crowd []byte) error {
 }
 
 func (w *stateWorker) doUpdateWorkflow(workflow metapb.Workflow) error {
+	for _, id := range w.cronIDs {
+		w.eng.StopCronJob(id)
+	}
+	w.cronIDs = w.cronIDs[:0]
+
 	oldCrowds := make(map[string]*roaring.Bitmap)
 	for idx, step := range w.state.States {
 		oldCrowds[step.Step.Name] = w.stepCrowds[idx]
@@ -403,6 +423,21 @@ func (w *stateWorker) doUpdateWorkflow(workflow metapb.Workflow) error {
 		exec, err := newExcution(step.Name, step.Execution)
 		if err != nil {
 			return err
+		}
+
+		if step.Execution.Timer != nil {
+			name := step.Name
+			id, err := w.eng.AddCronJob(step.Execution.Timer.Cron, func() {
+				w.queue.Put(item{
+					action: timerAction,
+					value:  name,
+				})
+			})
+			if err != nil {
+				return err
+			}
+
+			w.cronIDs = append(w.cronIDs, id)
 		}
 
 		w.steps[step.Name] = exec

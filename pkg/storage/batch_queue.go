@@ -8,7 +8,6 @@ import (
 
 	"github.com/deepfabric/beehive/pb/raftcmdpb"
 	bhstorage "github.com/deepfabric/beehive/storage"
-	bhutil "github.com/deepfabric/beehive/util"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/util/protoc"
@@ -89,7 +88,7 @@ func (qb *queueBatch) add(req *rpcpb.QueueAddRequest, b *batch) {
 	}
 }
 
-func (qb *queueBatch) exec(s bhstorage.DataStorage, wb bhutil.WriteBatch, b *batch) error {
+func (qb *queueBatch) exec(s bhstorage.DataStorage, b *batch) error {
 	if len(qb.pairs)%2 != 0 {
 		return fmt.Errorf("queue batch pairs len must pow of 2, but %d", len(qb.pairs))
 	}
@@ -125,11 +124,11 @@ func (qb *queueBatch) exec(s bhstorage.DataStorage, wb bhutil.WriteBatch, b *bat
 
 		goetty.Uint64ToBytesTo(qb.maxOffset, qb.maxAndCleanOffsetValue)
 		goetty.Uint64ToBytesTo(qb.removedOffset, qb.maxAndCleanOffsetValue[8:])
-		wb.Set(qb.maxAndCleanOffsetKey, qb.maxAndCleanOffsetValue)
+		b.wb.Set(qb.maxAndCleanOffsetKey, qb.maxAndCleanOffsetValue)
 	}
 
 	for i := 0; i < len(qb.pairs)/2; i++ {
-		wb.Set(qb.pairs[2*i], qb.pairs[2*i+1])
+		b.wb.Set(qb.pairs[2*i], qb.pairs[2*i+1])
 	}
 
 	return nil

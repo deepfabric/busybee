@@ -21,7 +21,7 @@ const (
 type batchType interface {
 	support() []rpcpb.Type
 	addReq(*raftcmdpb.Request, *raftcmdpb.Response, *batch, *goetty.ByteBuf)
-	exec(bhstorage.DataStorage, bhutil.WriteBatch, *batch) error
+	exec(bhstorage.DataStorage, *batch) error
 	reset()
 }
 
@@ -30,6 +30,7 @@ type batch struct {
 	writtenBytes uint64
 	changedBytes int64
 	bs           *beeStorage
+	wb           *bhutil.WriteBatch
 
 	types []batchType
 	fn    map[rpcpb.Type]batchType
@@ -40,6 +41,7 @@ func newBatch(bs *beeStorage, types ...batchType) *batch {
 		bs:    bs,
 		types: types,
 		fn:    make(map[rpcpb.Type]batchType),
+		wb:    bhutil.NewWriteBatch(),
 	}
 
 	for _, tp := range types {
@@ -75,16 +77,15 @@ func (b *batch) get(key []byte) ([]byte, error) {
 
 func (b *batch) Execute() (uint64, int64, error) {
 	s := b.bs.getStore(b.shard)
-	wb := s.NewWriteBatch()
 
 	for _, tp := range b.types {
-		err := tp.exec(s, wb, b)
+		err := tp.exec(s, b)
 		if err != nil {
 			return 0, 0, err
 		}
 	}
 
-	err := s.Write(wb, false)
+	err := s.Write(b.wb, false)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -96,6 +97,7 @@ func (b *batch) Reset() {
 	b.shard = 0
 	b.writtenBytes = 0
 	b.changedBytes = 0
+	b.wb.Reset()
 
 	for _, tp := range b.types {
 		tp.reset()

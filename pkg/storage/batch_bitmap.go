@@ -6,7 +6,6 @@ import (
 	"github.com/RoaringBitmap/roaring"
 	"github.com/deepfabric/beehive/pb/raftcmdpb"
 	bhstorage "github.com/deepfabric/beehive/storage"
-	bhutil "github.com/deepfabric/beehive/util"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/deepfabric/busybee/pkg/util"
 	"github.com/fagongzi/goetty"
@@ -161,13 +160,13 @@ func (rb *bitmapBatch) reset() {
 	rb.bitmapRemoves = rb.bitmapRemoves[:0]
 }
 
-func (rb *bitmapBatch) exec(s bhstorage.DataStorage, wb bhutil.WriteBatch, b *batch) error {
+func (rb *bitmapBatch) exec(s bhstorage.DataStorage, b *batch) error {
 	if len(rb.ops) > 0 {
 		bm := util.AcquireBitmap()
 		for idx, ops := range rb.ops {
 			key := rb.bitmaps[idx]
 			if ops[len(ops)-1] == opDel {
-				wb.Delete(key)
+				b.wb.Delete(key)
 				b.changedBytes -= int64(len(key))
 				continue
 			}
@@ -201,7 +200,7 @@ func (rb *bitmapBatch) exec(s bhstorage.DataStorage, wb bhutil.WriteBatch, b *ba
 
 			data := util.MustMarshalBM(bm)
 
-			wb.Set(key, appendValuePrefix(rb.buf, data, kvType))
+			b.wb.Set(key, appendValuePrefix(rb.buf, data, kvType))
 
 			b.writtenBytes += uint64(len(data) - len(value))
 			b.changedBytes += int64(len(data) - len(value))

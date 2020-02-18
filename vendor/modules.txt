@@ -94,7 +94,7 @@ github.com/coreos/go-systemd/journal
 github.com/coreos/pkg/capnslog
 # github.com/davecgh/go-spew v1.1.1
 github.com/davecgh/go-spew/spew
-# github.com/deepfabric/beehive v0.0.0-20200217014942-47861739c227
+# github.com/deepfabric/beehive v0.0.0-20200218103515-4612f663e486
 github.com/deepfabric/beehive
 github.com/deepfabric/beehive/metric
 github.com/deepfabric/beehive/pb
@@ -109,11 +109,11 @@ github.com/deepfabric/beehive/storage
 github.com/deepfabric/beehive/storage/mem
 github.com/deepfabric/beehive/storage/nemo
 github.com/deepfabric/beehive/util
-# github.com/deepfabric/c-nemo v0.0.0-20190419083223-23fa413d9df4
+# github.com/deepfabric/c-nemo v0.0.0-20200217131733-d8d20abdb6f7
 github.com/deepfabric/c-nemo
-# github.com/deepfabric/go-nemo v0.0.0-20190419084252-5ec7afa882c6
+# github.com/deepfabric/go-nemo v0.0.0-20200217132256-1a30b09e0871
 github.com/deepfabric/go-nemo
-# github.com/deepfabric/prophet v0.0.0-20191202055442-cec7351ee5cf
+# github.com/deepfabric/prophet v0.0.0-20200217214013-3e0d1fb19e8e
 github.com/deepfabric/prophet
 # github.com/dgrijalva/jwt-go v3.2.0+incompatible
 github.com/dgrijalva/jwt-go
