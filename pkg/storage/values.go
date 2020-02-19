@@ -18,7 +18,7 @@ var (
 )
 
 func appendValuePrefix(buf *goetty.ByteBuf, value []byte, prefix byte) []byte {
-	buf.WrittenDataAfterMark()
+	buf.MarkWrite()
 	buf.WriteByte(prefix)
 	buf.Write(value)
 	return buf.WrittenDataAfterMark()
@@ -35,20 +35,20 @@ func OriginInstanceStatePBValue(value []byte) []byte {
 }
 
 func consumerCommittedValue(offset uint64, buf *goetty.ByteBuf) []byte {
-	buf.WrittenDataAfterMark()
+	buf.MarkWrite()
 	buf.WriteUint64(offset)
 	buf.WriteInt64(time.Now().Unix())
 	return buf.WrittenDataAfterMark()
 }
 
 func int64Value(value int64, buf *goetty.ByteBuf) []byte {
-	buf.WrittenDataAfterMark()
+	buf.MarkWrite()
 	buf.WriteInt64(value)
 	return buf.WrittenDataAfterMark()
 }
 
 func uint64Value(value uint64, buf *goetty.ByteBuf) []byte {
-	buf.WrittenDataAfterMark()
+	buf.MarkWrite()
 	buf.WriteUint64(value)
 	return buf.WrittenDataAfterMark()
 }

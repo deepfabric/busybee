@@ -77,7 +77,6 @@ func (b *batch) get(key []byte) ([]byte, error) {
 
 func (b *batch) Execute() (uint64, int64, error) {
 	s := b.bs.getStore(b.shard)
-
 	for _, tp := range b.types {
 		err := tp.exec(s, b)
 		if err != nil {
