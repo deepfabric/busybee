@@ -2,8 +2,9 @@ package expr
 
 import (
 	"fmt"
-	engine "github.com/fagongzi/expr"
 	"strings"
+
+	engine "github.com/fagongzi/expr"
 )
 
 const (

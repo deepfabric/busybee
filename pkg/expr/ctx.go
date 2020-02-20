@@ -1,6 +1,7 @@
 package expr
 
 import (
+	"github.com/RoaringBitmap/roaring"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 )
 
@@ -9,4 +10,6 @@ type Ctx interface {
 	Event() metapb.UserEvent
 	Profile([]byte) ([]byte, error)
 	KV([]byte) ([]byte, error)
+	StepCrowd() *roaring.Bitmap
+	StepTTL() ([]byte, error)
 }

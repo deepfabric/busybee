@@ -9,6 +9,7 @@ import (
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/deepfabric/busybee/pkg/queue"
+	"github.com/deepfabric/busybee/pkg/storage"
 	bbutil "github.com/deepfabric/busybee/pkg/util"
 	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/log"
@@ -85,7 +86,7 @@ func (w *stateWorker) resetByState() error {
 	w.entryActions = make(map[string]string)
 	w.leaveActions = make(map[string]string)
 
-	for _, stepState := range w.state.States {
+	for idx, stepState := range w.state.States {
 		bm := bbutil.MustParseBM(stepState.Crowd)
 		w.stepCrowds = append(w.stepCrowds, bm)
 		w.totalCrowds.Or(bm)
@@ -96,11 +97,10 @@ func (w *stateWorker) resetByState() error {
 		}
 
 		if stepState.Step.Execution.Timer != nil {
-			name := stepState.Step.Name
 			id, err := w.eng.AddCronJob(stepState.Step.Execution.Timer.Cron, func() {
 				w.queue.Put(item{
 					action: timerAction,
-					value:  name,
+					value:  idx,
 				})
 			})
 			if err != nil {
@@ -162,7 +162,7 @@ func (w *stateWorker) run() {
 
 				switch value.action {
 				case timerAction:
-					w.doStepTimer(batch, value.value.(string))
+					w.doStepTimer(batch, value.value.(int))
 				case userEventAction:
 					batch.cbs = append(batch.cbs, value.cb)
 					w.doStepEvents(value.value.([]metapb.UserEvent), batch)
@@ -278,6 +278,12 @@ func (w *stateWorker) execBatch(batch *executionbatch) {
 			len(batch.notifies),
 			w.state.TenantID)
 
+		for _, nt := range batch.notifies {
+			log.Infof("worker %s notify %s",
+				w.key,
+				nt.String())
+		}
+
 		w.retryDo("exec update state", batch, w.execUpdate)
 		log.Infof("worker %s state update to version %d",
 			w.key,
@@ -322,7 +328,7 @@ func (w *stateWorker) retryDo(thing string, batch *executionbatch, fn func(*exec
 }
 
 func (w *stateWorker) execNotify(batch *executionbatch) error {
-	return w.eng.Notifier().Notify(w.state.TenantID, batch.notifies...)
+	return w.eng.Notifier().Notify(w.state.TenantID, w.buf, batch.notifies...)
 }
 
 func (w *stateWorker) execUpdate(batch *executionbatch) error {
@@ -332,6 +338,8 @@ func (w *stateWorker) execUpdate(batch *executionbatch) error {
 	return err
 }
 
+// this function will called by every step exectuion, if the target crowd or user
+// removed to other step.
 func (w *stateWorker) stepChanged(batch *executionbatch) error {
 	// the batch.crowd is the timer step to filter a crowd on the all workflow crowd,
 	// so it's contains other shards crowds.
@@ -357,6 +365,7 @@ func (w *stateWorker) stepChanged(batch *executionbatch) error {
 			}
 		} else if w.state.States[idx].Step.Name == batch.to {
 			changed = true
+			batch.ttl = w.state.States[idx].Step.TTL
 			if nil != batch.crowd {
 				afterChanged := bbutil.BMOr(w.stepCrowds[idx], batch.crowd)
 				if w.stepCrowds[idx].GetCardinality() == afterChanged.GetCardinality() {
@@ -475,7 +484,7 @@ func (w *stateWorker) doStepEvents(events []metapb.UserEvent, batch *executionba
 
 		for idx, crowd := range w.stepCrowds {
 			if crowd.Contains(event.UserID) {
-				err := w.steps[w.state.States[idx].Step.Name].Execute(newExprCtx(event, w.eng),
+				err := w.steps[w.state.States[idx].Step.Name].Execute(newExprCtx(event, w, idx),
 					w.stepChanged, batch)
 				if err != nil {
 					logger.Errorf("worker %s step event %+v failed with %+v",
@@ -489,13 +498,18 @@ func (w *stateWorker) doStepEvents(events []metapb.UserEvent, batch *executionba
 	}
 }
 
-func (w *stateWorker) doStepTimer(batch *executionbatch, name string) {
-	log.Infof("worker %s step timer %s", name)
+func (w *stateWorker) doStepTimer(batch *executionbatch, idx int) {
+	step := w.state.States[idx]
+	if step.Step.Execution.Type != metapb.Timer {
+		return
+	}
 
-	err := w.steps[name].Execute(newExprCtx(metapb.UserEvent{
+	log.Infof("worker %s step timer %s", idx)
+
+	err := w.steps[step.Step.Name].Execute(newExprCtx(metapb.UserEvent{
 		TenantID:   w.state.TenantID,
 		WorkflowID: w.state.WorkflowID,
-	}, w.eng),
+	}, w, idx),
 		w.stepChanged, batch)
 	if err != nil {
 		logger.Errorf("worker %s trigger timer failed with %+v",
@@ -506,13 +520,15 @@ func (w *stateWorker) doStepTimer(batch *executionbatch, name string) {
 
 type exprCtx struct {
 	event metapb.UserEvent
-	eng   Engine
+	w     *stateWorker
+	idx   int
 }
 
-func newExprCtx(event metapb.UserEvent, eng Engine) expr.Ctx {
+func newExprCtx(event metapb.UserEvent, w *stateWorker, idx int) expr.Ctx {
 	return &exprCtx{
+		w:     w,
+		idx:   idx,
 		event: event,
-		eng:   eng,
 	}
 }
 
@@ -521,7 +537,7 @@ func (c *exprCtx) Event() metapb.UserEvent {
 }
 
 func (c *exprCtx) Profile(key []byte) ([]byte, error) {
-	value, err := c.eng.Service().GetProfileField(c.event.TenantID, c.event.UserID, hack.SliceToString(key))
+	value, err := c.w.eng.Service().GetProfileField(c.event.TenantID, c.event.UserID, hack.SliceToString(key))
 	if err != nil {
 		return nil, err
 	}
@@ -530,5 +546,20 @@ func (c *exprCtx) Profile(key []byte) ([]byte, error) {
 }
 
 func (c *exprCtx) KV(key []byte) ([]byte, error) {
-	return c.eng.Storage().Get(key)
+	return c.w.eng.Storage().Get(key)
+}
+
+func (c *exprCtx) StepCrowd() *roaring.Bitmap {
+	return c.w.stepCrowds[c.idx]
+}
+
+func (c *exprCtx) StepTTL() ([]byte, error) {
+	name := c.w.state.States[c.idx].Step.Name
+	key := storage.WorkflowStepTTLKey(c.event.WorkflowID, c.event.UserID, name, c.w.buf)
+	v, err := c.w.eng.Storage().Get(key)
+	if err != nil {
+		return nil, err
+	}
+
+	return v, nil
 }

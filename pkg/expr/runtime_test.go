@@ -52,6 +52,14 @@ func (c *testCtx) KV(key []byte) ([]byte, error) {
 	return nil, nil
 }
 
+func (c *testCtx) StepCrowd() *roaring.Bitmap {
+	return nil
+}
+
+func (c *testCtx) StepTTL() ([]byte, error) {
+	return nil, nil
+}
+
 func TestFetchFromEvent(t *testing.T) {
 	ctx := newTestCtx()
 	ctx.setEventKV("key1", "1")

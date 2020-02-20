@@ -7,11 +7,12 @@ import (
 )
 
 const (
-	mappingIDPrefix      byte = 0
-	mappingPrefix        byte = 1
-	profilePrefix        byte = 2
-	queueMetadataPrefix  byte = 3
-	workflowMetataPrefix byte = 4
+	mappingIDPrefix       byte = 0
+	mappingPrefix         byte = 1
+	profilePrefix         byte = 2
+	queueMetadataPrefix   byte = 3
+	workflowMetataPrefix  byte = 4
+	workflowStepTTLPrefix byte = 5
 
 	instance      byte = 1
 	instanceShard byte = 2
@@ -20,6 +21,16 @@ const (
 	queueItemField      byte = 1
 	queueCommittedField byte = 2
 )
+
+// WorkflowStepTTLKey returns the ttl key for user on the step
+func WorkflowStepTTLKey(wid uint64, uid uint32, name string, buf *goetty.ByteBuf) []byte {
+	buf.MarkWrite()
+	buf.WriteByte(workflowStepTTLPrefix)
+	buf.WriteUInt64(wid)
+	buf.WriteUInt32(uid)
+	buf.WriteString(name)
+	return buf.WrittenDataAfterMark()
+}
 
 // PartitionKey returns partition key
 func PartitionKey(id, partition uint64) []byte {

@@ -142,7 +142,6 @@ func (qb *queueBatch) reset() {
 	qb.consumerStartKey = qb.consumerStartKey[:0]
 	qb.consumerEndKey = qb.consumerEndKey[:0]
 	qb.maxAndCleanOffsetKey = qb.maxAndCleanOffsetKey[:0]
-	qb.maxAndCleanOffsetValue = qb.maxAndCleanOffsetValue[:0]
 	qb.pairs = qb.pairs[:0]
 	qb.buf.Clear()
 }

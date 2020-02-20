@@ -94,7 +94,7 @@ github.com/coreos/go-systemd/journal
 github.com/coreos/pkg/capnslog
 # github.com/davecgh/go-spew v1.1.1
 github.com/davecgh/go-spew/spew
-# github.com/deepfabric/beehive v0.0.0-20200219013120-1480d8f2528a
+# github.com/deepfabric/beehive v0.0.0-20200219160709-e18d99fffc00
 github.com/deepfabric/beehive
 github.com/deepfabric/beehive/metric
 github.com/deepfabric/beehive/pb

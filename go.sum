@@ -35,12 +35,10 @@ github.com/cpuguy83/go-md2man v1.0.10/go.mod h1:SmD6nW6nTyfqj6ABTjUi3V3JVMnlJmwc
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/deepfabric/beehive v0.0.0-20200218071530-8c8955c85ba7 h1:BLz94CqS9IY7A/Bo1S+Tm7a5aCMSwUcN0llLGPEO1HU=
-github.com/deepfabric/beehive v0.0.0-20200218071530-8c8955c85ba7/go.mod h1:EczHurp4SOE/QfuWAcOxB1896PfUn4z2g1ASPiBVvbk=
-github.com/deepfabric/beehive v0.0.0-20200218103515-4612f663e486 h1:IkDk4TWHEnxjLBT+cpLrVQwXljZF/6wqv6MPPaO9Lnk=
-github.com/deepfabric/beehive v0.0.0-20200218103515-4612f663e486/go.mod h1:EczHurp4SOE/QfuWAcOxB1896PfUn4z2g1ASPiBVvbk=
 github.com/deepfabric/beehive v0.0.0-20200219013120-1480d8f2528a h1:yzLfxY900rgzSGrH+AguquXbd04oyfWyJh8mQJ5TpWQ=
 github.com/deepfabric/beehive v0.0.0-20200219013120-1480d8f2528a/go.mod h1:EczHurp4SOE/QfuWAcOxB1896PfUn4z2g1ASPiBVvbk=
+github.com/deepfabric/beehive v0.0.0-20200219160709-e18d99fffc00 h1:6IilvrRBx6lopTN/kzuVEmPDovvBpukXK7eR1jx655I=
+github.com/deepfabric/beehive v0.0.0-20200219160709-e18d99fffc00/go.mod h1:EczHurp4SOE/QfuWAcOxB1896PfUn4z2g1ASPiBVvbk=
 github.com/deepfabric/c-nemo v0.0.0-20200217131733-d8d20abdb6f7 h1:ZuOizeGleJvUp8ZTj9TsWyo70X9nJNfM+Lvw0UeMLVw=
 github.com/deepfabric/c-nemo v0.0.0-20200217131733-d8d20abdb6f7/go.mod h1:xHI4efz5VNLAaNzIpEzcWlG03PcKRA+S7J1LkYbCG9Q=
 github.com/deepfabric/etcd v3.3.17+incompatible h1:JDSLn0ZFr4Jtxko12SkJNl+yWRenHPeqlhUQ+PkMwew=

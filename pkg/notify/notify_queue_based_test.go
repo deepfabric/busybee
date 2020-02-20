@@ -8,6 +8,7 @@ import (
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/deepfabric/busybee/pkg/storage"
+	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/util/protoc"
 	"github.com/stretchr/testify/assert"
 )
@@ -15,6 +16,7 @@ import (
 func TestNotify(t *testing.T) {
 	s, deferFunc := storage.NewTestStorage(t, true)
 	defer deferFunc()
+	buf := goetty.NewByteBuf(256)
 
 	tenantID := uint64(1)
 	assert.NoError(t, s.RaftStore().AddShards(hbmetapb.Shard{
@@ -26,7 +28,7 @@ func TestNotify(t *testing.T) {
 	time.Sleep(time.Second * 2)
 
 	n := NewQueueBasedNotifier(s)
-	assert.NoError(t, n.Notify(tenantID, metapb.Notify{
+	assert.NoError(t, n.Notify(tenantID, buf, metapb.Notify{
 		UserID: 1,
 	}), "TestNotify failed")
 

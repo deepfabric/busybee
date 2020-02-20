@@ -11,7 +11,7 @@ import (
 // func.name
 type funcVar struct {
 	valueType engine.VarType
-	dynaFunc  func() interface{}
+	dynaFunc  func(Ctx) (interface{}, error)
 }
 
 func newFuncVar(name string, valueType engine.VarType) (engine.Expr, error) {
@@ -26,6 +26,10 @@ func newFuncVar(name string, valueType engine.VarType) (engine.Expr, error) {
 		expr.dynaFunc = monthFunc
 	case "day":
 		expr.dynaFunc = dayFunc
+	case "wf_step_crowd":
+		expr.dynaFunc = stepCrowdFunc
+	case "wf_step_ttl":
+		expr.dynaFunc = stepTTLFunc
 	default:
 		return nil, fmt.Errorf("func %s not support", name)
 	}
@@ -39,17 +43,30 @@ func (v *funcVar) Exec(data interface{}) (interface{}, error) {
 		log.Fatalf("BUG: invalid expr ctx type %T", ctx)
 	}
 
-	return convertByType(v.dynaFunc(), v.valueType)
+	value, err := v.dynaFunc(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return convertByType(value, v.valueType)
 }
 
-func yearFunc() interface{} {
-	return int64(time.Now().Year())
+func yearFunc(ctx Ctx) (interface{}, error) {
+	return int64(time.Now().Year()), nil
 }
 
-func monthFunc() interface{} {
-	return int64(time.Now().Month())
+func monthFunc(ctx Ctx) (interface{}, error) {
+	return int64(time.Now().Month()), nil
 }
 
-func dayFunc() interface{} {
-	return int64(time.Now().Day())
+func dayFunc(ctx Ctx) (interface{}, error) {
+	return int64(time.Now().Day()), nil
+}
+
+func stepCrowdFunc(ctx Ctx) (interface{}, error) {
+	return ctx.StepCrowd(), nil
+}
+
+func stepTTLFunc(ctx Ctx) (interface{}, error) {
+	return ctx.StepTTL()
 }

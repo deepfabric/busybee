@@ -70,6 +70,7 @@ message Notify {
     string fromAction = 6;
     string toStep     = 7;
     string toAction   = 8;
+    int32  ttl        = 9 [(gogoproto.customname) = "TTL"];
 }
 
 // Group shard group
@@ -133,6 +134,7 @@ message Step {
     Execution execution   = 2 [(gogoproto.nullable) = false];
     string    enterAction = 3;
     string    leaveAction = 4;
+    int32     ttl         = 5 [(gogoproto.customname) = "TTL"];
 }
 
 // ExectuionType is is the type of a execution operation

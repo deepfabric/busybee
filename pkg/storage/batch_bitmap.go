@@ -37,7 +37,7 @@ func (rb *bitmapBatch) addReq(req *raftcmdpb.Request, resp *raftcmdpb.Response, 
 		msg := rpcpb.AcquireBMCreateRequest()
 		protoc.MustUnmarshal(msg, req.Cmd)
 		msg.Key = req.Key
-		rb.add(msg.Key, msg.Value...)
+		rb.add(req.Key, msg.Value...)
 
 		resp.Value = rpcpb.EmptyRespBytes
 		rpcpb.ReleaseBMCreateRequest(msg)
@@ -200,6 +200,7 @@ func (rb *bitmapBatch) exec(s bhstorage.DataStorage, b *batch) error {
 
 			data := util.MustMarshalBM(bm)
 
+			log.Infof("***********write: %+v: %+v", key, appendValuePrefix(rb.buf, data, kvType))
 			b.wb.Set(key, appendValuePrefix(rb.buf, data, kvType))
 
 			b.writtenBytes += uint64(len(data) - len(value))

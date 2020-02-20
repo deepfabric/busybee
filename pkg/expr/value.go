@@ -86,6 +86,13 @@ func toString(value interface{}) (string, error) {
 func toInt64(value interface{}) (int64, error) {
 	if v, ok := value.(int64); ok {
 		return v, nil
+	} else if v, ok := value.([]byte); ok {
+		if len(v) == 0 {
+			return 0, nil
+		}
+		return format.ParseStrInt64(hack.SliceToString(v))
+	} else if v, ok := value.(string); ok {
+		return format.ParseStrInt64(v)
 	}
 
 	return 0, fmt.Errorf("expect int64 but %T", value)

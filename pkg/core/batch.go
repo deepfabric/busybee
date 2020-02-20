@@ -10,6 +10,7 @@ type executionbatch struct {
 	event    metapb.UserEvent
 	from     string
 	to       string
+	ttl      int32
 	crowd    *roaring.Bitmap
 	notifies []metapb.Notify
 	cbs      []*stepCB
@@ -26,6 +27,7 @@ func (b *executionbatch) notify() {
 		WorkflowID: b.event.WorkflowID,
 		FromStep:   b.from,
 		ToStep:     b.to,
+		TTL:        b.ttl,
 	}
 	if b.crowd != nil {
 		value.Crowd = util.MustMarshalBM(b.crowd)
@@ -42,12 +44,14 @@ func (b *executionbatch) next(notify bool) {
 	b.from = ""
 	b.to = ""
 	b.crowd = nil
+	b.ttl = 0
 }
 
 func (b *executionbatch) reset() {
 	b.event = metapb.UserEvent{}
 	b.from = ""
 	b.to = ""
+	b.ttl = 0
 	b.crowd = nil
 	b.notifies = b.notifies[:0]
 	b.cbs = b.cbs[:0]
