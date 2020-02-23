@@ -6,6 +6,22 @@ import (
 )
 
 var (
+	requestReceivedCounter = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "busybee",
+			Subsystem: "api",
+			Name:      "request_received_total",
+			Help:      "Total number of request received.",
+		}, []string{"type"})
+
+	requestResultCounter = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "busybee",
+			Subsystem: "api",
+			Name:      "request_result_total",
+			Help:      "Total number of request handled result.",
+		}, []string{"type", "result"})
+
 	inputEventAddedCounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "busybee",
@@ -38,6 +54,21 @@ var (
 			Help:      "Total number of event handled.",
 		}, []string{"tenant"})
 )
+
+// IncRequestReceived inc request received
+func IncRequestReceived(t string) {
+	requestReceivedCounter.WithLabelValues(t).Inc()
+}
+
+// IncRequestSucceed inc request handled succeed
+func IncRequestSucceed(t string) {
+	requestResultCounter.WithLabelValues(t, "succeed").Inc()
+}
+
+// IncRequestFailed inc request handled failed
+func IncRequestFailed(t string) {
+	requestResultCounter.WithLabelValues(t, "failed").Inc()
+}
 
 // IncEventAdded inc event queue addded
 func IncEventAdded(value int, tenant string, group metapb.Group) {

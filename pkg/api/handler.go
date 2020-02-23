@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/deepfabric/beehive/util"
+	"github.com/deepfabric/busybee/pkg/metric"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/deepfabric/busybee/pkg/storage"
@@ -322,6 +323,7 @@ func (s *server) onResp(arg interface{}, value []byte, err error) {
 		resp.Type = ctx.req.Type
 		resp.ID = ctx.req.ID
 		if err != nil {
+			metric.IncRequestFailed(resp.Type.String())
 			resp.Error.Error = err.Error()
 			rs.(*util.Session).OnResp(resp)
 			return
@@ -352,5 +354,6 @@ func (s *server) onResp(arg interface{}, value []byte, err error) {
 		}
 
 		rs.(*util.Session).OnResp(resp)
+		metric.IncRequestSucceed(resp.Type.String())
 	}
 }

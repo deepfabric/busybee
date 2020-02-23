@@ -6,6 +6,7 @@ import (
 
 	"github.com/deepfabric/beehive/util"
 	"github.com/deepfabric/busybee/pkg/core"
+	"github.com/deepfabric/busybee/pkg/metric"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/log"
@@ -84,8 +85,12 @@ func (s *server) doConnection(conn goetty.IOSession) error {
 		}
 
 		req := value.(*rpcpb.Request)
+		metric.IncRequestReceived(req.Type.String())
+
 		err = s.onReq(rs.ID, req)
 		if err != nil {
+			metric.IncRequestFailed(req.Type.String())
+
 			rsp := rpcpb.AcquireResponse()
 			rsp.ID = req.ID
 			rsp.Error.Error = err.Error()
