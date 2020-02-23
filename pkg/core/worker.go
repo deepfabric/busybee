@@ -6,6 +6,7 @@ import (
 
 	"github.com/RoaringBitmap/roaring"
 	"github.com/deepfabric/busybee/pkg/expr"
+	"github.com/deepfabric/busybee/pkg/metric"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/deepfabric/busybee/pkg/queue"
@@ -13,6 +14,7 @@ import (
 	bbutil "github.com/deepfabric/busybee/pkg/util"
 	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/log"
+	"github.com/fagongzi/util/format"
 	"github.com/fagongzi/util/hack"
 	"github.com/fagongzi/util/protoc"
 	"github.com/fagongzi/util/task"
@@ -51,6 +53,7 @@ type stateWorker struct {
 	queue        *task.Queue
 	cronIDs      []cron.EntryID
 	consumer     queue.Consumer
+	tenant       string
 }
 
 func newStateWorker(key string, state metapb.WorkflowInstanceState, eng Engine) (*stateWorker, error) {
@@ -69,6 +72,7 @@ func newStateWorker(key string, state metapb.WorkflowInstanceState, eng Engine) 
 		totalCrowds: bbutil.AcquireBitmap(),
 		queue:       task.New(1024),
 		consumer:    consumer,
+		tenant:      string(format.UInt64ToString(state.TenantID)),
 	}
 
 	err = w.resetByState()
@@ -229,6 +233,9 @@ func (w *stateWorker) onEvent(offset uint64, items ...[]byte) error {
 		return w.doEvent(userEventAction, userEvents)
 	}
 
+	if len(items) > 0 {
+		metric.IncEventHandled(len(items), w.tenant, metapb.TenantInputGroup)
+	}
 	return nil
 }
 

@@ -8,8 +8,11 @@ import (
 
 	"github.com/deepfabric/beehive/pb/raftcmdpb"
 	bhstorage "github.com/deepfabric/beehive/storage"
+	"github.com/deepfabric/busybee/pkg/metric"
+	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/fagongzi/goetty"
+	"github.com/fagongzi/util/format"
 	"github.com/fagongzi/util/protoc"
 )
 
@@ -29,6 +32,8 @@ type queueBatch struct {
 	maxAndCleanOffsetKey   []byte
 	pairs                  [][]byte
 	buf                    *goetty.ByteBuf
+	group                  metapb.Group
+	tenant                 string
 }
 
 func newQueueBatch() batchType {
@@ -49,6 +54,7 @@ func (qb *queueBatch) addReq(req *raftcmdpb.Request, resp *raftcmdpb.Response, b
 		protoc.MustUnmarshal(msg, req.Cmd)
 		msg.Key = req.Key
 
+		qb.group = metapb.Group(req.Group)
 		qb.add(msg, b)
 
 		value := rpcpb.AcquireUint64Response()
@@ -64,6 +70,7 @@ func (qb *queueBatch) addReq(req *raftcmdpb.Request, resp *raftcmdpb.Response, b
 
 func (qb *queueBatch) add(req *rpcpb.QueueAddRequest, b *batch) {
 	if !qb.loaded {
+		qb.tenant = string(format.UInt64ToString(goetty.Byte2UInt64(req.Key)))
 		qb.queueKey = copyKey(req.Key, qb.buf)
 		qb.consumerStartKey = consumerStartKey(req.Key, qb.buf)
 		qb.consumerEndKey = consumerEndKey(req.Key, qb.buf)
@@ -127,10 +134,13 @@ func (qb *queueBatch) exec(s bhstorage.DataStorage, b *batch) error {
 		b.wb.Set(qb.maxAndCleanOffsetKey, qb.maxAndCleanOffsetValue)
 	}
 
-	for i := 0; i < len(qb.pairs)/2; i++ {
+	n := len(qb.pairs) / 2
+	for i := 0; i < n; i++ {
 		b.wb.Set(qb.pairs[2*i], qb.pairs[2*i+1])
 	}
 
+	metric.SetEventQueueSize(qb.maxOffset-qb.removedOffset, qb.tenant, qb.group)
+	metric.IncEventAdded(n, qb.tenant, qb.group)
 	return nil
 }
 
