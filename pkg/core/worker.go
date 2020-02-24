@@ -61,6 +61,7 @@ func newStateWorker(key string, state metapb.WorkflowInstanceState, eng Engine) 
 		metapb.TenantInputGroup,
 		eng.Storage(), []byte(key))
 	if err != nil {
+		metric.IncStorageFailed()
 		return nil, err
 	}
 
@@ -77,6 +78,7 @@ func newStateWorker(key string, state metapb.WorkflowInstanceState, eng Engine) 
 
 	err = w.resetByState()
 	if err != nil {
+		metric.IncWorkflowWorkerFailed()
 		return nil, err
 	}
 
@@ -108,6 +110,7 @@ func (w *stateWorker) resetByState() error {
 				})
 			})
 			if err != nil {
+				metric.IncWorkflowWorkerFailed()
 				return err
 			}
 
@@ -317,7 +320,7 @@ func (w *stateWorker) retryDo(thing string, batch *executionbatch, fn func(*exec
 			return
 		}
 
-		metric.IcrStorageFailed()
+		metric.IncStorageFailed()
 		logger.Errorf("worker %s do %s failed %d times with %+v, retry after %d sec",
 			w.key,
 			thing,
@@ -495,6 +498,7 @@ func (w *stateWorker) doStepEvents(events []metapb.UserEvent, batch *executionba
 				err := w.steps[w.state.States[idx].Step.Name].Execute(newExprCtx(event, w, idx),
 					w.stepChanged, batch)
 				if err != nil {
+					metric.IcrWorkflowWorkerFailed()
 					logger.Errorf("worker %s step event %+v failed with %+v",
 						w.key,
 						event,
@@ -520,6 +524,7 @@ func (w *stateWorker) doStepTimer(batch *executionbatch, idx int) {
 	}, w, idx),
 		w.stepChanged, batch)
 	if err != nil {
+		metric.IcrWorkflowWorkerFailed()
 		logger.Errorf("worker %s trigger timer failed with %+v",
 			w.key,
 			err)

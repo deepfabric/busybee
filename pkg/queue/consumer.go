@@ -43,6 +43,7 @@ type consumer struct {
 func NewConsumer(id uint64, group metapb.Group, store storage.Storage, name []byte) (Consumer, error) {
 	value, err := store.Get(storage.QueueMetadataKey(id, group))
 	if err != nil {
+		metric.IncStorageFailed()
 		return nil, err
 	}
 	if len(value) == 0 {
@@ -97,7 +98,7 @@ func (c *consumer) startPartition(ctx context.Context, idx, batch, concurrency u
 
 				value, err := c.store.ExecCommandWithGroup(req, c.group)
 				if err != nil {
-					metric.IcrStorageFailed()
+					metric.IncStorageFailed()
 					logger.Errorf("%s failed with %+v, retry after 10s",
 						string(c.consumer),
 						err)

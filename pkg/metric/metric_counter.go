@@ -30,6 +30,14 @@ var (
 			Help:      "Total number of request storage failed.",
 		})
 
+	workerFailedCounter = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Namespace: "busybee",
+			Subsystem: "engine",
+			Name:      "worker_failed_total",
+			Help:      "Total number of workflow worker step failed.",
+		})
+
 	inputEventAddedCounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "busybee",
@@ -98,7 +106,12 @@ func IncEventHandled(value int, tenant string, group metapb.Group) {
 	}
 }
 
-// IcrStorageFailed storage failed
-func IcrStorageFailed() {
+// IncStorageFailed storage failed
+func IncStorageFailed() {
 	storageFailedCounter.Inc()
+}
+
+// IncWorkflowWorkerFailed workflow worker failed
+func IncWorkflowWorkerFailed() {
+	workerFailedCounter.Inc()
 }

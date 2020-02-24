@@ -9,16 +9,16 @@ var (
 	workflowCountGauge = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "busybee",
-			Subsystem: "workflow",
-			Name:      "instance_total",
+			Subsystem: "engine",
+			Name:      "workflow_total",
 			Help:      "Total number of workflow instance.",
 		}, []string{"status"})
 
 	workflowShardsCountGauge = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "busybee",
-			Subsystem: "workflow",
-			Name:      "shards_total",
+			Subsystem: "engine",
+			Name:      "workflow_shard_total",
 			Help:      "Total number of workflow instance shards.",
 		}, []string{"status"})
 
