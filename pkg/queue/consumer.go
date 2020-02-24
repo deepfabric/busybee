@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/deepfabric/busybee/pkg/metric"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/deepfabric/busybee/pkg/storage"
@@ -96,6 +97,7 @@ func (c *consumer) startPartition(ctx context.Context, idx, batch, concurrency u
 
 				value, err := c.store.ExecCommandWithGroup(req, c.group)
 				if err != nil {
+					metric.IcrStorageFailed()
 					logger.Errorf("%s failed with %+v, retry after 10s",
 						string(c.consumer),
 						err)

@@ -22,6 +22,14 @@ var (
 			Help:      "Total number of request handled result.",
 		}, []string{"type", "result"})
 
+	storageFailedCounter = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Namespace: "busybee",
+			Subsystem: "storage",
+			Name:      "failed_total",
+			Help:      "Total number of request storage failed.",
+		})
+
 	inputEventAddedCounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "busybee",
@@ -88,4 +96,9 @@ func IncEventHandled(value int, tenant string, group metapb.Group) {
 	case metapb.TenantOutputGroup:
 		outputEventHandledCounter.WithLabelValues(tenant).Add(float64(value))
 	}
+}
+
+// IcrStorageFailed storage failed
+func IcrStorageFailed() {
+	storageFailedCounter.Inc()
 }

@@ -317,6 +317,7 @@ func (w *stateWorker) retryDo(thing string, batch *executionbatch, fn func(*exec
 			return
 		}
 
+		metric.IcrStorageFailed()
 		logger.Errorf("worker %s do %s failed %d times with %+v, retry after %d sec",
 			w.key,
 			thing,

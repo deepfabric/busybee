@@ -11,6 +11,7 @@ import (
 	hbmetapb "github.com/deepfabric/beehive/pb/metapb"
 	"github.com/deepfabric/beehive/util"
 	"github.com/deepfabric/busybee/pkg/crm"
+	"github.com/deepfabric/busybee/pkg/metric"
 	"github.com/deepfabric/busybee/pkg/notify"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
@@ -155,6 +156,7 @@ func (eng *engine) StartInstance(workflow metapb.Workflow, crow []byte, workers 
 	req.Instance = instance
 	_, err = eng.store.ExecCommand(req)
 	if err != nil {
+		metric.IcrStorageFailed()
 		logger.Errorf("start workflow-%d failed with %+v",
 			workflow.ID,
 			err)
@@ -428,10 +430,6 @@ func (eng *engine) getInstanceShards(instance metapb.WorkflowInstance) ([]metapb
 	return shards, nil
 }
 
-func (eng *engine) doReport() {
-	
-}
-
 func (eng *engine) handleEvent(ctx context.Context) {
 	for {
 		select {
@@ -595,6 +593,7 @@ func (eng *engine) doStoppingInstanceEvent(instance metapb.WorkflowInstance) {
 
 		_, err := eng.store.ExecCommand(req)
 		if err != nil {
+			metric.IcrStorageFailed()
 			logger.Errorf("stop workflow-%d failed with %+v, retry later",
 				instance.Snapshot.ID,
 				err)
@@ -631,6 +630,7 @@ func (eng *engine) doCreateInstanceState(instance metapb.WorkflowInstance, state
 		State: state,
 	})
 	if err != nil {
+		metric.IcrStorageFailed()
 		logger.Errorf("create workflow-%d state %s failed with %+v, retry later",
 			instance.Snapshot.ID,
 			workerKey(state),
@@ -647,6 +647,7 @@ func (eng *engine) doCreateInstanceStateShardComplete(id uint64) {
 		WorkflowID: id,
 	})
 	if err != nil {
+		metric.IcrStorageFailed()
 		logger.Errorf("start workflow-%d state failed with %+v, retry later",
 			id, err)
 		util.DefaultTimeoutWheel().Schedule(eng.opts.retryInterval, eng.addToRetryCompleteInstance, id)
@@ -659,6 +660,7 @@ func (eng *engine) doStopInstance(id uint64) {
 		WorkflowID: id,
 	})
 	if err != nil {
+		metric.IcrStorageFailed()
 		logger.Errorf("stopping workflow-%d failed with %+v, retry later",
 			id, err)
 		util.DefaultTimeoutWheel().Schedule(eng.opts.retryInterval, eng.addToInstanceStop, id)
