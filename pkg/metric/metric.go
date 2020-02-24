@@ -1,19 +1,17 @@
 package metric
 
 import (
-	"github.com/prometheus/client_golang/prometheus"
-)
-
-var (
-	registry = prometheus.NewRegistry()
+	p "github.com/deepfabric/beehive/metric"
 )
 
 func init() {
-	registry.MustRegister(inputEventAddedCounter)
-	registry.MustRegister(outputEventAddedCounter)
-	registry.MustRegister(inputEventHandledCounter)
-	registry.MustRegister(outputEventHandledCounter)
+	p.MustRegister(inputEventAddedCounter)
+	p.MustRegister(outputEventAddedCounter)
+	p.MustRegister(inputEventHandledCounter)
+	p.MustRegister(outputEventHandledCounter)
+	p.MustRegister(requestReceivedCounter)
+	p.MustRegister(requestResultCounter)
 
-	registry.MustRegister(inputEventQueueSizeGauge)
-	registry.MustRegister(outputEventQueueSizeGauge)
+	p.MustRegister(inputEventQueueSizeGauge)
+	p.MustRegister(outputEventQueueSizeGauge)
 }

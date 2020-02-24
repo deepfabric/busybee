@@ -428,6 +428,10 @@ func (eng *engine) getInstanceShards(instance metapb.WorkflowInstance) ([]metapb
 	return shards, nil
 }
 
+func (eng *engine) doReport() {
+	
+}
+
 func (eng *engine) handleEvent(ctx context.Context) {
 	for {
 		select {

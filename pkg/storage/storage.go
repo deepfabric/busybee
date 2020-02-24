@@ -1,14 +1,19 @@
 package storage
 
 import (
+	"context"
+	"math"
 	"time"
 
 	"github.com/deepfabric/beehive"
 	"github.com/deepfabric/beehive/raftstore"
 	"github.com/deepfabric/beehive/server"
 	bhstorage "github.com/deepfabric/beehive/storage"
+	"github.com/deepfabric/busybee/pkg/metric"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
+	"github.com/deepfabric/prophet"
+	"github.com/fagongzi/log"
 	"github.com/fagongzi/util/protoc"
 	"github.com/fagongzi/util/task"
 )
@@ -55,6 +60,8 @@ type beeStorage struct {
 	eventC chan Event
 	shardC chan shardCycle
 	runner *task.Runner
+
+	scanTaskID uint64
 }
 
 // NewStorage returns a beehive request handler
@@ -72,7 +79,8 @@ func NewStorage(dataPath string,
 		metadataStorages,
 		dataStorages,
 		raftstore.WithShardStateAware(h),
-		raftstore.WithWriteBatchFunc(h.WriteBatch))
+		raftstore.WithWriteBatchFunc(h.WriteBatch),
+		raftstore.WithProphetOptions(prophet.WithRoleChangeHandler(h)))
 	if err != nil {
 		return nil, err
 	}
@@ -191,6 +199,125 @@ func (h *beeStorage) WatchEvent() chan Event {
 
 func (h *beeStorage) RaftStore() raftstore.Store {
 	return h.store
+}
+
+func (h *beeStorage) ProphetBecomeLeader() {
+	h.startWorkflowScan()
+}
+
+func (h *beeStorage) ProphetBecomeFollower() {
+	h.stopWorkflowScan()
+}
+
+func (h *beeStorage) startWorkflowScan() {
+	if h.scanTaskID > 0 {
+		h.runner.StopCancelableTask(h.scanTaskID)
+	}
+
+	h.scanTaskID, _ = h.runner.RunCancelableTask(h.doWorkflowScan)
+}
+
+func (h *beeStorage) stopWorkflowScan() {
+	if h.scanTaskID > 0 {
+		h.runner.StopCancelableTask(h.scanTaskID)
+	}
+}
+
+func (h *beeStorage) doWorkflowScan(ctx context.Context) {
+	log.Infof("workflow scan worker started")
+	timer := time.NewTicker(time.Second * 10)
+	defer timer.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Infof("workflow scan worker stopped")
+			return
+		case <-timer.C:
+			h.scanWorkflow()
+		}
+	}
+}
+
+func (h *beeStorage) scanWorkflow() {
+	instance := &metapb.WorkflowInstance{}
+	startingCount := 0
+	startedCount := 0
+	stoppingCount := 0
+	stoppedCount := 0
+
+	start := StartedInstanceKey(0)
+	end := StartedInstanceKey(math.MaxUint64)
+
+	for {
+		values, err := h.Scan(start, end, 16, 0)
+		if err != nil {
+			log.Errorf("scan workflow failed with %+v")
+			return
+		}
+
+		if len(values) == 0 {
+			break
+		}
+
+		for idx, value := range values {
+			switch value[0] {
+			case instanceStartingType:
+				startingCount++
+			case instanceStartedType:
+				startedCount++
+			case instanceStoppingType:
+				stoppingCount++
+			case instanceStoppedType:
+				stoppedCount++
+			}
+
+			if idx == len(values)-1 {
+				instance.Reset()
+				protoc.MustUnmarshal(instance, value[1:])
+				start = StartedInstanceKey(instance.Snapshot.ID + 1)
+			}
+		}
+	}
+
+	metric.SetWorkflowCount(startingCount, startedCount, stoppingCount, stoppedCount)
+}
+
+func (h *beeStorage) scanWorkflowShards() {
+	shard := &metapb.WorkflowInstanceState{}
+	runningCount := 0
+	stoppedCount := 0
+
+	start := InstanceShardKey(0, 0)
+	end := InstanceShardKey(math.MaxUint64, math.MaxUint32)
+	for {
+		values, err := h.Scan(start, end, 16, 0)
+		if err != nil {
+			log.Errorf("scan workflow shard failed with %+v")
+			return
+		}
+
+		if len(values) == 0 {
+			break
+		}
+
+		for idx, value := range values {
+			switch value[0] {
+			case runningStateType:
+				runningCount++
+			case stoppedStateType:
+				stoppedCount++
+			}
+
+			if idx == len(values)-1 {
+				shard.Reset()
+				protoc.MustUnmarshal(shard, value[1:])
+				start = InstanceShardKey(shard.WorkflowID, shard.Index+1)
+			}
+		}
+	}
+
+	metric.SetWorkflowShardsCount(runningCount, stoppedCount)
 }
 
 func (h *beeStorage) getStore(shard uint64) bhstorage.DataStorage {
