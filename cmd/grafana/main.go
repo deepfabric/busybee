@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"net/http"
 	"os"
 
@@ -18,19 +19,25 @@ import (
 )
 
 var (
-	addr   = flag.String("grafana", "127.0.0.1:3000", "Grafana api address")
-	key    = flag.String("key", "", "Grafana api key")
+	addr   = flag.String("grafana", "http://127.0.0.1:3000", "Grafana api address")
+	key    = flag.String("key", "eyJrIjoiZ3BnN3NxRjVFcnVoSGkxZTJXT2lWQVhJZ0dpNXR6QWIiLCJuIjoidGVzdCIsImlkIjoxfQ==", "Grafana api key")
 	folder = flag.String("folder", "Busybee", "Busybee dashboard folder")
 	ds     = flag.String("ds", "Prometheus", "Prometheus datasource name")
 )
 
 func main() {
+	flag.Parse()
+
 	err := createBeehive()
-	log.Fatalf("create beehive dashboard failed with %+v", err)
+	if err != nil {
+		log.Fatalf("create beehive dashboard failed with %+v", err)
+	}
 	log.Infof("create beehive dashboard successful")
 
 	err = createBusybee()
-	log.Fatalf("create busybee dashboard failed with %+v", err)
+	if err != nil {
+		log.Fatalf("create busybee dashboard failed with %+v", err)
+	}
 	log.Infof("create busybee dashboard successful")
 	os.Exit(0)
 }
@@ -74,6 +81,7 @@ func createDashboard(cli *grabana.Client, f *grabana.Folder) error {
 			"interval",
 			interval.Values([]string{"30s", "1m", "5m", "10m", "30m", "1h", "6h", "12h"}),
 		),
+		workflowRow(),
 		requestRow(),
 		errorRow(),
 		eventRow())
@@ -83,70 +91,75 @@ func createDashboard(cli *grabana.Client, f *grabana.Folder) error {
 }
 
 func requestRow() grabana.DashboardBuilderOption {
+	height := 400
 	return grabana.Row(
 		"Request status",
-		withGraph("Requests received", 6,
+		withGraph("Requests received", height, 6,
 			"sum(rate(busybee_api_request_received_total[$interval]))",
 			"Received"),
-		withGraph("Request result", 6,
+		withGraph("Request result", height, 6,
 			"sum(rate(busybee_api_request_result_total[$interval])) by (type, result)",
 			"{{type}}({{result}})"),
 	)
 }
 
 func errorRow() grabana.DashboardBuilderOption {
+	height := 300
 	return grabana.Row(
 		"Error status",
-		withGraph("Storage Error", 6,
+		withGraph("Storage Error", height, 6,
 			"sum(rate(busybee_storage_failed_total[$interval]))",
 			"Error"),
-		withGraph("Worker Error", 6,
+		withGraph("Worker Error", height, 6,
 			"sum(rate(busybee_engine_worker_failed_total[$interval]))",
 			"Error"),
 	)
 }
 
 func eventRow() grabana.DashboardBuilderOption {
+	height := 400
 	return grabana.Row(
 		"Tenant input and output queue status",
-		withGraph("Input event added", 4,
+		withGraph("Input event added", height, 3,
 			"sum(rate(busybee_event_input_total[$interval]))",
-			""),
-		withGraph("Input event handled", 4,
+			"Input added"),
+		withGraph("Input event handled", height, 3,
 			"sum(rate(busybee_event_input_handled_total[$interval]))",
-			""),
-		withGraph("Output notify added", 4,
+			"Input handled"),
+		withGraph("Output notify added", height, 3,
 			"sum(rate(busybee_event_output_total[$interval]))",
-			""),
-		withGraph("Output notify handled", 4,
+			"Output added"),
+		withGraph("Output notify handled", height, 3,
 			"sum(rate(busybee_event_output_handled_total[$interval]))",
-			""),
-		withTable("Input queue size", 6,
-			"sum(busybee_event_input_queue_size) by (tenant)",
-			"{{ tenant }}"),
-		withTable("Output queue size", 6,
-			"sum(busybee_event_output_queue_size) by (tenant)",
-			"{{ tenant }}"),
+			"Output handled"),
 	)
 }
 
 func workflowRow() grabana.DashboardBuilderOption {
+	height := 400
 	return grabana.Row(
 		"Tenant workflow status",
-		withTable("workflow count", 4,
+		withTable("workflow count", height, 3,
 			"sum(busybee_engine_workflow_total) by (status)",
 			"{{ status }}"),
-		withTable("workflow shard count", 4,
+		withTable("workflow shard count", height, 3,
 			"sum(busybee_engine_workflow_shard_total) by (status)",
 			"{{ status }}"),
+
+		withTable("Input queue size", height, 3,
+			"sum(busybee_event_input_queue_size) by (tenant)",
+			"tenant-{{ tenant }}"),
+		withTable("Output queue size", height, 3,
+			"sum(busybee_event_output_queue_size) by (tenant)",
+			"tenant-{{ tenant }}"),
 	)
 }
 
-func withGraph(title string, span float32, pql string, legend string, opts ...axis.Option) row.Option {
+func withGraph(title string, height int, span float32, pql string, legend string, opts ...axis.Option) row.Option {
 	return row.WithGraph(
 		title,
 		graph.Span(span),
-		graph.Height("400px"),
+		graph.Height(fmt.Sprintf("%dpx", height)),
 		graph.DataSource(*ds),
 		graph.WithPrometheusTarget(
 			pql,
@@ -156,11 +169,11 @@ func withGraph(title string, span float32, pql string, legend string, opts ...ax
 	)
 }
 
-func withTable(title string, span float32, pql string, legend string) row.Option {
+func withTable(title string, height int, span float32, pql string, legend string) row.Option {
 	return row.WithTable(
 		title,
 		table.Span(span),
-		table.Height("400px"),
+		table.Height(fmt.Sprintf("%dpx", height)),
 		table.DataSource(*ds),
 		table.WithPrometheusTarget(
 			pql,

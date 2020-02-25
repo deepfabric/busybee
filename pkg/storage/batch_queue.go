@@ -70,7 +70,7 @@ func (qb *queueBatch) addReq(req *raftcmdpb.Request, resp *raftcmdpb.Response, b
 
 func (qb *queueBatch) add(req *rpcpb.QueueAddRequest, b *batch) {
 	if !qb.loaded {
-		qb.tenant = string(format.UInt64ToString(goetty.Byte2UInt64(req.Key)))
+		qb.tenant = string(format.UInt64ToString(goetty.Byte2UInt64(req.Key[len(req.Key)-16:])))
 		qb.queueKey = copyKey(req.Key, qb.buf)
 		qb.consumerStartKey = consumerStartKey(req.Key, qb.buf)
 		qb.consumerEndKey = consumerEndKey(req.Key, qb.buf)

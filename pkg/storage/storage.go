@@ -19,7 +19,8 @@ import (
 )
 
 const (
-	defaultRPCTimeout = time.Second * 10
+	defaultRPCTimeout        = time.Second * 10
+	reportGroup       uint64 = 1314
 )
 
 // Storage storage
@@ -55,11 +56,12 @@ type Storage interface {
 }
 
 type beeStorage struct {
-	app    *server.Application
-	store  raftstore.Store
-	eventC chan Event
-	shardC chan shardCycle
-	runner *task.Runner
+	reportElector prophet.Elector
+	app           *server.Application
+	store         raftstore.Store
+	eventC        chan Event
+	shardC        chan shardCycle
+	runner        *task.Runner
 
 	scanTaskID uint64
 }
@@ -79,8 +81,7 @@ func NewStorage(dataPath string,
 		metadataStorages,
 		dataStorages,
 		raftstore.WithShardStateAware(h),
-		raftstore.WithWriteBatchFunc(h.WriteBatch),
-		raftstore.WithProphetOptions(prophet.WithRoleChangeHandler(h)))
+		raftstore.WithWriteBatchFunc(h.WriteBatch))
 	if err != nil {
 		return nil, err
 	}
@@ -101,6 +102,17 @@ func (h *beeStorage) Start() error {
 	if err != nil {
 		return err
 	}
+
+	elector, err := prophet.NewElector(h.store.Prophet().GetEtcdClient())
+	if err != nil {
+		return err
+	}
+
+	go elector.ElectionLoop(context.Background(),
+		reportGroup,
+		h.store.Meta().ShardAddr,
+		h.becomeReportLeader,
+		h.becomeReportFollower)
 
 	h.app = app
 	return nil
@@ -201,11 +213,11 @@ func (h *beeStorage) RaftStore() raftstore.Store {
 	return h.store
 }
 
-func (h *beeStorage) ProphetBecomeLeader() {
+func (h *beeStorage) becomeReportLeader() {
 	h.startWorkflowScan()
 }
 
-func (h *beeStorage) ProphetBecomeFollower() {
+func (h *beeStorage) becomeReportFollower() {
 	h.stopWorkflowScan()
 }
 
@@ -234,7 +246,9 @@ func (h *beeStorage) doWorkflowScan(ctx context.Context) {
 			log.Infof("workflow scan worker stopped")
 			return
 		case <-timer.C:
+			log.Infof("start scan workflow")
 			h.scanWorkflow()
+			h.scanWorkflowShards()
 		}
 	}
 }
@@ -281,6 +295,11 @@ func (h *beeStorage) scanWorkflow() {
 		}
 	}
 
+	log.Infof("start scan workflow with %d statrting, %d started, %d stopping, %d stopped workflows",
+		startingCount,
+		startedCount,
+		stoppingCount,
+		stoppedCount)
 	metric.SetWorkflowCount(startingCount, startedCount, stoppingCount, stoppedCount)
 }
 
@@ -313,12 +332,15 @@ func (h *beeStorage) scanWorkflowShards() {
 
 			if idx == len(values)-1 {
 				shard.Reset()
-				protoc.MustUnmarshal(shard, value[1:])
+				protoc.MustUnmarshal(shard, OriginInstanceStatePBValue(value[1:]))
 				start = InstanceShardKey(shard.WorkflowID, shard.Index+1)
 			}
 		}
 	}
 
+	log.Infof("start scan workflow with %d running, %d stopped workflow shard workers",
+		runningCount,
+		stoppedCount)
 	metric.SetWorkflowShardsCount(runningCount, stoppedCount)
 }
 

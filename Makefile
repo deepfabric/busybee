@@ -19,6 +19,10 @@ dist_dir: ; $(info ======== prepare distribute dir:)
 	mkdir -p $(DIST_DIR)
 	# @rm -rf $(DIST_DIR)busybee
 
+.PHONY: grafana
+grafana: dist_dir; $(info ======== compiled busybee)
+	env GO111MODULE=off GOOS=$(GOOS) go build -o $(DIST_DIR)grafana $(LD_FLAGS) $(ROOT_DIR)/cmd/grafana/*.go
+
 .PHONY: busybee
 busybee: dist_dir; $(info ======== compiled busybee)
 	env GO111MODULE=off GOOS=$(GOOS) go build -o $(DIST_DIR)busybee $(LD_FLAGS) $(ROOT_DIR)/cmd/server/*.go

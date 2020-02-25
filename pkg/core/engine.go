@@ -492,21 +492,25 @@ func (eng *engine) doStartInstanceStateEvent(state metapb.WorkflowInstanceState)
 		return
 	}
 
-	w, err := newStateWorker(key, state, eng)
-	if err != nil {
-		logger.Errorf("create worker %s failed with %+v",
-			w.key,
-			err)
-		return
+	for {
+		w, err := newStateWorker(key, state, eng)
+		if err != nil {
+			logger.Errorf("create worker %s failed with %+v",
+				key,
+				err)
+			continue
+		}
+
+		eng.workers.Store(w.key, w)
+		w.run()
+
+		if state.StopAt != 0 {
+			after := time.Second * time.Duration(state.StopAt-now)
+			util.DefaultTimeoutWheel().Schedule(after, eng.stopWorker, w)
+		}
+		break
 	}
 
-	eng.workers.Store(w.key, w)
-	w.run()
-
-	if state.StopAt != 0 {
-		after := time.Second * time.Duration(state.StopAt-now)
-		util.DefaultTimeoutWheel().Schedule(after, eng.stopWorker, w)
-	}
 }
 
 func (eng *engine) stopWorker(arg interface{}) {

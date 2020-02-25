@@ -11,7 +11,11 @@ func init() {
 	p.MustRegister(outputEventHandledCounter)
 	p.MustRegister(requestReceivedCounter)
 	p.MustRegister(requestResultCounter)
+	p.MustRegister(storageFailedCounter)
+	p.MustRegister(workerFailedCounter)
 
 	p.MustRegister(inputEventQueueSizeGauge)
 	p.MustRegister(outputEventQueueSizeGauge)
+	p.MustRegister(workflowShardsCountGauge)
+	p.MustRegister(workflowCountGauge)
 }
