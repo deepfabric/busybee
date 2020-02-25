@@ -22,3 +22,15 @@ clusters = [
     "node2:2371",
     "node3:2371"
 ]
+
+[metric]
+# The prometheus pushgateway address
+addr = "pushgateway:9091"
+
+# The interval seconds to push the metrics to prometheus pushgateway
+interval = 10
+
+# The prometheus job
+job = "busybee"
+
+instance = "node4"

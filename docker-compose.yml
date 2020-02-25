@@ -1,9 +1,42 @@
 version: '2.1'
 services:
+  pushgateway:
+    image: prom/pushgateway:v1.1.0
+    expose:
+      - 9091
+    ports:
+      - "9091:9091"
+
+  prometheus:
+    image: prom/prometheus:v2.9.2
+    depends_on:
+      - pushgateway
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+    expose:
+      - 9090
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:5.4.3
+    depends_on:
+      - prometheus
+    environment:
+      - GF_SECURITY_ADMIN_USER=${ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    expose:
+      - 3000
+    ports:
+      - "3000:3000"
+
   node1:
     image: deepfabric/busybee
     ports:
-      - "9091:8080"
+      - "8081:8080"
     volumes:
       - ./cfg/node1.toml:/etc/node.toml
     command: 
@@ -14,7 +47,7 @@ services:
   node2:
     image: deepfabric/busybee
     ports:
-      - "9092:8080"
+      - "8082:8080"
     volumes:
       - ./cfg/node2.toml:/etc/node.toml
     command: 
@@ -25,7 +58,7 @@ services:
   node3:
     image: deepfabric/busybee
     ports:
-      - "9093:8080"
+      - "8083:8080"
     volumes:
       - ./cfg/node3.toml:/etc/node.toml
     command: 
@@ -37,7 +70,7 @@ services:
   node4:
     image: deepfabric/busybee
     ports:
-      - "9094:8080"
+      - "8084:8080"
     volumes:
       - ./cfg/node4.toml:/etc/node.toml
     command: 

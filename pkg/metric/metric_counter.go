@@ -66,7 +66,7 @@ var (
 		prometheus.CounterOpts{
 			Namespace: "busybee",
 			Subsystem: "event",
-			Name:      "input_handled_total",
+			Name:      "output_handled_total",
 			Help:      "Total number of event handled.",
 		}, []string{"tenant"})
 )

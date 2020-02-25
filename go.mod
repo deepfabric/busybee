@@ -3,6 +3,7 @@ module github.com/deepfabric/busybee
 go 1.13
 
 require (
+	github.com/K-Phoen/grabana v0.4.1
 	github.com/RoaringBitmap/roaring v0.4.21
 	github.com/buger/jsonparser v0.0.0-20191204142016-1a29609e0929
 	github.com/deepfabric/beehive v0.0.0-20200224010548-d27dea8468c0

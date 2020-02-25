@@ -21,3 +21,15 @@ clientAddr = "node1:2371"
 
 # The embed etcd peer address, required while storeMetadata is true
 peerAddr = "node1:2381"
+
+[metric]
+# The prometheus pushgateway address
+addr = "pushgateway:9091"
+
+# The interval seconds to push the metrics to prometheus pushgateway
+interval = 10
+
+# The prometheus job
+job = "busybee"
+
+instance = "node1"
