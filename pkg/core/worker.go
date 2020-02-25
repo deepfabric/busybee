@@ -498,7 +498,7 @@ func (w *stateWorker) doStepEvents(events []metapb.UserEvent, batch *executionba
 				err := w.steps[w.state.States[idx].Step.Name].Execute(newExprCtx(event, w, idx),
 					w.stepChanged, batch)
 				if err != nil {
-					metric.IcrWorkflowWorkerFailed()
+					metric.IncWorkflowWorkerFailed()
 					logger.Errorf("worker %s step event %+v failed with %+v",
 						w.key,
 						event,
@@ -524,7 +524,7 @@ func (w *stateWorker) doStepTimer(batch *executionbatch, idx int) {
 	}, w, idx),
 		w.stepChanged, batch)
 	if err != nil {
-		metric.IcrWorkflowWorkerFailed()
+		metric.IncWorkflowWorkerFailed()
 		logger.Errorf("worker %s trigger timer failed with %+v",
 			w.key,
 			err)
