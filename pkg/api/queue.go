@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"fmt"
-	"log"
 	"sync/atomic"
 	"time"
 
@@ -11,6 +10,7 @@ import (
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/storage"
 	"github.com/fagongzi/goetty"
+	"github.com/fagongzi/log"
 	"github.com/fagongzi/util/protoc"
 	"github.com/fagongzi/util/task"
 )
@@ -92,33 +92,35 @@ func (q *tenantQueue) startPartition(partition uint64, pq *task.Queue) {
 		items := make([]interface{}, 16, 16)
 		var events [][]byte
 
-		select {
-		case <-c.Done():
-			return
-		default:
-			n, err := pq.Get(16, items)
-			if err != nil {
-				log.Fatalf("BUG: queue must closed by self goroutine")
-			}
-
-			events = events[:0]
-			for i := int64(0); i < n; i++ {
-				item := items[i]
-				if item == closeFlag {
-					pq.Dispose()
-					return
+		for {
+			select {
+			case <-c.Done():
+				return
+			default:
+				n, err := pq.Get(16, items)
+				if err != nil {
+					log.Fatalf("BUG: queue must closed by self goroutine")
 				}
 
-				events = append(events, protoc.MustMarshal(&metapb.Event{
-					Type: metapb.UserType,
-					User: &item.(ctx).req.AddEvent.Event,
-				}))
-			}
+				events = events[:0]
+				for i := int64(0); i < n; i++ {
+					item := items[i]
+					if item == closeFlag {
+						pq.Dispose()
+						return
+					}
 
-			err = q.eng.Storage().PutToQueue(q.id, partition,
-				metapb.TenantInputGroup, events...)
-			for i := int64(0); i < n; i++ {
-				q.cb(items[i], nil, err)
+					events = append(events, protoc.MustMarshal(&metapb.Event{
+						Type: metapb.UserType,
+						User: &item.(ctx).req.AddEvent.Event,
+					}))
+				}
+
+				err = q.eng.Storage().PutToQueue(q.id, partition,
+					metapb.TenantInputGroup, events...)
+				for i := int64(0); i < n; i++ {
+					q.cb(items[i], nil, err)
+				}
 			}
 		}
 	})
