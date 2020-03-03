@@ -179,6 +179,8 @@ func (eng *engine) StartInstance(workflow metapb.Workflow, loader metapb.BMLoade
 		return err
 	}
 
+	logger.Infof("workflow-%d start load bitmap crowd",
+		workflow.ID)
 	bm, err := eng.loadBM(loader, crowdMeta)
 	if err != nil {
 		logger.Errorf("start workflow-%d failed with %+v",
@@ -629,7 +631,7 @@ func (eng *engine) doEvent(event storage.Event, buf *goetty.ByteBuf) {
 }
 
 func (eng *engine) doStartInstanceStateEvent(state metapb.WorkflowInstanceWorkerState) {
-	logger.Infof("create workflow-%d shard %d",
+	logger.Infof("create workflow-%d worker %d",
 		state.WorkflowID,
 		state.Index)
 
