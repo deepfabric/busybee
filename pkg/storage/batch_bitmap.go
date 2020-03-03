@@ -178,7 +178,7 @@ func (rb *bitmapBatch) exec(s bhstorage.DataStorage, b *batch) error {
 
 			if len(value) > 0 {
 				bm = util.AcquireBitmap()
-				util.MustParseBMTo(value[1:], bm)
+				util.MustParseBMTo(value, bm)
 			}
 
 			for _, op := range ops {
@@ -199,9 +199,7 @@ func (rb *bitmapBatch) exec(s bhstorage.DataStorage, b *batch) error {
 			}
 
 			data := util.MustMarshalBM(bm)
-
-			log.Infof("***********write: %+v: %+v", key, appendValuePrefix(rb.buf, data, kvType))
-			b.wb.Set(key, appendValuePrefix(rb.buf, data, kvType))
+			b.wb.Set(key, util.MustMarshalBM(bm))
 
 			b.writtenBytes += uint64(len(data) - len(value))
 			b.changedBytes += int64(len(data) - len(value))

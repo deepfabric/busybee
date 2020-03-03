@@ -24,16 +24,18 @@ enum Type {
     BMRange       = 106;
 
     StartingInstance         = 200;
-    UpdateWorkflow           = 201;
-    UpdateCrowd              = 202;
-    UpdateInstance           = 203;
-    StartedInstance          = 204;
-    StopInstance             = 205;
-    CreateInstanceStateShard = 206;
-    UpdateInstanceStateShard = 207;
-    RemoveInstanceStateShard = 208;
-    InstanceCountState       = 209;
-    InstanceCrowdState       = 210;
+    LastInstance             = 201;
+    HistoryInstance          = 202;
+    UpdateWorkflow           = 203;
+    UpdateCrowd              = 204;
+    StartedInstance          = 205;
+    StopInstance             = 206;
+    StoppedInstance          = 207;
+    CreateInstanceStateShard = 208;
+    UpdateInstanceStateShard = 209;
+    RemoveInstanceStateShard = 210;
+    InstanceCountState       = 211;
+    InstanceCrowdState       = 212;
 
     QueueAdd      = 300;
     QueueFetch    = 301;
@@ -54,36 +56,38 @@ enum Type {
 
 // Request the busybee request
 message Request {
-    uint64                     id             = 1  [(gogoproto.customname) = "ID"];
-    Type                       type           = 2;
-    SetRequest                 set            = 3  [(gogoproto.nullable) = false];
-    GetRequest                 get            = 4  [(gogoproto.nullable) = false];
-    DeleteRequest              delete         = 5  [(gogoproto.nullable) = false];
-    ScanRequest                scan           = 6  [(gogoproto.nullable) = false];
-    BMCreateRequest            bmCreate       = 7  [(gogoproto.nullable) = false];
-    BMAddRequest               bmAdd          = 8  [(gogoproto.nullable) = false];
-    BMRemoveRequest            bmRemove       = 9  [(gogoproto.nullable) = false];
-    BMClearRequest             bmClear        = 10  [(gogoproto.nullable) = false];
-    BMRangeRequest             bmRange        = 11 [(gogoproto.nullable) = false];
-    BMCountRequest             bmCount        = 12 [(gogoproto.nullable) = false];
-    BMContainsRequest          bmContains     = 13 [(gogoproto.nullable) = false];
-    TenantInitRequest          tenantInit     = 14 [(gogoproto.nullable) = false];
-    StartingInstanceRequest    startInstance  = 15 [(gogoproto.nullable) = false];
-    UpdateCrowdRequest         updateCrowd    = 16 [(gogoproto.nullable) = false];
-    UpdateWorkflowRequest      updateWorkflow = 17 [(gogoproto.nullable) = false];
-    StopInstanceRequest        stopInstance   = 18 [(gogoproto.nullable) = false];
-    InstanceCountStateRequest  countInstance  = 19 [(gogoproto.nullable) = false];
-    InstanceCrowdStateRequest  crowdInstance  = 20 [(gogoproto.nullable) = false];
-    UpdateMappingRequest       updateMapping  = 21 [(gogoproto.nullable) = false];
-    GetMappingRequest          getMapping     = 22 [(gogoproto.nullable) = false];
-    UpdateProfileRequest       updateProfile  = 23 [(gogoproto.nullable) = false];
-    GetProfileRequest          getProfile     = 24 [(gogoproto.nullable) = false];
-    AddEventRequest            addEvent       = 25 [(gogoproto.nullable) = false];
-    FetchNotifyRequest         fetchNotify    = 26 [(gogoproto.nullable) = false];
-    AllocIDRequest             allocID        = 27 [(gogoproto.nullable) = false];
-    ResetIDRequest             resetID        = 28 [(gogoproto.nullable) = false];
-    ScanMappingRequest         scanMapping    = 29 [(gogoproto.nullable) = false];
-    GetIDSetRequest            getIDSet       = 30 [(gogoproto.nullable) = false];
+    uint64                     id              = 1  [(gogoproto.customname) = "ID"];
+    Type                       type            = 2;
+    SetRequest                 set             = 3  [(gogoproto.nullable) = false];
+    GetRequest                 get             = 4  [(gogoproto.nullable) = false];
+    DeleteRequest              delete          = 5  [(gogoproto.nullable) = false];
+    ScanRequest                scan            = 6  [(gogoproto.nullable) = false];
+    BMCreateRequest            bmCreate        = 7  [(gogoproto.nullable) = false];
+    BMAddRequest               bmAdd           = 8  [(gogoproto.nullable) = false];
+    BMRemoveRequest            bmRemove        = 9  [(gogoproto.nullable) = false];
+    BMClearRequest             bmClear         = 10  [(gogoproto.nullable) = false];
+    BMRangeRequest             bmRange         = 11 [(gogoproto.nullable) = false];
+    BMCountRequest             bmCount         = 12 [(gogoproto.nullable) = false];
+    BMContainsRequest          bmContains      = 13 [(gogoproto.nullable) = false];
+    TenantInitRequest          tenantInit      = 14 [(gogoproto.nullable) = false];
+    StartingInstanceRequest    startInstance   = 15 [(gogoproto.nullable) = false];
+    LastInstanceRequest        lastInstance    = 16 [(gogoproto.nullable) = false];
+    HistoryInstanceRequest     historyInstance = 17 [(gogoproto.nullable) = false];
+    UpdateCrowdRequest         updateCrowd     = 18 [(gogoproto.nullable) = false];
+    UpdateWorkflowRequest      updateWorkflow  = 19 [(gogoproto.nullable) = false];
+    StopInstanceRequest        stopInstance    = 20 [(gogoproto.nullable) = false];
+    InstanceCountStateRequest  countInstance   = 21 [(gogoproto.nullable) = false];
+    InstanceCrowdStateRequest  crowdInstance   = 22 [(gogoproto.nullable) = false];
+    UpdateMappingRequest       updateMapping   = 23 [(gogoproto.nullable) = false];
+    GetMappingRequest          getMapping      = 24 [(gogoproto.nullable) = false];
+    UpdateProfileRequest       updateProfile   = 25 [(gogoproto.nullable) = false];
+    GetProfileRequest          getProfile      = 26 [(gogoproto.nullable) = false];
+    AddEventRequest            addEvent        = 27 [(gogoproto.nullable) = false];
+    FetchNotifyRequest         fetchNotify     = 28 [(gogoproto.nullable) = false];
+    AllocIDRequest             allocID         = 29 [(gogoproto.nullable) = false];
+    ResetIDRequest             resetID         = 30 [(gogoproto.nullable) = false];
+    ScanMappingRequest         scanMapping     = 31 [(gogoproto.nullable) = false];
+    GetIDSetRequest            getIDSet        = 32 [(gogoproto.nullable) = false];
 }
 
 // Response the busybee response
@@ -110,7 +114,7 @@ message SetRequest {
 
 // GetRequest get value by key
 message GetRequest {
-    bytes key = 1;
+    bytes key  = 1;
 }
 
 // DeleteRequest remove a key value pair
@@ -164,19 +168,26 @@ message StartingInstanceRequest {
     metapb.WorkflowInstance instance  = 1 [(gogoproto.nullable) = false];
 }
 
-// UpdateInstanceRequest update a workflow
-message UpdateInstanceRequest {
-    metapb.WorkflowInstance instance  = 1 [(gogoproto.nullable) = false];
+// LastInstanceRequest last instance request
+message LastInstanceRequest {
+    uint64 workflowID = 1;
+}
+
+// HistoryInstanceRequest history instance request
+message HistoryInstanceRequest {
+    uint64 workflowID = 1;
+    uint64 instanceID = 2;
 }
 
 // UpdateCrowdRequest update crowd request
 message UpdateCrowdRequest {
-    uint64 id    = 1 [(gogoproto.customname) = "ID"];
-    bytes  crowd = 2;
+    uint64 id              = 1 [(gogoproto.customname) = "ID"];
+    metapb.BMLoader loader = 2;
+    bytes  loaderMeta      = 3;
 }
   
 // UpdateWorkflowRequest update instance request
-message  UpdateWorkflowRequest {
+message UpdateWorkflowRequest {
     metapb.Workflow workflow  = 1 [(gogoproto.nullable) = false];
 }
 
@@ -185,19 +196,24 @@ message StartedInstanceRequest {
     uint64 workflowID = 1;
 }
 
-// StopInstanceRequest remove a workflow
+// StopInstanceRequest stop a workflow
 message StopInstanceRequest {
+    uint64 workflowID = 1;
+}
+
+// StoppedInstanceRequest workflow stopped
+message StoppedInstanceRequest {
     uint64 workflowID = 1;
 }
 
 // CreateInstanceStateShardRequest create a instance state
 message CreateInstanceStateShardRequest {
-    metapb.WorkflowInstanceState state = 1 [(gogoproto.nullable) = false];
+    metapb.WorkflowInstanceWorkerState state = 1 [(gogoproto.nullable) = false];
 }
 
 // UpdateInstanceStateShardRequest update a instance state
 message UpdateInstanceStateShardRequest {
-    metapb.WorkflowInstanceState state = 1 [(gogoproto.nullable) = false];
+    metapb.WorkflowInstanceWorkerState state = 1 [(gogoproto.nullable) = false];
 }
 
 // RemoveInstanceStateShardRequest remove a instance state
@@ -311,8 +327,7 @@ message ScanRequest {
     bytes        start = 1;
     bytes        end   = 2;
     uint64       limit = 3;
-    int32        skip  = 4;
-    metapb.Group group = 5;
+    metapb.Group group = 4;
 }
 
 // ErrorResponse error response 

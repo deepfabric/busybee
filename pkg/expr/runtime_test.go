@@ -635,12 +635,12 @@ func TestFuncVar(t *testing.T) {
 func TestDynamicVar(t *testing.T) {
 	now := time.Now()
 	ctx := newTestCtx()
-	ctx.kvs[fmt.Sprintf("cur_%d", now.Year())] = "123"
-	ctx.kvs[fmt.Sprintf("cur_%d", now.Month())] = "456"
-	ctx.kvs[fmt.Sprintf("cur_%d", now.Day())] = "789"
+	ctx.kvs[fmt.Sprintf("cur_year_%d", now.Year())] = "123"
+	ctx.kvs[fmt.Sprintf("cur_month_%d", now.Month())] = "456"
+	ctx.kvs[fmt.Sprintf("cur_day_%d", now.Day())] = "789"
 
 	rt, err := NewRuntime(metapb.Expr{
-		Value: []byte("({dyna.cur_%d.year}==123) && ({dyna.cur_%d.month}==456) && ({dyna.cur_%d.day}==789)"),
+		Value: []byte("({dyna.cur_year_%d.year}==123) && ({dyna.cur_month_%d.month}==456) && ({dyna.cur_day_%d.day}==789)"),
 	})
 	assert.NoError(t, err, "TestDynamicVar failed")
 

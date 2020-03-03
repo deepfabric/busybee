@@ -24,6 +24,70 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.GoGoProtoPackageIsVersion3 // please upgrade the proto package
 
+// BMLoader bitmap loader type
+type BMLoader int32
+
+const (
+	RawLoader        BMLoader = 0
+	KVLoader         BMLoader = 1
+	KVShardLoader    BMLoader = 2
+	ClickhouseLoader BMLoader = 3
+)
+
+var BMLoader_name = map[int32]string{
+	0: "RawLoader",
+	1: "KVLoader",
+	2: "KVShardLoader",
+	3: "ClickhouseLoader",
+}
+
+var BMLoader_value = map[string]int32{
+	"RawLoader":        0,
+	"KVLoader":         1,
+	"KVShardLoader":    2,
+	"ClickhouseLoader": 3,
+}
+
+func (x BMLoader) String() string {
+	return proto.EnumName(BMLoader_name, int32(x))
+}
+
+func (BMLoader) EnumDescriptor() ([]byte, []int) {
+	return fileDescriptor_3b5ea8fe65782bcc, []int{0}
+}
+
+// WorkflowInstanceState workflow instance state
+type WorkflowInstanceState int32
+
+const (
+	Starting WorkflowInstanceState = 0
+	Running  WorkflowInstanceState = 1
+	Stopping WorkflowInstanceState = 2
+	Stopped  WorkflowInstanceState = 3
+)
+
+var WorkflowInstanceState_name = map[int32]string{
+	0: "Starting",
+	1: "Running",
+	2: "Stopping",
+	3: "Stopped",
+}
+
+var WorkflowInstanceState_value = map[string]int32{
+	"Starting": 0,
+	"Running":  1,
+	"Stopping": 2,
+	"Stopped":  3,
+}
+
+func (x WorkflowInstanceState) String() string {
+	return proto.EnumName(WorkflowInstanceState_name, int32(x))
+}
+
+func (WorkflowInstanceState) EnumDescriptor() ([]byte, []int) {
+	return fileDescriptor_3b5ea8fe65782bcc, []int{1}
+}
+
 // EventType tenant input event type
 type EventType int32
 
@@ -50,7 +114,7 @@ func (x EventType) String() string {
 }
 
 func (EventType) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_3b5ea8fe65782bcc, []int{0}
+	return fileDescriptor_3b5ea8fe65782bcc, []int{2}
 }
 
 // Group shard group
@@ -79,7 +143,7 @@ func (x Group) String() string {
 }
 
 func (Group) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_3b5ea8fe65782bcc, []int{1}
+	return fileDescriptor_3b5ea8fe65782bcc, []int{3}
 }
 
 // ExectuionType is is the type of a execution operation
@@ -115,7 +179,7 @@ func (x ExectuionType) String() string {
 }
 
 func (ExectuionType) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_3b5ea8fe65782bcc, []int{2}
+	return fileDescriptor_3b5ea8fe65782bcc, []int{4}
 }
 
 // ExprResultType expr execute type
@@ -141,7 +205,129 @@ func (x ExprResultType) String() string {
 }
 
 func (ExprResultType) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_3b5ea8fe65782bcc, []int{3}
+	return fileDescriptor_3b5ea8fe65782bcc, []int{5}
+}
+
+// ShardBitmapPutMeta shard bitmap put meta
+type ShardBitmapPutMeta struct {
+	Key           []byte `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	TTL           uint32 `protobuf:"varint,2,opt,name=ttl,proto3" json:"ttl,omitempty"`
+	BytesPerShard uint32 `protobuf:"varint,3,opt,name=bytesPerShard,proto3" json:"bytesPerShard,omitempty"`
+}
+
+func (m *ShardBitmapPutMeta) Reset()         { *m = ShardBitmapPutMeta{} }
+func (m *ShardBitmapPutMeta) String() string { return proto.CompactTextString(m) }
+func (*ShardBitmapPutMeta) ProtoMessage()    {}
+func (*ShardBitmapPutMeta) Descriptor() ([]byte, []int) {
+	return fileDescriptor_3b5ea8fe65782bcc, []int{0}
+}
+func (m *ShardBitmapPutMeta) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *ShardBitmapPutMeta) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_ShardBitmapPutMeta.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *ShardBitmapPutMeta) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ShardBitmapPutMeta.Merge(m, src)
+}
+func (m *ShardBitmapPutMeta) XXX_Size() int {
+	return m.Size()
+}
+func (m *ShardBitmapPutMeta) XXX_DiscardUnknown() {
+	xxx_messageInfo_ShardBitmapPutMeta.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ShardBitmapPutMeta proto.InternalMessageInfo
+
+func (m *ShardBitmapPutMeta) GetKey() []byte {
+	if m != nil {
+		return m.Key
+	}
+	return nil
+}
+
+func (m *ShardBitmapPutMeta) GetTTL() uint32 {
+	if m != nil {
+		return m.TTL
+	}
+	return 0
+}
+
+func (m *ShardBitmapPutMeta) GetBytesPerShard() uint32 {
+	if m != nil {
+		return m.BytesPerShard
+	}
+	return 0
+}
+
+// ShardBitmapLoadMeta shard bitmap load meta
+type ShardBitmapLoadMeta struct {
+	Key    []byte `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	Total  uint64 `protobuf:"varint,2,opt,name=Total,proto3" json:"Total,omitempty"`
+	Shards uint32 `protobuf:"varint,3,opt,name=shards,proto3" json:"shards,omitempty"`
+}
+
+func (m *ShardBitmapLoadMeta) Reset()         { *m = ShardBitmapLoadMeta{} }
+func (m *ShardBitmapLoadMeta) String() string { return proto.CompactTextString(m) }
+func (*ShardBitmapLoadMeta) ProtoMessage()    {}
+func (*ShardBitmapLoadMeta) Descriptor() ([]byte, []int) {
+	return fileDescriptor_3b5ea8fe65782bcc, []int{1}
+}
+func (m *ShardBitmapLoadMeta) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *ShardBitmapLoadMeta) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_ShardBitmapLoadMeta.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *ShardBitmapLoadMeta) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ShardBitmapLoadMeta.Merge(m, src)
+}
+func (m *ShardBitmapLoadMeta) XXX_Size() int {
+	return m.Size()
+}
+func (m *ShardBitmapLoadMeta) XXX_DiscardUnknown() {
+	xxx_messageInfo_ShardBitmapLoadMeta.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ShardBitmapLoadMeta proto.InternalMessageInfo
+
+func (m *ShardBitmapLoadMeta) GetKey() []byte {
+	if m != nil {
+		return m.Key
+	}
+	return nil
+}
+
+func (m *ShardBitmapLoadMeta) GetTotal() uint64 {
+	if m != nil {
+		return m.Total
+	}
+	return 0
+}
+
+func (m *ShardBitmapLoadMeta) GetShards() uint32 {
+	if m != nil {
+		return m.Shards
+	}
+	return 0
 }
 
 // IDValue is a id value
@@ -154,7 +340,7 @@ func (m *IDValue) Reset()         { *m = IDValue{} }
 func (m *IDValue) String() string { return proto.CompactTextString(m) }
 func (*IDValue) ProtoMessage()    {}
 func (*IDValue) Descriptor() ([]byte, []int) {
-	return fileDescriptor_3b5ea8fe65782bcc, []int{0}
+	return fileDescriptor_3b5ea8fe65782bcc, []int{2}
 }
 func (m *IDValue) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -206,7 +392,7 @@ func (m *IDSet) Reset()         { *m = IDSet{} }
 func (m *IDSet) String() string { return proto.CompactTextString(m) }
 func (*IDSet) ProtoMessage()    {}
 func (*IDSet) Descriptor() ([]byte, []int) {
-	return fileDescriptor_3b5ea8fe65782bcc, []int{1}
+	return fileDescriptor_3b5ea8fe65782bcc, []int{3}
 }
 func (m *IDSet) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -254,7 +440,7 @@ func (m *Event) Reset()         { *m = Event{} }
 func (m *Event) String() string { return proto.CompactTextString(m) }
 func (*Event) ProtoMessage()    {}
 func (*Event) Descriptor() ([]byte, []int) {
-	return fileDescriptor_3b5ea8fe65782bcc, []int{2}
+	return fileDescriptor_3b5ea8fe65782bcc, []int{4}
 }
 func (m *Event) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -322,7 +508,7 @@ func (m *UpdateCrowdEvent) Reset()         { *m = UpdateCrowdEvent{} }
 func (m *UpdateCrowdEvent) String() string { return proto.CompactTextString(m) }
 func (*UpdateCrowdEvent) ProtoMessage()    {}
 func (*UpdateCrowdEvent) Descriptor() ([]byte, []int) {
-	return fileDescriptor_3b5ea8fe65782bcc, []int{3}
+	return fileDescriptor_3b5ea8fe65782bcc, []int{5}
 }
 func (m *UpdateCrowdEvent) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -381,7 +567,7 @@ func (m *UpdateWorkflowEvent) Reset()         { *m = UpdateWorkflowEvent{} }
 func (m *UpdateWorkflowEvent) String() string { return proto.CompactTextString(m) }
 func (*UpdateWorkflowEvent) ProtoMessage()    {}
 func (*UpdateWorkflowEvent) Descriptor() ([]byte, []int) {
-	return fileDescriptor_3b5ea8fe65782bcc, []int{4}
+	return fileDescriptor_3b5ea8fe65782bcc, []int{6}
 }
 func (m *UpdateWorkflowEvent) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -429,7 +615,7 @@ func (m *UserEvent) Reset()         { *m = UserEvent{} }
 func (m *UserEvent) String() string { return proto.CompactTextString(m) }
 func (*UserEvent) ProtoMessage()    {}
 func (*UserEvent) Descriptor() ([]byte, []int) {
-	return fileDescriptor_3b5ea8fe65782bcc, []int{5}
+	return fileDescriptor_3b5ea8fe65782bcc, []int{7}
 }
 func (m *UserEvent) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -496,7 +682,7 @@ func (m *KV) Reset()         { *m = KV{} }
 func (m *KV) String() string { return proto.CompactTextString(m) }
 func (*KV) ProtoMessage()    {}
 func (*KV) Descriptor() ([]byte, []int) {
-	return fileDescriptor_3b5ea8fe65782bcc, []int{6}
+	return fileDescriptor_3b5ea8fe65782bcc, []int{8}
 }
 func (m *KV) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -556,7 +742,7 @@ func (m *Notify) Reset()         { *m = Notify{} }
 func (m *Notify) String() string { return proto.CompactTextString(m) }
 func (*Notify) ProtoMessage()    {}
 func (*Notify) Descriptor() ([]byte, []int) {
-	return fileDescriptor_3b5ea8fe65782bcc, []int{7}
+	return fileDescriptor_3b5ea8fe65782bcc, []int{9}
 }
 func (m *Notify) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -661,7 +847,7 @@ func (m *Workflow) Reset()         { *m = Workflow{} }
 func (m *Workflow) String() string { return proto.CompactTextString(m) }
 func (*Workflow) ProtoMessage()    {}
 func (*Workflow) Descriptor() ([]byte, []int) {
-	return fileDescriptor_3b5ea8fe65782bcc, []int{8}
+	return fileDescriptor_3b5ea8fe65782bcc, []int{10}
 }
 func (m *Workflow) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -727,19 +913,23 @@ func (m *Workflow) GetDuration() int64 {
 
 // WorkflowInstance workflow instance
 type WorkflowInstance struct {
-	Snapshot  Workflow `protobuf:"bytes,1,opt,name=snapshot,proto3" json:"snapshot"`
-	Crowd     []byte   `protobuf:"bytes,2,opt,name=crowd,proto3" json:"crowd,omitempty"`
-	Workers   uint64   `protobuf:"varint,3,opt,name=workers,proto3" json:"workers,omitempty"`
-	StartedAt int64    `protobuf:"varint,4,opt,name=startedAt,proto3" json:"startedAt,omitempty"`
-	StoppedAt int64    `protobuf:"varint,5,opt,name=stoppedAt,proto3" json:"stoppedAt,omitempty"`
-	Version   uint64   `protobuf:"varint,6,opt,name=version,proto3" json:"version,omitempty"`
+	Snapshot   Workflow              `protobuf:"bytes,1,opt,name=snapshot,proto3" json:"snapshot"`
+	InstanceID uint64                `protobuf:"varint,2,opt,name=instanceID,proto3" json:"instanceID,omitempty"`
+	LoaderMeta []byte                `protobuf:"bytes,3,opt,name=loaderMeta,proto3" json:"loaderMeta,omitempty"`
+	Loader     BMLoader              `protobuf:"varint,4,opt,name=loader,proto3,enum=metapb.BMLoader" json:"loader,omitempty"`
+	TotalCrowd uint64                `protobuf:"varint,5,opt,name=totalCrowd,proto3" json:"totalCrowd,omitempty"`
+	Workers    uint64                `protobuf:"varint,6,opt,name=workers,proto3" json:"workers,omitempty"`
+	StartedAt  int64                 `protobuf:"varint,7,opt,name=startedAt,proto3" json:"startedAt,omitempty"`
+	StoppedAt  int64                 `protobuf:"varint,8,opt,name=stoppedAt,proto3" json:"stoppedAt,omitempty"`
+	Version    uint64                `protobuf:"varint,9,opt,name=version,proto3" json:"version,omitempty"`
+	State      WorkflowInstanceState `protobuf:"varint,10,opt,name=state,proto3,enum=metapb.WorkflowInstanceState" json:"state,omitempty"`
 }
 
 func (m *WorkflowInstance) Reset()         { *m = WorkflowInstance{} }
 func (m *WorkflowInstance) String() string { return proto.CompactTextString(m) }
 func (*WorkflowInstance) ProtoMessage()    {}
 func (*WorkflowInstance) Descriptor() ([]byte, []int) {
-	return fileDescriptor_3b5ea8fe65782bcc, []int{9}
+	return fileDescriptor_3b5ea8fe65782bcc, []int{11}
 }
 func (m *WorkflowInstance) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -775,11 +965,32 @@ func (m *WorkflowInstance) GetSnapshot() Workflow {
 	return Workflow{}
 }
 
-func (m *WorkflowInstance) GetCrowd() []byte {
+func (m *WorkflowInstance) GetInstanceID() uint64 {
 	if m != nil {
-		return m.Crowd
+		return m.InstanceID
+	}
+	return 0
+}
+
+func (m *WorkflowInstance) GetLoaderMeta() []byte {
+	if m != nil {
+		return m.LoaderMeta
 	}
 	return nil
+}
+
+func (m *WorkflowInstance) GetLoader() BMLoader {
+	if m != nil {
+		return m.Loader
+	}
+	return RawLoader
+}
+
+func (m *WorkflowInstance) GetTotalCrowd() uint64 {
+	if m != nil {
+		return m.TotalCrowd
+	}
+	return 0
 }
 
 func (m *WorkflowInstance) GetWorkers() uint64 {
@@ -810,28 +1021,32 @@ func (m *WorkflowInstance) GetVersion() uint64 {
 	return 0
 }
 
-// WorkflowInstanceState workflow instance state. instance : instanceState = 1 : N
-type WorkflowInstanceState struct {
-	TenantID   uint64      `protobuf:"varint,1,opt,name=tenantID,proto3" json:"tenantID,omitempty"`
-	WorkflowID uint64      `protobuf:"varint,2,opt,name=workflowID,proto3" json:"workflowID,omitempty"`
-	Index      uint32      `protobuf:"varint,3,opt,name=index,proto3" json:"index,omitempty"`
-	States     []StepState `protobuf:"bytes,4,rep,name=states,proto3" json:"states"`
-	Version    uint64      `protobuf:"varint,5,opt,name=version,proto3" json:"version,omitempty"`
-	StopAt     int64       `protobuf:"varint,6,opt,name=stopAt,proto3" json:"stopAt,omitempty"`
+func (m *WorkflowInstance) GetState() WorkflowInstanceState {
+	if m != nil {
+		return m.State
+	}
+	return Starting
 }
 
-func (m *WorkflowInstanceState) Reset()         { *m = WorkflowInstanceState{} }
-func (m *WorkflowInstanceState) String() string { return proto.CompactTextString(m) }
-func (*WorkflowInstanceState) ProtoMessage()    {}
-func (*WorkflowInstanceState) Descriptor() ([]byte, []int) {
-	return fileDescriptor_3b5ea8fe65782bcc, []int{10}
+// WorkflowInstanceSnapshot workflow instance snapshpot
+type WorkflowInstanceSnapshot struct {
+	Snapshot  WorkflowInstance `protobuf:"bytes,1,opt,name=snapshot,proto3" json:"snapshot"`
+	Timestamp int64            `protobuf:"varint,2,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	States    []StepState      `protobuf:"bytes,3,rep,name=states,proto3" json:"states"`
 }
-func (m *WorkflowInstanceState) XXX_Unmarshal(b []byte) error {
+
+func (m *WorkflowInstanceSnapshot) Reset()         { *m = WorkflowInstanceSnapshot{} }
+func (m *WorkflowInstanceSnapshot) String() string { return proto.CompactTextString(m) }
+func (*WorkflowInstanceSnapshot) ProtoMessage()    {}
+func (*WorkflowInstanceSnapshot) Descriptor() ([]byte, []int) {
+	return fileDescriptor_3b5ea8fe65782bcc, []int{12}
+}
+func (m *WorkflowInstanceSnapshot) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
 }
-func (m *WorkflowInstanceState) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+func (m *WorkflowInstanceSnapshot) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	if deterministic {
-		return xxx_messageInfo_WorkflowInstanceState.Marshal(b, m, deterministic)
+		return xxx_messageInfo_WorkflowInstanceSnapshot.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
 		n, err := m.MarshalToSizedBuffer(b)
@@ -841,54 +1056,118 @@ func (m *WorkflowInstanceState) XXX_Marshal(b []byte, deterministic bool) ([]byt
 		return b[:n], nil
 	}
 }
-func (m *WorkflowInstanceState) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_WorkflowInstanceState.Merge(m, src)
+func (m *WorkflowInstanceSnapshot) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_WorkflowInstanceSnapshot.Merge(m, src)
 }
-func (m *WorkflowInstanceState) XXX_Size() int {
+func (m *WorkflowInstanceSnapshot) XXX_Size() int {
 	return m.Size()
 }
-func (m *WorkflowInstanceState) XXX_DiscardUnknown() {
-	xxx_messageInfo_WorkflowInstanceState.DiscardUnknown(m)
+func (m *WorkflowInstanceSnapshot) XXX_DiscardUnknown() {
+	xxx_messageInfo_WorkflowInstanceSnapshot.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_WorkflowInstanceState proto.InternalMessageInfo
+var xxx_messageInfo_WorkflowInstanceSnapshot proto.InternalMessageInfo
 
-func (m *WorkflowInstanceState) GetTenantID() uint64 {
+func (m *WorkflowInstanceSnapshot) GetSnapshot() WorkflowInstance {
 	if m != nil {
-		return m.TenantID
+		return m.Snapshot
+	}
+	return WorkflowInstance{}
+}
+
+func (m *WorkflowInstanceSnapshot) GetTimestamp() int64 {
+	if m != nil {
+		return m.Timestamp
 	}
 	return 0
 }
 
-func (m *WorkflowInstanceState) GetWorkflowID() uint64 {
-	if m != nil {
-		return m.WorkflowID
-	}
-	return 0
-}
-
-func (m *WorkflowInstanceState) GetIndex() uint32 {
-	if m != nil {
-		return m.Index
-	}
-	return 0
-}
-
-func (m *WorkflowInstanceState) GetStates() []StepState {
+func (m *WorkflowInstanceSnapshot) GetStates() []StepState {
 	if m != nil {
 		return m.States
 	}
 	return nil
 }
 
-func (m *WorkflowInstanceState) GetVersion() uint64 {
+// WorkflowInstanceWorkerState workflow instance state. instance : instanceState = 1 : N
+type WorkflowInstanceWorkerState struct {
+	TenantID   uint64      `protobuf:"varint,1,opt,name=tenantID,proto3" json:"tenantID,omitempty"`
+	WorkflowID uint64      `protobuf:"varint,2,opt,name=workflowID,proto3" json:"workflowID,omitempty"`
+	Index      uint32      `protobuf:"varint,3,opt,name=index,proto3" json:"index,omitempty"`
+	States     []StepState `protobuf:"bytes,4,rep,name=states,proto3" json:"states"`
+	Version    uint64      `protobuf:"varint,5,opt,name=version,proto3" json:"version,omitempty"`
+	StopAt     int64       `protobuf:"varint,6,opt,name=stopAt,proto3" json:"stopAt,omitempty"`
+}
+
+func (m *WorkflowInstanceWorkerState) Reset()         { *m = WorkflowInstanceWorkerState{} }
+func (m *WorkflowInstanceWorkerState) String() string { return proto.CompactTextString(m) }
+func (*WorkflowInstanceWorkerState) ProtoMessage()    {}
+func (*WorkflowInstanceWorkerState) Descriptor() ([]byte, []int) {
+	return fileDescriptor_3b5ea8fe65782bcc, []int{13}
+}
+func (m *WorkflowInstanceWorkerState) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *WorkflowInstanceWorkerState) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_WorkflowInstanceWorkerState.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *WorkflowInstanceWorkerState) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_WorkflowInstanceWorkerState.Merge(m, src)
+}
+func (m *WorkflowInstanceWorkerState) XXX_Size() int {
+	return m.Size()
+}
+func (m *WorkflowInstanceWorkerState) XXX_DiscardUnknown() {
+	xxx_messageInfo_WorkflowInstanceWorkerState.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_WorkflowInstanceWorkerState proto.InternalMessageInfo
+
+func (m *WorkflowInstanceWorkerState) GetTenantID() uint64 {
+	if m != nil {
+		return m.TenantID
+	}
+	return 0
+}
+
+func (m *WorkflowInstanceWorkerState) GetWorkflowID() uint64 {
+	if m != nil {
+		return m.WorkflowID
+	}
+	return 0
+}
+
+func (m *WorkflowInstanceWorkerState) GetIndex() uint32 {
+	if m != nil {
+		return m.Index
+	}
+	return 0
+}
+
+func (m *WorkflowInstanceWorkerState) GetStates() []StepState {
+	if m != nil {
+		return m.States
+	}
+	return nil
+}
+
+func (m *WorkflowInstanceWorkerState) GetVersion() uint64 {
 	if m != nil {
 		return m.Version
 	}
 	return 0
 }
 
-func (m *WorkflowInstanceState) GetStopAt() int64 {
+func (m *WorkflowInstanceWorkerState) GetStopAt() int64 {
 	if m != nil {
 		return m.StopAt
 	}
@@ -905,7 +1184,7 @@ func (m *CountState) Reset()         { *m = CountState{} }
 func (m *CountState) String() string { return proto.CompactTextString(m) }
 func (*CountState) ProtoMessage()    {}
 func (*CountState) Descriptor() ([]byte, []int) {
-	return fileDescriptor_3b5ea8fe65782bcc, []int{11}
+	return fileDescriptor_3b5ea8fe65782bcc, []int{14}
 }
 func (m *CountState) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -959,7 +1238,7 @@ func (m *InstanceCountState) Reset()         { *m = InstanceCountState{} }
 func (m *InstanceCountState) String() string { return proto.CompactTextString(m) }
 func (*InstanceCountState) ProtoMessage()    {}
 func (*InstanceCountState) Descriptor() ([]byte, []int) {
-	return fileDescriptor_3b5ea8fe65782bcc, []int{12}
+	return fileDescriptor_3b5ea8fe65782bcc, []int{15}
 }
 func (m *InstanceCountState) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1011,15 +1290,17 @@ func (m *InstanceCountState) GetTotal() uint64 {
 
 // StepState workflow step state.
 type StepState struct {
-	Step  Step   `protobuf:"bytes,1,opt,name=step,proto3" json:"step"`
-	Crowd []byte `protobuf:"bytes,2,opt,name=crowd,proto3" json:"crowd,omitempty"`
+	Step       Step     `protobuf:"bytes,1,opt,name=step,proto3" json:"step"`
+	TotalCrowd uint64   `protobuf:"varint,2,opt,name=totalCrowd,proto3" json:"totalCrowd,omitempty"`
+	Loader     BMLoader `protobuf:"varint,3,opt,name=loader,proto3,enum=metapb.BMLoader" json:"loader,omitempty"`
+	LoaderMeta []byte   `protobuf:"bytes,4,opt,name=loaderMeta,proto3" json:"loaderMeta,omitempty"`
 }
 
 func (m *StepState) Reset()         { *m = StepState{} }
 func (m *StepState) String() string { return proto.CompactTextString(m) }
 func (*StepState) ProtoMessage()    {}
 func (*StepState) Descriptor() ([]byte, []int) {
-	return fileDescriptor_3b5ea8fe65782bcc, []int{13}
+	return fileDescriptor_3b5ea8fe65782bcc, []int{16}
 }
 func (m *StepState) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1055,9 +1336,23 @@ func (m *StepState) GetStep() Step {
 	return Step{}
 }
 
-func (m *StepState) GetCrowd() []byte {
+func (m *StepState) GetTotalCrowd() uint64 {
 	if m != nil {
-		return m.Crowd
+		return m.TotalCrowd
+	}
+	return 0
+}
+
+func (m *StepState) GetLoader() BMLoader {
+	if m != nil {
+		return m.Loader
+	}
+	return RawLoader
+}
+
+func (m *StepState) GetLoaderMeta() []byte {
+	if m != nil {
+		return m.LoaderMeta
 	}
 	return nil
 }
@@ -1075,7 +1370,7 @@ func (m *Step) Reset()         { *m = Step{} }
 func (m *Step) String() string { return proto.CompactTextString(m) }
 func (*Step) ProtoMessage()    {}
 func (*Step) Descriptor() ([]byte, []int) {
-	return fileDescriptor_3b5ea8fe65782bcc, []int{14}
+	return fileDescriptor_3b5ea8fe65782bcc, []int{17}
 }
 func (m *Step) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1156,7 +1451,7 @@ func (m *Execution) Reset()         { *m = Execution{} }
 func (m *Execution) String() string { return proto.CompactTextString(m) }
 func (*Execution) ProtoMessage()    {}
 func (*Execution) Descriptor() ([]byte, []int) {
-	return fileDescriptor_3b5ea8fe65782bcc, []int{15}
+	return fileDescriptor_3b5ea8fe65782bcc, []int{18}
 }
 func (m *Execution) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1231,7 +1526,7 @@ func (m *TimerExecution) Reset()         { *m = TimerExecution{} }
 func (m *TimerExecution) String() string { return proto.CompactTextString(m) }
 func (*TimerExecution) ProtoMessage()    {}
 func (*TimerExecution) Descriptor() ([]byte, []int) {
-	return fileDescriptor_3b5ea8fe65782bcc, []int{16}
+	return fileDescriptor_3b5ea8fe65782bcc, []int{19}
 }
 func (m *TimerExecution) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1291,7 +1586,7 @@ func (m *ParallelExecution) Reset()         { *m = ParallelExecution{} }
 func (m *ParallelExecution) String() string { return proto.CompactTextString(m) }
 func (*ParallelExecution) ProtoMessage()    {}
 func (*ParallelExecution) Descriptor() ([]byte, []int) {
-	return fileDescriptor_3b5ea8fe65782bcc, []int{17}
+	return fileDescriptor_3b5ea8fe65782bcc, []int{20}
 }
 func (m *ParallelExecution) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1343,7 +1638,7 @@ func (m *DirectExecution) Reset()         { *m = DirectExecution{} }
 func (m *DirectExecution) String() string { return proto.CompactTextString(m) }
 func (*DirectExecution) ProtoMessage()    {}
 func (*DirectExecution) Descriptor() ([]byte, []int) {
-	return fileDescriptor_3b5ea8fe65782bcc, []int{18}
+	return fileDescriptor_3b5ea8fe65782bcc, []int{21}
 }
 func (m *DirectExecution) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1390,7 +1685,7 @@ func (m *ConditionExecution) Reset()         { *m = ConditionExecution{} }
 func (m *ConditionExecution) String() string { return proto.CompactTextString(m) }
 func (*ConditionExecution) ProtoMessage()    {}
 func (*ConditionExecution) Descriptor() ([]byte, []int) {
-	return fileDescriptor_3b5ea8fe65782bcc, []int{19}
+	return fileDescriptor_3b5ea8fe65782bcc, []int{22}
 }
 func (m *ConditionExecution) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1450,7 +1745,7 @@ func (m *Expr) Reset()         { *m = Expr{} }
 func (m *Expr) String() string { return proto.CompactTextString(m) }
 func (*Expr) ProtoMessage()    {}
 func (*Expr) Descriptor() ([]byte, []int) {
-	return fileDescriptor_3b5ea8fe65782bcc, []int{20}
+	return fileDescriptor_3b5ea8fe65782bcc, []int{23}
 }
 func (m *Expr) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1494,10 +1789,14 @@ func (m *Expr) GetType() ExprResultType {
 }
 
 func init() {
+	proto.RegisterEnum("metapb.BMLoader", BMLoader_name, BMLoader_value)
+	proto.RegisterEnum("metapb.WorkflowInstanceState", WorkflowInstanceState_name, WorkflowInstanceState_value)
 	proto.RegisterEnum("metapb.EventType", EventType_name, EventType_value)
 	proto.RegisterEnum("metapb.Group", Group_name, Group_value)
 	proto.RegisterEnum("metapb.ExectuionType", ExectuionType_name, ExectuionType_value)
 	proto.RegisterEnum("metapb.ExprResultType", ExprResultType_name, ExprResultType_value)
+	proto.RegisterType((*ShardBitmapPutMeta)(nil), "metapb.ShardBitmapPutMeta")
+	proto.RegisterType((*ShardBitmapLoadMeta)(nil), "metapb.ShardBitmapLoadMeta")
 	proto.RegisterType((*IDValue)(nil), "metapb.IDValue")
 	proto.RegisterType((*IDSet)(nil), "metapb.IDSet")
 	proto.RegisterType((*Event)(nil), "metapb.Event")
@@ -1508,7 +1807,8 @@ func init() {
 	proto.RegisterType((*Notify)(nil), "metapb.Notify")
 	proto.RegisterType((*Workflow)(nil), "metapb.Workflow")
 	proto.RegisterType((*WorkflowInstance)(nil), "metapb.WorkflowInstance")
-	proto.RegisterType((*WorkflowInstanceState)(nil), "metapb.WorkflowInstanceState")
+	proto.RegisterType((*WorkflowInstanceSnapshot)(nil), "metapb.WorkflowInstanceSnapshot")
+	proto.RegisterType((*WorkflowInstanceWorkerState)(nil), "metapb.WorkflowInstanceWorkerState")
 	proto.RegisterType((*CountState)(nil), "metapb.CountState")
 	proto.RegisterType((*InstanceCountState)(nil), "metapb.InstanceCountState")
 	proto.RegisterType((*StepState)(nil), "metapb.StepState")
@@ -1524,82 +1824,180 @@ func init() {
 func init() { proto.RegisterFile("meta.proto", fileDescriptor_3b5ea8fe65782bcc) }
 
 var fileDescriptor_3b5ea8fe65782bcc = []byte{
-	// 1199 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x9c, 0x56, 0x4b, 0x4f, 0x23, 0x47,
-	0x10, 0xf6, 0xbc, 0x8c, 0xa7, 0xcc, 0x9a, 0xa1, 0x17, 0x88, 0x97, 0xac, 0x0c, 0x1a, 0x25, 0x11,
-	0xb1, 0x16, 0x58, 0xb1, 0xca, 0x1e, 0x92, 0x1c, 0x82, 0x31, 0x9b, 0x58, 0x9b, 0x97, 0x06, 0x42,
-	0x6e, 0x91, 0x06, 0xbb, 0x0d, 0xd6, 0x9a, 0x99, 0xd1, 0x4c, 0x0f, 0x8f, 0x1f, 0x90, 0x3b, 0x52,
-	0x2e, 0xf9, 0x19, 0xf9, 0x19, 0x7b, 0xc8, 0x81, 0x53, 0x94, 0x13, 0x4a, 0xe0, 0x77, 0x44, 0x8a,
-	0xba, 0xba, 0x7b, 0x1e, 0x36, 0xb0, 0x51, 0x6e, 0x5d, 0x55, 0x5f, 0x75, 0xbd, 0xbe, 0x7e, 0x00,
-	0x9c, 0x50, 0xe6, 0x6f, 0x44, 0x71, 0xc8, 0x42, 0x52, 0xe5, 0xeb, 0xe8, 0x70, 0x79, 0xfd, 0x68,
-	0xc4, 0x8e, 0xd3, 0xc3, 0x8d, 0x7e, 0x78, 0xb2, 0x79, 0x14, 0x1e, 0x85, 0x9b, 0x68, 0x3e, 0x4c,
-	0x87, 0x28, 0xa1, 0x80, 0x2b, 0xe1, 0xe6, 0xbe, 0x80, 0x99, 0x5e, 0xf7, 0xc0, 0x1f, 0xa7, 0x94,
-	0x2c, 0x80, 0x75, 0xca, 0x17, 0x4d, 0x6d, 0x55, 0x5b, 0xb3, 0x3d, 0x21, 0x10, 0x02, 0x26, 0xbb,
-	0x88, 0x68, 0x53, 0x47, 0x25, 0xae, 0xdd, 0x97, 0x60, 0xf5, 0xba, 0x7b, 0x94, 0x91, 0x75, 0xa8,
-	0x22, 0x2a, 0x69, 0x6a, 0xab, 0xc6, 0x5a, 0x7d, 0x6b, 0x6e, 0x43, 0x64, 0xb1, 0x21, 0xf7, 0xec,
-	0x98, 0x6f, 0xaf, 0x57, 0x2a, 0x9e, 0x04, 0xb9, 0x7f, 0x68, 0x60, 0xed, 0x9e, 0xd2, 0x80, 0x91,
-	0x0f, 0xe5, 0xae, 0x3c, 0x54, 0x63, 0x6b, 0x5e, 0xb9, 0xa1, 0x71, 0xff, 0x22, 0xa2, 0x22, 0x10,
-	0x87, 0xa5, 0x09, 0x8d, 0x31, 0x78, 0x3d, 0x87, 0xfd, 0x90, 0xd0, 0x18, 0xa1, 0x1e, 0x9a, 0xc9,
-	0xa7, 0x50, 0x4f, 0xa3, 0x81, 0xcf, 0xe8, 0x4e, 0x1c, 0x9e, 0x0d, 0x9a, 0x06, 0xa2, 0x9b, 0x19,
-	0x3a, 0x37, 0x09, 0xa7, 0x22, 0x98, 0xec, 0x40, 0x43, 0x88, 0x3f, 0x86, 0xf1, 0x9b, 0xe1, 0x38,
-	0x3c, 0x6b, 0x9a, 0xe8, 0xfe, 0x7e, 0xd9, 0x5d, 0x59, 0xc5, 0x0e, 0x13, 0x2e, 0xee, 0x4f, 0xe0,
-	0x4c, 0x46, 0x21, 0x2d, 0x80, 0x33, 0x69, 0xef, 0x75, 0xb1, 0x50, 0xd3, 0x2b, 0x68, 0x78, 0xbb,
-	0x47, 0xc1, 0x80, 0x9e, 0x63, 0x71, 0x8f, 0x3c, 0x21, 0x70, 0x6d, 0x3f, 0x2b, 0x62, 0xd6, 0x13,
-	0x82, 0xdb, 0x83, 0xc7, 0x77, 0xa4, 0x41, 0xb6, 0xa0, 0xa6, 0x36, 0xc4, 0x00, 0xf5, 0x2d, 0x47,
-	0x65, 0xad, 0x80, 0x72, 0x02, 0x19, 0xce, 0xfd, 0x59, 0x03, 0x3b, 0xeb, 0x1f, 0x59, 0x82, 0x2a,
-	0xef, 0xa0, 0x4c, 0xf0, 0x91, 0x27, 0x25, 0xb2, 0x0c, 0x35, 0x46, 0x03, 0x3f, 0x60, 0xbd, 0x2e,
-	0xe6, 0x67, 0x7a, 0x99, 0x3c, 0x51, 0x98, 0x31, 0x55, 0xd8, 0x07, 0x60, 0x0e, 0x7c, 0xe6, 0x37,
-	0x4d, 0xa4, 0x04, 0xa8, 0x8c, 0x5e, 0x1f, 0xc8, 0x5c, 0xd0, 0xea, 0x3e, 0x03, 0xfd, 0xf5, 0x01,
-	0x71, 0xc0, 0x78, 0x43, 0x2f, 0x30, 0xf8, 0xac, 0xc7, 0x97, 0x39, 0x0b, 0x75, 0xd1, 0x00, 0x14,
-	0xdc, 0x7f, 0x34, 0xa8, 0x7e, 0x1b, 0xb2, 0xd1, 0xf0, 0xe2, 0xde, 0x94, 0xb3, 0xce, 0xe9, 0x85,
-	0xce, 0x95, 0x0a, 0x31, 0x1e, 0x2c, 0xc4, 0x9c, 0x2a, 0x64, 0x19, 0x6a, 0xc3, 0x38, 0x3c, 0xd9,
-	0x63, 0x34, 0x6a, 0x5a, 0x48, 0xff, 0x4c, 0xe6, 0xbe, 0x7c, 0xbd, 0xdd, 0x67, 0xa3, 0x30, 0x68,
-	0x56, 0xd1, 0x5a, 0xd0, 0xf0, 0x2c, 0x59, 0x88, 0x9e, 0x33, 0x68, 0x93, 0x12, 0xe6, 0x13, 0x4a,
-	0xaf, 0x9a, 0xd8, 0x53, 0xc9, 0xe4, 0x09, 0x18, 0x8c, 0x8d, 0x9b, 0xf6, 0xaa, 0xb6, 0x66, 0x75,
-	0x66, 0x6e, 0xae, 0x57, 0x8c, 0xfd, 0xfd, 0xaf, 0x3d, 0xae, 0x73, 0x7f, 0xd5, 0xa0, 0xa6, 0x46,
-	0x4a, 0x96, 0x40, 0x1f, 0x0d, 0x04, 0xa3, 0x3a, 0xd5, 0x9b, 0xeb, 0x15, 0xbd, 0xd7, 0xf5, 0xf4,
-	0xd1, 0xe0, 0xc1, 0xa1, 0x11, 0x30, 0x03, 0xff, 0x84, 0x62, 0x0f, 0x6c, 0x0f, 0xd7, 0x64, 0x0d,
-	0xac, 0x84, 0xd1, 0x28, 0x91, 0x93, 0x9a, 0x55, 0x93, 0xe2, 0x89, 0xca, 0x59, 0x09, 0x00, 0xdf,
-	0x79, 0x90, 0xc6, 0x3e, 0x66, 0xcd, 0x3b, 0x61, 0x78, 0x99, 0xec, 0xfe, 0xae, 0x81, 0xa3, 0x52,
-	0xeb, 0x05, 0x09, 0xf3, 0x83, 0x3e, 0xe5, 0xcc, 0x4c, 0x02, 0x3f, 0x4a, 0x8e, 0x43, 0xf6, 0x2e,
-	0x66, 0x2a, 0xdc, 0x3d, 0x03, 0x6c, 0xc2, 0x0c, 0x1f, 0x09, 0x8d, 0x13, 0x39, 0x3f, 0x25, 0x92,
-	0xa7, 0x60, 0x27, 0xcc, 0x8f, 0x19, 0x1d, 0x6c, 0x33, 0x9c, 0x9e, 0xe1, 0xe5, 0x0a, 0x61, 0x0d,
-	0xa3, 0x08, 0xad, 0x96, 0xb2, 0x4a, 0x05, 0xdf, 0xf5, 0x94, 0xc6, 0x89, 0x9a, 0x9d, 0xe9, 0x29,
-	0x91, 0x97, 0xb3, 0x38, 0x59, 0xce, 0x1e, 0xf3, 0x19, 0x2d, 0xb5, 0x57, 0x7b, 0x90, 0x4a, 0xfa,
-	0xfd, 0x87, 0xdd, 0x28, 0x1e, 0xf6, 0x4d, 0xa8, 0x26, 0x7c, 0x6b, 0x35, 0x81, 0xf9, 0xe2, 0x04,
-	0x30, 0xa8, 0xba, 0x40, 0x05, 0xac, 0x98, 0xb6, 0x55, 0x4a, 0x9b, 0xf3, 0x8d, 0x57, 0xb7, 0xcd,
-	0xb0, 0x1e, 0xc3, 0x93, 0x92, 0xfb, 0x12, 0x60, 0x27, 0x4c, 0x03, 0x26, 0x4a, 0x20, 0x60, 0xf2,
-	0x81, 0xca, 0x1b, 0x1e, 0xd7, 0xd8, 0x76, 0x8e, 0x90, 0x59, 0x0b, 0xc1, 0xbd, 0xd4, 0x80, 0xa8,
-	0xf2, 0x0b, 0x1b, 0xfc, 0x9f, 0xb9, 0x3e, 0xcf, 0xaa, 0xd4, 0xb1, 0x4a, 0xa2, 0x3c, 0xf2, 0x7d,
-	0x27, 0xca, 0x5c, 0x00, 0x8b, 0x85, 0xcc, 0x1f, 0xcb, 0x89, 0x0b, 0xc1, 0xed, 0x81, 0x9d, 0xf5,
-	0x85, 0x7c, 0x54, 0xa8, 0xe4, 0x6e, 0xea, 0xe6, 0xd5, 0x4d, 0x91, 0xca, 0xfd, 0x4d, 0x03, 0x13,
-	0x8f, 0xa3, 0x3a, 0x16, 0x5a, 0xe1, 0x58, 0x7c, 0x02, 0x36, 0x3d, 0xa7, 0xfd, 0x14, 0xd9, 0x3e,
-	0xf1, 0xf2, 0xec, 0x2a, 0x83, 0x0c, 0x92, 0x23, 0xc9, 0x2a, 0xd4, 0x69, 0xc0, 0x68, 0x2c, 0x0f,
-	0xb7, 0x38, 0x68, 0x45, 0x15, 0x47, 0x8c, 0xa9, 0x7f, 0x4a, 0x25, 0xc2, 0x14, 0x88, 0x82, 0x4a,
-	0xdd, 0x00, 0xd6, 0x1d, 0x37, 0xc0, 0xa5, 0x0e, 0x76, 0x16, 0x9d, 0x7c, 0x5c, 0x7a, 0x3f, 0x17,
-	0x8b, 0xe9, 0xb1, 0x74, 0x14, 0x06, 0x85, 0x37, 0xf4, 0x19, 0x58, 0x6c, 0x74, 0x92, 0x3d, 0xa2,
-	0x4b, 0x0a, 0xbb, 0xcf, 0x95, 0xd9, 0x8e, 0x9e, 0x00, 0x71, 0x4a, 0x0e, 0x46, 0x31, 0xed, 0x33,
-	0xf9, 0x8a, 0xbe, 0xa7, 0xe0, 0x5d, 0xd4, 0xe6, 0x78, 0x09, 0x23, 0x9f, 0x43, 0xed, 0x30, 0xf6,
-	0x83, 0xfe, 0x71, 0xc6, 0xe2, 0xe5, 0x7c, 0xbe, 0xc1, 0x60, 0xc4, 0xc1, 0x93, 0x5d, 0xcb, 0x3c,
-	0xc8, 0x67, 0x50, 0x8b, 0xfc, 0xd8, 0x1f, 0x8f, 0xa9, 0xa8, 0xba, 0xbe, 0xf5, 0x44, 0x79, 0x7f,
-	0x2f, 0xf5, 0x53, 0xce, 0xca, 0xc1, 0x1d, 0x43, 0xa3, 0x5c, 0x04, 0x69, 0x83, 0xdd, 0x57, 0x41,
-	0x27, 0xa9, 0xb1, 0x7b, 0x1e, 0xc5, 0x5e, 0x6e, 0xe6, 0xa3, 0xef, 0xc7, 0x72, 0xc2, 0xb6, 0x87,
-	0x6b, 0x7e, 0xc4, 0x03, 0x7a, 0xce, 0xf0, 0xde, 0x16, 0x03, 0xcc, 0x64, 0x77, 0x08, 0xf3, 0x53,
-	0x29, 0x95, 0x1c, 0xb4, 0xb2, 0x03, 0xe7, 0x91, 0x4a, 0x55, 0x51, 0xff, 0x7e, 0x1e, 0x65, 0x48,
-	0x77, 0x1d, 0xe6, 0x26, 0x7a, 0xfd, 0x50, 0x14, 0xf7, 0x17, 0x0d, 0xc8, 0x74, 0xa3, 0xc9, 0xf3,
-	0x77, 0x74, 0x42, 0xc5, 0xcd, 0xfb, 0xb1, 0xf9, 0x5f, 0x68, 0x5f, 0x24, 0xfc, 0x43, 0xcd, 0xfa,
-	0x0a, 0x4c, 0x1e, 0xa5, 0xfc, 0xa7, 0x54, 0xaf, 0x39, 0x69, 0x17, 0xfe, 0x94, 0x8d, 0x9c, 0x91,
-	0x38, 0x21, 0x9a, 0xa4, 0xe3, 0xc2, 0x17, 0xb0, 0xfd, 0x0a, 0xec, 0xec, 0x57, 0x48, 0x66, 0xa1,
-	0xc6, 0xff, 0x2e, 0x7c, 0xed, 0x54, 0xc8, 0x63, 0x98, 0x2b, 0xfc, 0xba, 0x50, 0xa9, 0x91, 0x25,
-	0x20, 0xe5, 0xaf, 0x12, 0xea, 0xf5, 0xf6, 0x2b, 0xb0, 0xbe, 0x8c, 0xc3, 0x34, 0x22, 0x0e, 0xcc,
-	0x76, 0xe9, 0xd0, 0x4f, 0xc7, 0x0c, 0x65, 0xa7, 0x42, 0x16, 0xc0, 0xd9, 0x17, 0x17, 0x79, 0x10,
-	0xa5, 0x52, 0xab, 0x91, 0x45, 0x98, 0x17, 0xda, 0xef, 0x52, 0x96, 0xa9, 0xf5, 0xf6, 0x17, 0xf0,
-	0xa8, 0x74, 0xca, 0x08, 0x40, 0x55, 0xcc, 0xcb, 0xa9, 0x10, 0x1b, 0x2c, 0x64, 0xa4, 0xa3, 0x71,
-	0x75, 0x07, 0x59, 0xee, 0xe8, 0x3c, 0x6d, 0x45, 0x1d, 0xc7, 0x68, 0x6f, 0x40, 0xa3, 0x5c, 0x29,
-	0x69, 0x00, 0x74, 0xc2, 0x70, 0x2c, 0x34, 0x4e, 0x85, 0xe3, 0x3b, 0xdf, 0x48, 0x49, 0xeb, 0x3c,
-	0xbd, 0xfa, 0xbb, 0x55, 0x79, 0x7b, 0xd3, 0xd2, 0xae, 0x6e, 0x5a, 0xda, 0x5f, 0x37, 0x2d, 0xed,
-	0xf2, 0xb6, 0x55, 0xb9, 0xba, 0x6d, 0x55, 0xfe, 0xbc, 0x6d, 0x55, 0x0e, 0xab, 0xf8, 0x8f, 0x7f,
-	0xf1, 0x6f, 0x00, 0x00, 0x00, 0xff, 0xff, 0x8c, 0xdb, 0xec, 0xe7, 0x0c, 0x0c, 0x00, 0x00,
+	// 1486 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x9c, 0x57, 0x4b, 0x6f, 0xdb, 0xc6,
+	0x13, 0x17, 0x1f, 0x92, 0xc5, 0x91, 0xad, 0xd0, 0x9b, 0xc4, 0x7f, 0xc5, 0xc9, 0x5f, 0x31, 0x88,
+	0xb4, 0x70, 0x85, 0xc4, 0x0e, 0x1c, 0x34, 0x87, 0xb4, 0x87, 0x46, 0x56, 0xd2, 0x0a, 0x8e, 0x5b,
+	0x83, 0x76, 0x9c, 0x5b, 0x01, 0x5a, 0x5a, 0xdb, 0x44, 0x24, 0x92, 0x20, 0x97, 0x7e, 0x7c, 0x80,
+	0xde, 0x03, 0xf4, 0xd2, 0x4b, 0x8f, 0xbd, 0xf7, 0x63, 0xe4, 0x18, 0xf4, 0x50, 0xf4, 0x14, 0xb4,
+	0xce, 0x67, 0xe8, 0xb1, 0x40, 0xb1, 0xb3, 0xbb, 0x7c, 0x48, 0x7e, 0x04, 0xbd, 0xed, 0xcc, 0xfc,
+	0xe6, 0x3d, 0x3b, 0x5c, 0x02, 0x8c, 0x29, 0xf3, 0x56, 0xa2, 0x38, 0x64, 0x21, 0xa9, 0xf1, 0x73,
+	0xb4, 0xb7, 0xf8, 0xe0, 0xc0, 0x67, 0x87, 0xe9, 0xde, 0xca, 0x20, 0x1c, 0xaf, 0x1e, 0x84, 0x07,
+	0xe1, 0x2a, 0x8a, 0xf7, 0xd2, 0x7d, 0xa4, 0x90, 0xc0, 0x93, 0x50, 0x73, 0x0e, 0x80, 0x6c, 0x1f,
+	0x7a, 0xf1, 0xb0, 0xeb, 0xb3, 0xb1, 0x17, 0x6d, 0xa5, 0x6c, 0x93, 0x32, 0x8f, 0xd8, 0x60, 0xbc,
+	0xa6, 0xa7, 0x2d, 0x6d, 0x49, 0x5b, 0x9e, 0x75, 0xf9, 0x91, 0xdc, 0x02, 0x83, 0xb1, 0x51, 0x4b,
+	0x5f, 0xd2, 0x96, 0xe7, 0xba, 0x33, 0x67, 0xef, 0xef, 0x1a, 0x3b, 0x3b, 0x2f, 0x5c, 0xce, 0x23,
+	0xf7, 0x60, 0x6e, 0xef, 0x94, 0xd1, 0x64, 0x8b, 0xc6, 0x68, 0xaa, 0x65, 0x70, 0x90, 0x5b, 0x66,
+	0x3a, 0x2f, 0xe1, 0x7a, 0xc1, 0xd1, 0x8b, 0xd0, 0x1b, 0x5e, 0xe0, 0xe9, 0x06, 0x54, 0x77, 0x42,
+	0xe6, 0x09, 0x5f, 0xa6, 0x2b, 0x08, 0xb2, 0x00, 0xb5, 0x84, 0xab, 0x27, 0xd2, 0xba, 0xa4, 0x9c,
+	0x47, 0x30, 0xd3, 0xef, 0xed, 0x7a, 0xa3, 0x94, 0x72, 0xc5, 0x23, 0x7e, 0x40, 0x63, 0x96, 0x2b,
+	0x08, 0x42, 0xc0, 0x64, 0xa7, 0x11, 0x45, 0x6b, 0x96, 0x8b, 0x67, 0xe7, 0x31, 0x54, 0xfb, 0xbd,
+	0x6d, 0xca, 0xc8, 0x03, 0xa8, 0x21, 0x2a, 0x69, 0x69, 0x4b, 0xc6, 0x72, 0x63, 0xed, 0xda, 0x8a,
+	0xa8, 0xe2, 0x8a, 0xb4, 0xd9, 0x35, 0xdf, 0xbe, 0xbf, 0x5b, 0x71, 0x25, 0xc8, 0xf9, 0x5d, 0x83,
+	0xea, 0xb3, 0x23, 0x1a, 0x30, 0xf2, 0x89, 0xb4, 0xca, 0x5d, 0x35, 0xd7, 0xe6, 0x95, 0x1a, 0x0a,
+	0x77, 0x4e, 0x23, 0x2a, 0x1c, 0x71, 0x58, 0x9a, 0xd0, 0x18, 0x9d, 0x37, 0x72, 0xd8, 0xcb, 0x84,
+	0xc6, 0x08, 0x75, 0x51, 0x4c, 0x9e, 0x40, 0x23, 0x8d, 0x86, 0x1e, 0xa3, 0xeb, 0x71, 0x78, 0x2c,
+	0xea, 0xd7, 0x58, 0x6b, 0x65, 0xe8, 0x5c, 0x24, 0x94, 0x8a, 0x60, 0xb2, 0x0e, 0x4d, 0x41, 0xbe,
+	0x0a, 0xe3, 0xd7, 0xfb, 0xa3, 0xf0, 0xb8, 0x65, 0xa2, 0xfa, 0xed, 0xb2, 0xba, 0x92, 0x0a, 0x0b,
+	0x13, 0x2a, 0xce, 0xf7, 0x60, 0x4f, 0x7a, 0x21, 0x6d, 0x80, 0x63, 0x29, 0xef, 0xf7, 0x30, 0x51,
+	0xd3, 0x2d, 0x70, 0x78, 0xb9, 0xfd, 0x60, 0x48, 0x4f, 0xc4, 0x4c, 0xb8, 0x82, 0xe0, 0xdc, 0x41,
+	0x96, 0xc4, 0xac, 0x2b, 0x08, 0xa7, 0x0f, 0xd7, 0xcf, 0x09, 0x83, 0xac, 0x41, 0x5d, 0x19, 0x44,
+	0x07, 0x8d, 0x35, 0x5b, 0x45, 0xad, 0x80, 0xb2, 0x03, 0x19, 0xce, 0xf9, 0x41, 0x03, 0x2b, 0xab,
+	0x1f, 0x1f, 0x0b, 0x5e, 0x41, 0x19, 0xe0, 0x9c, 0x2b, 0x29, 0xb2, 0x08, 0x75, 0x46, 0x03, 0x2f,
+	0x60, 0xfd, 0x9e, 0x9c, 0xa3, 0x8c, 0x9e, 0x48, 0xcc, 0x98, 0x4a, 0xec, 0x1e, 0x98, 0x43, 0x8f,
+	0x79, 0x2d, 0x13, 0x47, 0x02, 0x54, 0x44, 0x1b, 0xbb, 0x32, 0x16, 0x94, 0x3a, 0xf7, 0x41, 0xdf,
+	0xd8, 0x3d, 0x7f, 0x7c, 0xc5, 0x14, 0xea, 0xa2, 0x00, 0x48, 0x38, 0xff, 0x68, 0x50, 0xfb, 0x36,
+	0x64, 0xfe, 0xfe, 0xe9, 0x85, 0x21, 0x67, 0x95, 0xd3, 0x0b, 0x95, 0x2b, 0x25, 0x62, 0x5c, 0x9a,
+	0x88, 0x39, 0x95, 0xc8, 0x22, 0xd4, 0xf7, 0xe3, 0x70, 0xbc, 0xcd, 0x68, 0xd4, 0xaa, 0xe2, 0xf8,
+	0x67, 0x34, 0xd7, 0xe5, 0xe7, 0xa7, 0x03, 0xe6, 0x87, 0x41, 0xab, 0x86, 0xd2, 0x02, 0x87, 0x47,
+	0xc9, 0x42, 0xd4, 0x9c, 0x41, 0x99, 0xa4, 0x30, 0x9e, 0x50, 0x6a, 0xd5, 0x85, 0x4d, 0x45, 0xab,
+	0x1d, 0x61, 0x2d, 0x69, 0xcb, 0xd5, 0xf2, 0x8e, 0x70, 0x7e, 0xd2, 0xa0, 0xae, 0x5a, 0x4a, 0x16,
+	0x40, 0xf7, 0x87, 0x62, 0xa2, 0xba, 0xb5, 0xb3, 0xf7, 0x77, 0xf5, 0x7e, 0xcf, 0xd5, 0xfd, 0xe1,
+	0xa5, 0x4d, 0x23, 0x60, 0x06, 0xde, 0x98, 0x62, 0x0d, 0x2c, 0x17, 0xcf, 0x64, 0x19, 0xaa, 0x09,
+	0xa3, 0x51, 0x22, 0x3b, 0x35, 0xab, 0x3a, 0xc5, 0x03, 0x95, 0xbd, 0x12, 0x00, 0x6e, 0x79, 0x98,
+	0xc6, 0x1e, 0x46, 0xcd, 0x2b, 0x61, 0xb8, 0x19, 0xed, 0xfc, 0xad, 0x83, 0xad, 0x42, 0xeb, 0x07,
+	0x09, 0xf3, 0x82, 0x01, 0xe5, 0x93, 0x99, 0x04, 0x5e, 0x94, 0x1c, 0x86, 0xec, 0xaa, 0xc9, 0x54,
+	0x38, 0x5e, 0x52, 0x5f, 0xea, 0x67, 0x09, 0x14, 0x38, 0x5c, 0x3e, 0x0a, 0xbd, 0x21, 0x8d, 0xf9,
+	0xe2, 0x93, 0xf7, 0xa3, 0xc0, 0x21, 0xcb, 0x50, 0x13, 0x14, 0xb6, 0xb2, 0x99, 0x7b, 0xec, 0x6e,
+	0xbe, 0x40, 0xbe, 0x2b, 0xe5, 0xdc, 0x12, 0xe3, 0x5b, 0x51, 0xac, 0x8b, 0xaa, 0xf0, 0x94, 0x73,
+	0x48, 0x0b, 0x66, 0xf8, 0x18, 0xd0, 0x38, 0xc1, 0xce, 0x9a, 0xae, 0x22, 0xc9, 0x1d, 0xb0, 0x12,
+	0xe6, 0xc5, 0x8c, 0x0e, 0x9f, 0x32, 0xec, 0xac, 0xe1, 0xe6, 0x0c, 0x21, 0x0d, 0xa3, 0x08, 0xa5,
+	0x75, 0x25, 0x95, 0x0c, 0x6e, 0xf5, 0x88, 0xc6, 0x09, 0xaf, 0xa1, 0x25, 0xac, 0x4a, 0x92, 0x3c,
+	0xe2, 0x8d, 0xf0, 0x18, 0x6d, 0x01, 0x06, 0xfe, 0xff, 0xc9, 0x52, 0xa9, 0xb2, 0x6e, 0x73, 0x90,
+	0x2b, 0xb0, 0xce, 0x2f, 0x1a, 0xb4, 0xa6, 0x00, 0xaa, 0x96, 0x4f, 0xa6, 0xea, 0xdf, 0xba, 0xc8,
+	0xe8, 0x54, 0x1f, 0xee, 0x80, 0xc5, 0xfc, 0x31, 0x4d, 0x98, 0x37, 0x8e, 0xb0, 0x0d, 0x86, 0x9b,
+	0x33, 0xc8, 0x2a, 0xd4, 0xd0, 0x3f, 0xff, 0x90, 0x18, 0xc5, 0xa5, 0xcc, 0xa7, 0x06, 0x03, 0x54,
+	0x4b, 0x5f, 0xc0, 0x9c, 0xdf, 0x34, 0xb8, 0x3d, 0xe9, 0xf3, 0x15, 0x96, 0x13, 0xd1, 0xa5, 0xa9,
+	0xd5, 0x2e, 0xbd, 0xa1, 0xfa, 0xc5, 0x3b, 0xd4, 0x28, 0xee, 0xd0, 0x3c, 0x44, 0xf3, 0xa3, 0x42,
+	0x2c, 0x76, 0xa6, 0x5a, 0xee, 0x0c, 0xff, 0x6c, 0xb2, 0x30, 0x7a, 0xca, 0x70, 0x10, 0x0c, 0x57,
+	0x52, 0xce, 0x63, 0x80, 0xf5, 0x30, 0x0d, 0x98, 0x48, 0x81, 0x80, 0xc9, 0xef, 0x89, 0xfc, 0x70,
+	0xe2, 0x19, 0xd7, 0x11, 0x47, 0xa8, 0xcf, 0x30, 0x12, 0xce, 0x1b, 0x0d, 0x88, 0x2a, 0x42, 0xc1,
+	0xc0, 0x7f, 0xb9, 0x2e, 0x0f, 0xb3, 0x2c, 0x75, 0xcc, 0x92, 0x28, 0x8d, 0xdc, 0xee, 0x44, 0x9a,
+	0x37, 0xa0, 0x8a, 0x43, 0x2e, 0x17, 0xa1, 0x20, 0x9c, 0x9f, 0x35, 0xb0, 0xb2, 0xc2, 0x90, 0x4f,
+	0x0b, 0xa9, 0x9c, 0xbf, 0x12, 0x44, 0x7a, 0xe5, 0x2b, 0xa4, 0x4f, 0x5d, 0xa1, 0xfc, 0x32, 0x1a,
+	0x57, 0x5f, 0xc6, 0xc2, 0xb5, 0x36, 0x27, 0xaf, 0xb5, 0xf3, 0xab, 0x06, 0x26, 0xae, 0x4e, 0xb5,
+	0xc2, 0xb4, 0xc2, 0x0a, 0xfb, 0x1c, 0x2c, 0x7a, 0x42, 0x07, 0x29, 0x6e, 0xa6, 0x89, 0x57, 0xc2,
+	0x33, 0x25, 0x90, 0x81, 0xe7, 0x48, 0xb2, 0x04, 0x0d, 0x1a, 0x30, 0x1a, 0xcb, 0x45, 0x2c, 0x96,
+	0x62, 0x91, 0xc5, 0x11, 0x23, 0xea, 0x1d, 0x51, 0x89, 0x30, 0x05, 0xa2, 0xc0, 0x52, 0xdb, 0xba,
+	0x7a, 0xce, 0xb6, 0x7e, 0xa3, 0x83, 0x95, 0x79, 0x27, 0x9f, 0x95, 0xde, 0x3a, 0x37, 0x8b, 0xe1,
+	0xb1, 0xd4, 0x0f, 0x83, 0xc2, 0x7b, 0xe7, 0x3e, 0x54, 0xf9, 0x4d, 0x53, 0x0f, 0x9e, 0x05, 0x85,
+	0xdd, 0xe1, 0xcc, 0xcc, 0xa2, 0x2b, 0x40, 0x7c, 0xce, 0x87, 0x7e, 0x4c, 0x07, 0x4c, 0xbe, 0x78,
+	0xfe, 0xa7, 0xe0, 0x3d, 0xe4, 0xe6, 0x78, 0x09, 0x23, 0x5f, 0x42, 0x7d, 0x2f, 0xf6, 0x82, 0xc1,
+	0x61, 0x76, 0x35, 0x16, 0xf3, 0xa1, 0x09, 0x86, 0x3e, 0x07, 0x4f, 0x56, 0x2d, 0xd3, 0x20, 0x5f,
+	0x40, 0x3d, 0xf2, 0x62, 0x6f, 0x34, 0xa2, 0x22, 0xeb, 0xc6, 0xda, 0x2d, 0xa5, 0xbd, 0x25, 0xf9,
+	0x53, 0xca, 0x4a, 0xc1, 0x19, 0x41, 0xb3, 0x9c, 0x04, 0xe9, 0x80, 0x35, 0x50, 0x4e, 0x27, 0xc7,
+	0xed, 0xd9, 0x49, 0x14, 0xbb, 0xb9, 0x98, 0xb7, 0x7e, 0x10, 0xcb, 0x0e, 0x5b, 0x2e, 0x9e, 0xf9,
+	0xde, 0x08, 0xe8, 0x09, 0xc3, 0x6f, 0xac, 0x68, 0x60, 0x46, 0x3b, 0xfb, 0x30, 0x3f, 0x15, 0x52,
+	0x49, 0x41, 0x2b, 0x2b, 0xf0, 0x39, 0x52, 0xa1, 0xaa, 0xfb, 0x74, 0xf1, 0x1c, 0x65, 0x48, 0xe7,
+	0x01, 0x5c, 0x9b, 0xa8, 0xf5, 0x65, 0x5e, 0x9c, 0x1f, 0x35, 0x20, 0xd3, 0x85, 0x26, 0x0f, 0xaf,
+	0xa8, 0x84, 0xf2, 0x9b, 0xd7, 0x63, 0xf5, 0x63, 0xc6, 0xbe, 0x38, 0xf0, 0x97, 0x15, 0xeb, 0x1b,
+	0x30, 0xb9, 0x97, 0xf2, 0xfb, 0x5f, 0xbd, 0xbc, 0x48, 0xa7, 0xf0, 0xfe, 0x6f, 0xe6, 0x13, 0x89,
+	0x1d, 0xa2, 0x49, 0x3a, 0x2a, 0x3c, 0xd7, 0x3b, 0x5b, 0x50, 0x57, 0xd7, 0x9b, 0xcc, 0x81, 0xe5,
+	0x7a, 0xc7, 0x82, 0xb0, 0x2b, 0x64, 0x16, 0xea, 0x1b, 0xbb, 0x92, 0xd2, 0xc8, 0x3c, 0xcc, 0x6d,
+	0xec, 0xe2, 0xef, 0x8c, 0x64, 0xe9, 0xe4, 0x06, 0xd8, 0xeb, 0x23, 0x7f, 0xf0, 0xfa, 0x30, 0x4c,
+	0x13, 0x2a, 0xb9, 0x46, 0x67, 0x13, 0x6e, 0x9e, 0xfb, 0x11, 0xe4, 0xf6, 0xb6, 0xf9, 0x77, 0xd7,
+	0x0f, 0x0e, 0xec, 0x0a, 0x69, 0xc0, 0x8c, 0x9b, 0x06, 0x01, 0x27, 0x34, 0x21, 0x0a, 0xa3, 0x88,
+	0x53, 0x3a, 0x17, 0x6d, 0x8b, 0x4f, 0xb0, 0x6d, 0x74, 0x9e, 0x83, 0x95, 0xfd, 0x62, 0x70, 0x1c,
+	0x7f, 0x08, 0xf3, 0xb3, 0x5d, 0x21, 0xd7, 0xe1, 0x5a, 0xe1, 0x09, 0x8f, 0x4c, 0x8d, 0x2c, 0x00,
+	0x29, 0xbf, 0xbb, 0x91, 0xaf, 0x77, 0x9e, 0x43, 0xf5, 0xeb, 0x38, 0x4c, 0x23, 0x62, 0xc3, 0x6c,
+	0x8f, 0xee, 0x7b, 0xe9, 0x88, 0x21, 0x6d, 0x57, 0x78, 0x1e, 0x3b, 0xe2, 0xf3, 0x15, 0x44, 0xa9,
+	0xe4, 0x6a, 0xe4, 0x26, 0xcc, 0x0b, 0xee, 0x77, 0x29, 0xcb, 0xd8, 0x7a, 0xe7, 0x2b, 0x98, 0x2b,
+	0xad, 0x01, 0x02, 0x50, 0x13, 0x03, 0x65, 0x57, 0x88, 0x05, 0x55, 0xbc, 0x32, 0xb6, 0xc6, 0xd9,
+	0x5d, 0xbc, 0x86, 0xb6, 0xce, 0xc3, 0x56, 0xb3, 0x6d, 0x1b, 0x9d, 0x15, 0x68, 0x96, 0x5b, 0x41,
+	0x9a, 0x00, 0xdd, 0x30, 0x1c, 0x09, 0x8e, 0xa8, 0x7c, 0x77, 0x53, 0x52, 0x5a, 0xf7, 0xce, 0xbb,
+	0xbf, 0xda, 0x95, 0xb7, 0x67, 0x6d, 0xed, 0xdd, 0x59, 0x5b, 0xfb, 0xf3, 0xac, 0xad, 0xbd, 0xf9,
+	0xd0, 0xae, 0xbc, 0xfb, 0xd0, 0xae, 0xfc, 0xf1, 0xa1, 0x5d, 0xd9, 0xab, 0xe1, 0x4f, 0xed, 0xa3,
+	0x7f, 0x03, 0x00, 0x00, 0xff, 0xff, 0x45, 0xb6, 0xcc, 0x82, 0x19, 0x0f, 0x00, 0x00,
+}
+
+func (m *ShardBitmapPutMeta) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ShardBitmapPutMeta) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ShardBitmapPutMeta) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.BytesPerShard != 0 {
+		i = encodeVarintMeta(dAtA, i, uint64(m.BytesPerShard))
+		i--
+		dAtA[i] = 0x18
+	}
+	if m.TTL != 0 {
+		i = encodeVarintMeta(dAtA, i, uint64(m.TTL))
+		i--
+		dAtA[i] = 0x10
+	}
+	if len(m.Key) > 0 {
+		i -= len(m.Key)
+		copy(dAtA[i:], m.Key)
+		i = encodeVarintMeta(dAtA, i, uint64(len(m.Key)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *ShardBitmapLoadMeta) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ShardBitmapLoadMeta) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ShardBitmapLoadMeta) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.Shards != 0 {
+		i = encodeVarintMeta(dAtA, i, uint64(m.Shards))
+		i--
+		dAtA[i] = 0x18
+	}
+	if m.Total != 0 {
+		i = encodeVarintMeta(dAtA, i, uint64(m.Total))
+		i--
+		dAtA[i] = 0x10
+	}
+	if len(m.Key) > 0 {
+		i -= len(m.Key)
+		copy(dAtA[i:], m.Key)
+		i = encodeVarintMeta(dAtA, i, uint64(len(m.Key)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
 }
 
 func (m *IDValue) Marshal() (dAtA []byte, err error) {
@@ -2059,32 +2457,52 @@ func (m *WorkflowInstance) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
+	if m.State != 0 {
+		i = encodeVarintMeta(dAtA, i, uint64(m.State))
+		i--
+		dAtA[i] = 0x50
+	}
 	if m.Version != 0 {
 		i = encodeVarintMeta(dAtA, i, uint64(m.Version))
 		i--
-		dAtA[i] = 0x30
+		dAtA[i] = 0x48
 	}
 	if m.StoppedAt != 0 {
 		i = encodeVarintMeta(dAtA, i, uint64(m.StoppedAt))
 		i--
-		dAtA[i] = 0x28
+		dAtA[i] = 0x40
 	}
 	if m.StartedAt != 0 {
 		i = encodeVarintMeta(dAtA, i, uint64(m.StartedAt))
 		i--
-		dAtA[i] = 0x20
+		dAtA[i] = 0x38
 	}
 	if m.Workers != 0 {
 		i = encodeVarintMeta(dAtA, i, uint64(m.Workers))
 		i--
-		dAtA[i] = 0x18
+		dAtA[i] = 0x30
 	}
-	if len(m.Crowd) > 0 {
-		i -= len(m.Crowd)
-		copy(dAtA[i:], m.Crowd)
-		i = encodeVarintMeta(dAtA, i, uint64(len(m.Crowd)))
+	if m.TotalCrowd != 0 {
+		i = encodeVarintMeta(dAtA, i, uint64(m.TotalCrowd))
 		i--
-		dAtA[i] = 0x12
+		dAtA[i] = 0x28
+	}
+	if m.Loader != 0 {
+		i = encodeVarintMeta(dAtA, i, uint64(m.Loader))
+		i--
+		dAtA[i] = 0x20
+	}
+	if len(m.LoaderMeta) > 0 {
+		i -= len(m.LoaderMeta)
+		copy(dAtA[i:], m.LoaderMeta)
+		i = encodeVarintMeta(dAtA, i, uint64(len(m.LoaderMeta)))
+		i--
+		dAtA[i] = 0x1a
+	}
+	if m.InstanceID != 0 {
+		i = encodeVarintMeta(dAtA, i, uint64(m.InstanceID))
+		i--
+		dAtA[i] = 0x10
 	}
 	{
 		size, err := m.Snapshot.MarshalToSizedBuffer(dAtA[:i])
@@ -2099,7 +2517,7 @@ func (m *WorkflowInstance) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
-func (m *WorkflowInstanceState) Marshal() (dAtA []byte, err error) {
+func (m *WorkflowInstanceSnapshot) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
 	n, err := m.MarshalToSizedBuffer(dAtA[:size])
@@ -2109,12 +2527,64 @@ func (m *WorkflowInstanceState) Marshal() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *WorkflowInstanceState) MarshalTo(dAtA []byte) (int, error) {
+func (m *WorkflowInstanceSnapshot) MarshalTo(dAtA []byte) (int, error) {
 	size := m.Size()
 	return m.MarshalToSizedBuffer(dAtA[:size])
 }
 
-func (m *WorkflowInstanceState) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+func (m *WorkflowInstanceSnapshot) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.States) > 0 {
+		for iNdEx := len(m.States) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.States[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintMeta(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0x1a
+		}
+	}
+	if m.Timestamp != 0 {
+		i = encodeVarintMeta(dAtA, i, uint64(m.Timestamp))
+		i--
+		dAtA[i] = 0x10
+	}
+	{
+		size, err := m.Snapshot.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarintMeta(dAtA, i, uint64(size))
+	}
+	i--
+	dAtA[i] = 0xa
+	return len(dAtA) - i, nil
+}
+
+func (m *WorkflowInstanceWorkerState) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *WorkflowInstanceWorkerState) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *WorkflowInstanceWorkerState) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	i := len(dAtA)
 	_ = i
 	var l int
@@ -2268,12 +2738,22 @@ func (m *StepState) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if len(m.Crowd) > 0 {
-		i -= len(m.Crowd)
-		copy(dAtA[i:], m.Crowd)
-		i = encodeVarintMeta(dAtA, i, uint64(len(m.Crowd)))
+	if len(m.LoaderMeta) > 0 {
+		i -= len(m.LoaderMeta)
+		copy(dAtA[i:], m.LoaderMeta)
+		i = encodeVarintMeta(dAtA, i, uint64(len(m.LoaderMeta)))
 		i--
-		dAtA[i] = 0x12
+		dAtA[i] = 0x22
+	}
+	if m.Loader != 0 {
+		i = encodeVarintMeta(dAtA, i, uint64(m.Loader))
+		i--
+		dAtA[i] = 0x18
+	}
+	if m.TotalCrowd != 0 {
+		i = encodeVarintMeta(dAtA, i, uint64(m.TotalCrowd))
+		i--
+		dAtA[i] = 0x10
 	}
 	{
 		size, err := m.Step.MarshalToSizedBuffer(dAtA[:i])
@@ -2644,6 +3124,44 @@ func encodeVarintMeta(dAtA []byte, offset int, v uint64) int {
 	dAtA[offset] = uint8(v)
 	return base
 }
+func (m *ShardBitmapPutMeta) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Key)
+	if l > 0 {
+		n += 1 + l + sovMeta(uint64(l))
+	}
+	if m.TTL != 0 {
+		n += 1 + sovMeta(uint64(m.TTL))
+	}
+	if m.BytesPerShard != 0 {
+		n += 1 + sovMeta(uint64(m.BytesPerShard))
+	}
+	return n
+}
+
+func (m *ShardBitmapLoadMeta) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Key)
+	if l > 0 {
+		n += 1 + l + sovMeta(uint64(l))
+	}
+	if m.Total != 0 {
+		n += 1 + sovMeta(uint64(m.Total))
+	}
+	if m.Shards != 0 {
+		n += 1 + sovMeta(uint64(m.Shards))
+	}
+	return n
+}
+
 func (m *IDValue) Size() (n int) {
 	if m == nil {
 		return 0
@@ -2848,9 +3366,18 @@ func (m *WorkflowInstance) Size() (n int) {
 	_ = l
 	l = m.Snapshot.Size()
 	n += 1 + l + sovMeta(uint64(l))
-	l = len(m.Crowd)
+	if m.InstanceID != 0 {
+		n += 1 + sovMeta(uint64(m.InstanceID))
+	}
+	l = len(m.LoaderMeta)
 	if l > 0 {
 		n += 1 + l + sovMeta(uint64(l))
+	}
+	if m.Loader != 0 {
+		n += 1 + sovMeta(uint64(m.Loader))
+	}
+	if m.TotalCrowd != 0 {
+		n += 1 + sovMeta(uint64(m.TotalCrowd))
 	}
 	if m.Workers != 0 {
 		n += 1 + sovMeta(uint64(m.Workers))
@@ -2864,10 +3391,33 @@ func (m *WorkflowInstance) Size() (n int) {
 	if m.Version != 0 {
 		n += 1 + sovMeta(uint64(m.Version))
 	}
+	if m.State != 0 {
+		n += 1 + sovMeta(uint64(m.State))
+	}
 	return n
 }
 
-func (m *WorkflowInstanceState) Size() (n int) {
+func (m *WorkflowInstanceSnapshot) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = m.Snapshot.Size()
+	n += 1 + l + sovMeta(uint64(l))
+	if m.Timestamp != 0 {
+		n += 1 + sovMeta(uint64(m.Timestamp))
+	}
+	if len(m.States) > 0 {
+		for _, e := range m.States {
+			l = e.Size()
+			n += 1 + l + sovMeta(uint64(l))
+		}
+	}
+	return n
+}
+
+func (m *WorkflowInstanceWorkerState) Size() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -2941,7 +3491,13 @@ func (m *StepState) Size() (n int) {
 	_ = l
 	l = m.Step.Size()
 	n += 1 + l + sovMeta(uint64(l))
-	l = len(m.Crowd)
+	if m.TotalCrowd != 0 {
+		n += 1 + sovMeta(uint64(m.TotalCrowd))
+	}
+	if m.Loader != 0 {
+		n += 1 + sovMeta(uint64(m.Loader))
+	}
+	l = len(m.LoaderMeta)
 	if l > 0 {
 		n += 1 + l + sovMeta(uint64(l))
 	}
@@ -3095,6 +3651,256 @@ func sovMeta(x uint64) (n int) {
 }
 func sozMeta(x uint64) (n int) {
 	return sovMeta(uint64((x << 1) ^ uint64((int64(x) >> 63))))
+}
+func (m *ShardBitmapPutMeta) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowMeta
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: ShardBitmapPutMeta: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: ShardBitmapPutMeta: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Key", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMeta
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMeta
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMeta
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Key = append(m.Key[:0], dAtA[iNdEx:postIndex]...)
+			if m.Key == nil {
+				m.Key = []byte{}
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TTL", wireType)
+			}
+			m.TTL = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMeta
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.TTL |= uint32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field BytesPerShard", wireType)
+			}
+			m.BytesPerShard = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMeta
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.BytesPerShard |= uint32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		default:
+			iNdEx = preIndex
+			skippy, err := skipMeta(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthMeta
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthMeta
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ShardBitmapLoadMeta) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowMeta
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: ShardBitmapLoadMeta: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: ShardBitmapLoadMeta: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Key", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMeta
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMeta
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMeta
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Key = append(m.Key[:0], dAtA[iNdEx:postIndex]...)
+			if m.Key == nil {
+				m.Key = []byte{}
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Total", wireType)
+			}
+			m.Total = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMeta
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Total |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Shards", wireType)
+			}
+			m.Shards = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMeta
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Shards |= uint32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		default:
+			iNdEx = preIndex
+			skippy, err := skipMeta(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthMeta
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthMeta
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
 }
 func (m *IDValue) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
@@ -4486,8 +5292,27 @@ func (m *WorkflowInstance) Unmarshal(dAtA []byte) error {
 			}
 			iNdEx = postIndex
 		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field InstanceID", wireType)
+			}
+			m.InstanceID = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMeta
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.InstanceID |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Crowd", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field LoaderMeta", wireType)
 			}
 			var byteLen int
 			for shift := uint(0); ; shift += 7 {
@@ -4514,12 +5339,50 @@ func (m *WorkflowInstance) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Crowd = append(m.Crowd[:0], dAtA[iNdEx:postIndex]...)
-			if m.Crowd == nil {
-				m.Crowd = []byte{}
+			m.LoaderMeta = append(m.LoaderMeta[:0], dAtA[iNdEx:postIndex]...)
+			if m.LoaderMeta == nil {
+				m.LoaderMeta = []byte{}
 			}
 			iNdEx = postIndex
-		case 3:
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Loader", wireType)
+			}
+			m.Loader = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMeta
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Loader |= BMLoader(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 5:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TotalCrowd", wireType)
+			}
+			m.TotalCrowd = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMeta
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.TotalCrowd |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 6:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Workers", wireType)
 			}
@@ -4538,7 +5401,7 @@ func (m *WorkflowInstance) Unmarshal(dAtA []byte) error {
 					break
 				}
 			}
-		case 4:
+		case 7:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field StartedAt", wireType)
 			}
@@ -4557,7 +5420,7 @@ func (m *WorkflowInstance) Unmarshal(dAtA []byte) error {
 					break
 				}
 			}
-		case 5:
+		case 8:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field StoppedAt", wireType)
 			}
@@ -4576,7 +5439,7 @@ func (m *WorkflowInstance) Unmarshal(dAtA []byte) error {
 					break
 				}
 			}
-		case 6:
+		case 9:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Version", wireType)
 			}
@@ -4591,6 +5454,25 @@ func (m *WorkflowInstance) Unmarshal(dAtA []byte) error {
 				b := dAtA[iNdEx]
 				iNdEx++
 				m.Version |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 10:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field State", wireType)
+			}
+			m.State = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMeta
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.State |= WorkflowInstanceState(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -4619,7 +5501,7 @@ func (m *WorkflowInstance) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *WorkflowInstanceState) Unmarshal(dAtA []byte) error {
+func (m *WorkflowInstanceSnapshot) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -4642,10 +5524,149 @@ func (m *WorkflowInstanceState) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: WorkflowInstanceState: wiretype end group for non-group")
+			return fmt.Errorf("proto: WorkflowInstanceSnapshot: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: WorkflowInstanceState: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: WorkflowInstanceSnapshot: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Snapshot", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMeta
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthMeta
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthMeta
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if err := m.Snapshot.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Timestamp", wireType)
+			}
+			m.Timestamp = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMeta
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Timestamp |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field States", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMeta
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthMeta
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthMeta
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.States = append(m.States, StepState{})
+			if err := m.States[len(m.States)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipMeta(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthMeta
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthMeta
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *WorkflowInstanceWorkerState) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowMeta
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: WorkflowInstanceWorkerState: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: WorkflowInstanceWorkerState: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -5107,8 +6128,46 @@ func (m *StepState) Unmarshal(dAtA []byte) error {
 			}
 			iNdEx = postIndex
 		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TotalCrowd", wireType)
+			}
+			m.TotalCrowd = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMeta
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.TotalCrowd |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Loader", wireType)
+			}
+			m.Loader = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMeta
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Loader |= BMLoader(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 4:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Crowd", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field LoaderMeta", wireType)
 			}
 			var byteLen int
 			for shift := uint(0); ; shift += 7 {
@@ -5135,9 +6194,9 @@ func (m *StepState) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Crowd = append(m.Crowd[:0], dAtA[iNdEx:postIndex]...)
-			if m.Crowd == nil {
-				m.Crowd = []byte{}
+			m.LoaderMeta = append(m.LoaderMeta[:0], dAtA[iNdEx:postIndex]...)
+			if m.LoaderMeta == nil {
+				m.LoaderMeta = []byte{}
 			}
 			iNdEx = postIndex
 		default:

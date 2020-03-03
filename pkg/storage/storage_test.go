@@ -177,17 +177,11 @@ func TestBMCreate(t *testing.T) {
 	})
 	assert.NoError(t, err, "TestBMCreate failed")
 
-	data, err = store.ExecCommand(&rpcpb.GetRequest{
-		Key: key,
-	})
+	data, err = store.Get(key)
 	assert.NoError(t, err, "TestBMCreate failed")
 	assert.NotEmpty(t, data, "TestBMCreate failed")
 
-	resp := &rpcpb.BytesResponse{}
-	protoc.MustUnmarshal(resp, data)
-	assert.NotEmpty(t, resp.Value, "TestBMCreate failed")
-
-	bm := util.MustParseBM(resp.Value)
+	bm := util.MustParseBM(data)
 	assert.Equal(t, uint64(len(value)), bm.GetCardinality(), "TestBMCreate failed")
 }
 
@@ -211,17 +205,11 @@ func TestBMAdd(t *testing.T) {
 	})
 	assert.NoError(t, err, "TestBMAdd failed")
 
-	data, err = store.ExecCommand(&rpcpb.GetRequest{
-		Key: key,
-	})
+	data, err = store.Get(key)
 	assert.NoError(t, err, "TestBMAdd failed")
 	assert.NotEmpty(t, data, "TestBMAdd failed")
 
-	resp := &rpcpb.BytesResponse{}
-	protoc.MustUnmarshal(resp, data)
-	assert.NotEmpty(t, resp.Value, "TestBMAdd failed")
-
-	bm := util.MustParseBM(resp.Value)
+	bm := util.MustParseBM(data)
 	assert.Equal(t, uint64(len(value)+len(value2)), bm.GetCardinality(), "TestBMAdd failed")
 }
 
@@ -243,17 +231,11 @@ func TestBMRemove(t *testing.T) {
 	})
 	assert.NoError(t, err, "TestBMRemove failed")
 
-	data, err = store.ExecCommand(&rpcpb.GetRequest{
-		Key: key,
-	})
+	data, err = store.Get(key)
 	assert.NoError(t, err, "TestBMRemove failed")
 	assert.NotEmpty(t, data, "TestBMRemove failed")
 
-	resp := &rpcpb.BytesResponse{}
-	protoc.MustUnmarshal(resp, data)
-	assert.NotEmpty(t, resp.Value, "TestBMRemove failed")
-
-	bm := util.MustParseBM(resp.Value)
+	bm := util.MustParseBM(data)
 	assert.Equal(t, uint64(2), bm.GetCardinality(), "TestBMRemove failed")
 }
 

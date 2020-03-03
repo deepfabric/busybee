@@ -19,13 +19,14 @@ func (h *beeStorage) init() {
 	h.AddReadFunc("bm-count", uint64(rpcpb.BMCount), h.bmcount)
 	h.AddReadFunc("bm-range", uint64(rpcpb.BMRange), h.bmrange)
 
-	h.AddWriteFunc("starting-instance", uint64(rpcpb.StartingInstance), h.startingInstance)
-	h.AddWriteFunc("update-instance", uint64(rpcpb.UpdateInstance), h.updateInstance)
-	h.AddWriteFunc("started-instance", uint64(rpcpb.StartedInstance), h.startedInstance)
-	h.AddWriteFunc("stop-instance", uint64(rpcpb.StopInstance), h.stopInstance)
-	h.AddWriteFunc("create-state", uint64(rpcpb.CreateInstanceStateShard), h.createInstanceStateShard)
-	h.AddWriteFunc("update-state", uint64(rpcpb.UpdateInstanceStateShard), h.updateState)
-	h.AddWriteFunc("remove-state", uint64(rpcpb.RemoveInstanceStateShard), h.removeState)
+	h.AddWriteFunc("starting-instance", uint64(rpcpb.StartingInstance), h.startingWorkflowInstance)
+	h.AddWriteFunc("update-instance", uint64(rpcpb.UpdateWorkflow), h.updateWorkflowDefinition)
+	h.AddWriteFunc("started-instance", uint64(rpcpb.StartedInstance), h.workflowInstanceStarted)
+	h.AddWriteFunc("stopping-instance", uint64(rpcpb.StopInstance), h.stopWorkflowInstance)
+	h.AddWriteFunc("stopped-instance", uint64(rpcpb.StoppedInstance), h.workflowInstanceStopped)
+	h.AddWriteFunc("create-state", uint64(rpcpb.CreateInstanceStateShard), h.createInstanceWorker)
+	h.AddWriteFunc("update-state", uint64(rpcpb.UpdateInstanceStateShard), h.updateInstanceWorkerState)
+	h.AddWriteFunc("remove-state", uint64(rpcpb.RemoveInstanceStateShard), h.removeInstanceWorker)
 	h.AddWriteFunc("queue-fetch", uint64(rpcpb.QueueFetch), h.queueFetch)
 
 	h.runner.RunCancelableTask(h.handleShardCycle)
@@ -126,32 +127,38 @@ func (h *beeStorage) BuildRequest(req *raftcmdpb.Request, cmd interface{}) error
 		rpcpb.ReleaseBMRangeRequest(msg)
 	case *rpcpb.StartingInstanceRequest:
 		msg := cmd.(*rpcpb.StartingInstanceRequest)
-		req.Key = StartedInstanceKey(msg.Instance.Snapshot.ID)
+		req.Key = WorkflowCurrentInstanceKey(msg.Instance.Snapshot.ID)
 		req.CustemType = uint64(rpcpb.StartingInstance)
 		req.Type = raftcmdpb.Write
 		req.Cmd = protoc.MustMarshal(msg)
 		rpcpb.ReleaseStartingInstanceRequest(msg)
-	case *rpcpb.UpdateInstanceRequest:
-		msg := cmd.(*rpcpb.UpdateInstanceRequest)
-		req.Key = StartedInstanceKey(msg.Instance.Snapshot.ID)
-		req.CustemType = uint64(rpcpb.UpdateInstance)
+	case *rpcpb.UpdateWorkflowRequest:
+		msg := cmd.(*rpcpb.UpdateWorkflowRequest)
+		req.Key = WorkflowCurrentInstanceKey(msg.Workflow.ID)
+		req.CustemType = uint64(rpcpb.UpdateWorkflow)
 		req.Type = raftcmdpb.Write
 		req.Cmd = protoc.MustMarshal(msg)
-		rpcpb.ReleaseUpdateInstanceRequest(msg)
 	case *rpcpb.StartedInstanceRequest:
 		msg := cmd.(*rpcpb.StartedInstanceRequest)
-		req.Key = StartedInstanceKey(msg.WorkflowID)
+		req.Key = WorkflowCurrentInstanceKey(msg.WorkflowID)
 		req.CustemType = uint64(rpcpb.StartedInstance)
 		req.Type = raftcmdpb.Write
 		req.Cmd = protoc.MustMarshal(msg)
 		rpcpb.ReleaseStartedInstanceRequest(msg)
 	case *rpcpb.StopInstanceRequest:
 		msg := cmd.(*rpcpb.StopInstanceRequest)
-		req.Key = StartedInstanceKey(msg.WorkflowID)
+		req.Key = WorkflowCurrentInstanceKey(msg.WorkflowID)
 		req.CustemType = uint64(rpcpb.StopInstance)
 		req.Type = raftcmdpb.Write
 		req.Cmd = protoc.MustMarshal(msg)
 		rpcpb.ReleaseStopInstanceRequest(msg)
+	case *rpcpb.StoppedInstanceRequest:
+		msg := cmd.(*rpcpb.StoppedInstanceRequest)
+		req.Key = WorkflowCurrentInstanceKey(msg.WorkflowID)
+		req.CustemType = uint64(rpcpb.StoppedInstance)
+		req.Type = raftcmdpb.Write
+		req.Cmd = protoc.MustMarshal(msg)
+		rpcpb.ReleaseStoppedInstanceRequest(msg)
 	case *rpcpb.CreateInstanceStateShardRequest:
 		msg := cmd.(*rpcpb.CreateInstanceStateShardRequest)
 		req.Key = InstanceShardKey(msg.State.WorkflowID, msg.State.Index)
@@ -222,19 +229,6 @@ func (h *beeStorage) WriteBatch() raftstore.CommandWriteBatch {
 }
 
 func (h *beeStorage) getValue(shard uint64, key []byte) ([]byte, error) {
-	value, err := h.getStore(shard).Get(key)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(value) == 0 {
-		return nil, nil
-	}
-
-	return value[1:], nil
-}
-
-func (h *beeStorage) getValueWithPrefix(shard uint64, key []byte) ([]byte, error) {
 	value, err := h.getStore(shard).Get(key)
 	if err != nil {
 		return nil, err

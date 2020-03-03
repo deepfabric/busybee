@@ -46,6 +46,10 @@ func (s *server) onReq(sid interface{}, req *rpcpb.Request) error {
 		return s.doTenantInit(ctx)
 	case rpcpb.StartingInstance:
 		return s.doStartInstance(ctx)
+	case rpcpb.LastInstance:
+		return s.doLastInstance(ctx)
+	case rpcpb.HistoryInstance:
+		return s.doHistoryInstance(ctx)
 	case rpcpb.UpdateCrowd:
 		return s.doUpdateCrowd(ctx)
 	case rpcpb.UpdateWorkflow:
@@ -127,7 +131,7 @@ func (s *server) doBMContains(ctx ctx) error {
 }
 
 func (s *server) doTenantInit(ctx ctx) error {
-	err := s.engine.CreateTenantQueue(ctx.req.TenantInit.ID,
+	err := s.engine.TenantInit(ctx.req.TenantInit.ID,
 		ctx.req.TenantInit.InputQueuePartitions)
 	if err != nil {
 		return err
@@ -137,9 +141,41 @@ func (s *server) doTenantInit(ctx ctx) error {
 	return nil
 }
 
+func (s *server) doLastInstance(ctx ctx) error {
+	value, err := s.engine.LastInstance(ctx.req.LastInstance.WorkflowID)
+	if err != nil {
+		return err
+	}
+
+	if value == nil {
+		s.onResp(ctx, nil, nil)
+	} else {
+		s.onResp(ctx, protoc.MustMarshal(value), nil)
+	}
+
+	return nil
+}
+
+func (s *server) doHistoryInstance(ctx ctx) error {
+	value, err := s.engine.HistoryInstance(ctx.req.HistoryInstance.WorkflowID,
+		ctx.req.HistoryInstance.InstanceID)
+	if err != nil {
+		return err
+	}
+
+	if value == nil {
+		s.onResp(ctx, nil, nil)
+	} else {
+		s.onResp(ctx, protoc.MustMarshal(value), nil)
+	}
+
+	return nil
+}
+
 func (s *server) doStartInstance(ctx ctx) error {
 	err := s.engine.StartInstance(ctx.req.StartInstance.Instance.Snapshot,
-		ctx.req.StartInstance.Instance.Crowd,
+		ctx.req.StartInstance.Instance.Loader,
+		ctx.req.StartInstance.Instance.LoaderMeta,
 		ctx.req.StartInstance.Instance.Workers)
 	if err != nil {
 		return err
@@ -161,7 +197,8 @@ func (s *server) doUpdateWorkflow(ctx ctx) error {
 
 func (s *server) doUpdateCrowd(ctx ctx) error {
 	err := s.engine.UpdateCrowd(ctx.req.UpdateCrowd.ID,
-		ctx.req.UpdateCrowd.Crowd)
+		ctx.req.UpdateCrowd.Loader,
+		ctx.req.UpdateCrowd.LoaderMeta)
 	if err != nil {
 		return err
 	}
@@ -233,7 +270,6 @@ func (s *server) doScanMapping(ctx ctx) error {
 	scanReq.Start = storage.MappingIDKey(ctx.req.ScanMapping.ID, ctx.req.ScanMapping.From)
 	scanReq.End = storage.MappingIDKey(ctx.req.ScanMapping.ID, ctx.req.ScanMapping.To)
 	scanReq.Limit = ctx.req.ScanMapping.Limit
-	scanReq.Skip = 1
 
 	s.engine.Storage().AsyncExecCommand(scanReq, s.onResp, ctx)
 	return nil
@@ -345,7 +381,8 @@ func (s *server) onResp(arg interface{}, value []byte, err error) {
 		case rpcpb.BMContains:
 			protoc.MustUnmarshal(&resp.BoolResp, value)
 		case rpcpb.InstanceCountState, rpcpb.InstanceCrowdState,
-			rpcpb.GetMapping, rpcpb.GetProfile:
+			rpcpb.GetMapping, rpcpb.GetProfile, rpcpb.LastInstance,
+			rpcpb.HistoryInstance:
 			resp.BytesResp.Value = value
 		case rpcpb.FetchNotify, rpcpb.Scan, rpcpb.ScanMapping:
 			protoc.MustUnmarshal(&resp.BytesSliceResp, value)

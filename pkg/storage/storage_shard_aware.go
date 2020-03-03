@@ -3,7 +3,7 @@ package storage
 import (
 	"context"
 
-	beehivemetapb "github.com/deepfabric/beehive/pb/metapb"
+	bhmetapb "github.com/deepfabric/beehive/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/fagongzi/log"
 	"github.com/fagongzi/util/protoc"
@@ -15,23 +15,23 @@ const (
 )
 
 type shardCycle struct {
-	shard  beehivemetapb.Shard
+	shard  bhmetapb.Shard
 	action int
 }
 
-func (h *beeStorage) Created(shard beehivemetapb.Shard) {
+func (h *beeStorage) Created(shard bhmetapb.Shard) {
 
 }
 
-func (h *beeStorage) Splited(shard beehivemetapb.Shard) {
+func (h *beeStorage) Splited(shard bhmetapb.Shard) {
 
 }
 
-func (h *beeStorage) Destory(shard beehivemetapb.Shard) {
+func (h *beeStorage) Destory(shard bhmetapb.Shard) {
 
 }
 
-func (h *beeStorage) BecomeLeader(shard beehivemetapb.Shard) {
+func (h *beeStorage) BecomeLeader(shard bhmetapb.Shard) {
 	if shard.Group == uint64(metapb.DefaultGroup) {
 		h.shardC <- shardCycle{
 			shard:  shard,
@@ -40,7 +40,7 @@ func (h *beeStorage) BecomeLeader(shard beehivemetapb.Shard) {
 	}
 }
 
-func (h *beeStorage) BecomeFollower(shard beehivemetapb.Shard) {
+func (h *beeStorage) BecomeFollower(shard bhmetapb.Shard) {
 	if shard.Group == uint64(metapb.DefaultGroup) {
 		h.shardC <- shardCycle{
 			shard:  shard,
@@ -68,56 +68,61 @@ func (h *beeStorage) handleShardCycle(ctx context.Context) {
 	}
 }
 
-func (h *beeStorage) doLoadEvent(shard beehivemetapb.Shard, leader bool) {
+func (h *beeStorage) doLoadEvent(shard bhmetapb.Shard, leader bool) {
 	err := h.getStore(shard.ID).Scan(shard.Start, shard.End, func(key, value []byte) (bool, error) {
 		if len(value) == 0 {
 			return true, nil
 		}
 
-		switch value[0] {
-		case instanceStartingType:
+		switch key[0] {
+		case workflowCurrentPrefix:
 			if leader {
-				instance := metapb.WorkflowInstance{}
-				protoc.MustUnmarshal(&instance, value[1:])
-				h.eventC <- Event{
-					EventType: InstanceLoadedEvent,
-					Data:      instance,
-				}
+				h.doWorkflowEvent(value)
 			}
-		case instanceStartedType:
-			if leader {
-				instance := metapb.WorkflowInstance{}
-				protoc.MustUnmarshal(&instance, value[1:])
-				h.eventC <- Event{
-					EventType: InstanceStartedEvent,
-					Data:      instance,
-				}
-			}
-		case instanceStoppingType:
-			if leader {
-				instance := metapb.WorkflowInstance{}
-				protoc.MustUnmarshal(&instance, value[1:])
-				h.eventC <- Event{
-					EventType: InstanceStoppingEvent,
-					Data:      instance,
-				}
-			}
-		case runningStateType:
-			state := metapb.WorkflowInstanceState{}
-			protoc.MustUnmarshal(&state, OriginInstanceStatePBValue(value[1:]))
-
-			et := InstanceStateLoadedEvent
-			if !leader {
-				et = InstanceStateRemovedEvent
-			}
-			h.eventC <- Event{
-				EventType: et,
-				Data:      state,
-			}
+		case workflowWorkerPrefix:
+			h.doWorkflowWorkerEvent(value, leader)
 		}
+
 		return true, nil
 	}, false)
 	if err != nil {
 		log.Fatalf("scan shard data for loading failed with %+v", err)
+	}
+}
+
+func (h *beeStorage) doWorkflowEvent(value []byte) {
+	instance := &metapb.WorkflowInstance{}
+	protoc.MustUnmarshal(instance, value)
+
+	switch instance.State {
+	case metapb.Starting:
+		h.eventC <- Event{
+			EventType: StartingInstanceEvent,
+			Data:      instance,
+		}
+	case metapb.Running:
+		h.eventC <- Event{
+			EventType: RunningInstanceEvent,
+			Data:      instance,
+		}
+	case metapb.Stopping:
+		h.eventC <- Event{
+			EventType: StoppingInstanceEvent,
+			Data:      instance,
+		}
+	}
+}
+
+func (h *beeStorage) doWorkflowWorkerEvent(value []byte, leader bool) {
+	state := &metapb.WorkflowInstanceWorkerState{}
+	protoc.MustUnmarshal(state, value)
+
+	et := RunningInstanceWorkerEvent
+	if !leader {
+		et = RemoveInstanceWorkerEvent
+	}
+	h.eventC <- Event{
+		EventType: et,
+		Data:      state,
 	}
 }

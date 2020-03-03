@@ -8,11 +8,41 @@ option (gogoproto.sizer_all) = true;
 option (gogoproto.unmarshaler_all) = true;
 option (gogoproto.goproto_enum_prefix_all) = false;
 
+// BMLoader bitmap loader type
+enum BMLoader {
+    RawLoader        = 0;
+    KVLoader         = 1;
+    KVShardLoader    = 2;
+    ClickhouseLoader = 3;
+}
+
+// WorkflowInstanceState workflow instance state
+enum WorkflowInstanceState {
+    Starting = 0;
+    Running  = 1;
+    Stopping = 2;
+    Stopped  = 3;
+}
+
 // EventType tenant input event type
 enum EventType {
     UserType           = 0;
     UpdateCrowdType    = 1;
     UpdateWorkflowType = 2;
+}
+
+// ShardBitmapPutMeta shard bitmap put meta
+message ShardBitmapPutMeta {
+    bytes  key           = 1;
+    uint32 ttl           = 2 [(gogoproto.customname) = "TTL"];
+	uint32 bytesPerShard = 3;
+}
+
+// ShardBitmapLoadMeta shard bitmap load meta
+message ShardBitmapLoadMeta {
+    bytes  key    = 1;
+    uint64 Total  = 2;
+    uint32 shards = 3;
 }
 
 // IDValue is a id value
@@ -91,16 +121,27 @@ message Workflow {
 
 // WorkflowInstance workflow instance
 message WorkflowInstance {
-    Workflow snapshot    = 1 [(gogoproto.nullable) = false];
-    bytes    crowd       = 2;
-    uint64   workers     = 3;
-    int64    startedAt   = 4;
-    int64    stoppedAt   = 5;
-    uint64   version     = 6;
+    Workflow              snapshot    = 1 [(gogoproto.nullable) = false];
+    uint64                instanceID  = 2;
+    bytes                 loaderMeta  = 3;
+    BMLoader              loader      = 4;
+    uint64                totalCrowd  = 5;
+    uint64                workers     = 6;
+    int64                 startedAt   = 7;
+    int64                 stoppedAt   = 8;
+    uint64                version     = 9;
+    WorkflowInstanceState state       = 10;
 }
 
-// WorkflowInstanceState workflow instance state. instance : instanceState = 1 : N
-message WorkflowInstanceState {
+// WorkflowInstanceSnapshot workflow instance snapshpot
+message WorkflowInstanceSnapshot {
+    WorkflowInstance   snapshot  = 1 [(gogoproto.nullable) = false];
+    int64              timestamp = 2;
+    repeated StepState states    = 3 [(gogoproto.nullable) = false];
+}
+
+// WorkflowInstanceWorkerState workflow instance state. instance : instanceState = 1 : N
+message WorkflowInstanceWorkerState {
     uint64             tenantID   = 1;
     uint64             workflowID = 2;
     uint32             index      = 3;
@@ -124,8 +165,10 @@ message InstanceCountState {
 
 // StepState workflow step state.
 message StepState {
-    Step  step   = 1 [(gogoproto.nullable) = false];
-    bytes crowd  = 2;
+    Step     step       = 1 [(gogoproto.nullable) = false];
+    uint64   totalCrowd = 2;
+    BMLoader loader     = 3;
+    bytes    loaderMeta = 4;
 }
 
 // Step is a step of the work flow

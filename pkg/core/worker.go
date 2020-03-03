@@ -44,7 +44,7 @@ type stateWorker struct {
 	key          string
 	eng          Engine
 	buf          *goetty.ByteBuf
-	state        metapb.WorkflowInstanceState
+	state        metapb.WorkflowInstanceWorkerState
 	totalCrowds  *roaring.Bitmap
 	stepCrowds   []*roaring.Bitmap
 	steps        map[string]excution
@@ -56,7 +56,7 @@ type stateWorker struct {
 	tenant       string
 }
 
-func newStateWorker(key string, state metapb.WorkflowInstanceState, eng Engine) (*stateWorker, error) {
+func newStateWorker(key string, state metapb.WorkflowInstanceWorkerState, eng Engine) (*stateWorker, error) {
 	consumer, err := queue.NewConsumer(state.TenantID,
 		metapb.TenantInputGroup,
 		eng.Storage(), []byte(key))
@@ -93,7 +93,7 @@ func (w *stateWorker) resetByState() error {
 	w.leaveActions = make(map[string]string)
 
 	for idx, stepState := range w.state.States {
-		bm := bbutil.MustParseBM(stepState.Crowd)
+		bm := bbutil.MustParseBM(stepState.LoaderMeta)
 		w.stepCrowds = append(w.stepCrowds, bm)
 		w.totalCrowds.Or(bm)
 
@@ -390,7 +390,8 @@ func (w *stateWorker) stepChanged(batch *executionbatch) error {
 		}
 
 		if changed {
-			w.state.States[idx].Crowd = bbutil.MustMarshalBM(w.stepCrowds[idx])
+			w.state.States[idx].TotalCrowd = w.stepCrowds[idx].GetCardinality()
+			w.state.States[idx].LoaderMeta = bbutil.MustMarshalBM(w.stepCrowds[idx])
 			w.state.Version++
 			doNotify = true
 		}
@@ -401,6 +402,7 @@ func (w *stateWorker) stepChanged(batch *executionbatch) error {
 }
 
 func (w *stateWorker) doUpdateCrowd(crowd []byte) error {
+	old := w.totalCrowds.GetCardinality()
 	bm := bbutil.MustParseBM(crowd)
 	new := bbutil.BMMinus(bm, w.totalCrowds)
 	w.totalCrowds = bm.Clone()
@@ -411,13 +413,16 @@ func (w *stateWorker) doUpdateCrowd(crowd []byte) error {
 		sc.And(bm)
 	}
 	for idx := range w.state.States {
-		w.state.States[idx].Crowd = bbutil.MustMarshalBM(w.stepCrowds[idx])
+		w.state.States[idx].TotalCrowd = w.stepCrowds[idx].GetCardinality()
+		w.state.States[idx].Loader = metapb.RawLoader
+		w.state.States[idx].LoaderMeta = bbutil.MustMarshalBM(w.stepCrowds[idx])
 	}
 	w.state.Version++
 
 	w.retryDo("exec update crowd", nil, w.execUpdate)
-	log.Infof("worker %s crowd updated to %d numbers",
+	log.Infof("worker %s crowd updated: %d -> %d",
 		w.key,
+		old,
 		w.totalCrowds.GetCardinality())
 	return nil
 }
@@ -467,15 +472,17 @@ func (w *stateWorker) doUpdateWorkflow(workflow metapb.Workflow) error {
 		if bm, ok := oldCrowds[step.Name]; ok {
 			newCrowds = append(newCrowds, bm)
 			newStates = append(newStates, metapb.StepState{
-				Step:  step,
-				Crowd: bbutil.MustMarshalBM(bm),
+				Step:       step,
+				TotalCrowd: bm.GetCardinality(),
+				Loader:     metapb.RawLoader,
+				LoaderMeta: bbutil.MustMarshalBM(bm),
 			})
 			continue
 		}
 
 		newStates = append(newStates, metapb.StepState{
-			Step:  step,
-			Crowd: emptyBMData.Bytes(),
+			Step:       step,
+			LoaderMeta: emptyBMData.Bytes(),
 		})
 		newCrowds = append(newCrowds, bbutil.AcquireBitmap())
 	}

@@ -1,20 +1,18 @@
 package storage
 
 const (
-	// InstanceLoadedEvent  load a new instance event
-	InstanceLoadedEvent = iota
-	// InstanceStartedEvent instance started event
-	InstanceStartedEvent
-	// InstanceRemovedEvent instance removed to another node event
-	InstanceRemovedEvent
-	// InstanceStoppingEvent instance stopping event
-	InstanceStoppingEvent
-	// InstanceStoppedEvent instance stopped event
-	InstanceStoppedEvent
-	// InstanceStateLoadedEvent load a new instance state event
-	InstanceStateLoadedEvent
-	// InstanceStateRemovedEvent instance state removed to another node event
-	InstanceStateRemovedEvent
+	// StartingInstanceEvent  load a new instance event
+	StartingInstanceEvent = iota
+	// RunningInstanceEvent instance started event
+	RunningInstanceEvent
+	// StoppingInstanceEvent instance stopping event
+	StoppingInstanceEvent
+	// StoppedInstanceEvent instance stopped event
+	StoppedInstanceEvent
+	// RunningInstanceWorkerEvent load a new instance state event
+	RunningInstanceWorkerEvent
+	// RemoveInstanceWorkerEvent instance state removed to another node event
+	RemoveInstanceWorkerEvent
 )
 
 // Event the event

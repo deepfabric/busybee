@@ -35,8 +35,7 @@ func (h *beeStorage) allocID(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *
 	start := id + 1
 	end := id + uint32(customReq.Batch)
 
-	err = h.getStore(shard.ID).Set(req.Key,
-		appendValuePrefix(buf, format.Uint32ToBytes(end), kvType))
+	err = h.getStore(shard.ID).Set(req.Key, format.Uint32ToBytes(end))
 	if err != nil {
 		log.Fatalf("alloc id %+v failed with %+v", req.Key, err)
 	}
@@ -57,8 +56,7 @@ func (h *beeStorage) resetID(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *
 	protoc.MustUnmarshal(&customReq, req.Cmd)
 
 	value := 0 + customReq.StartWith
-	err := h.getStore(shard.ID).Set(req.Key,
-		appendValuePrefix(buf, format.Uint32ToBytes(uint32(value)), kvType))
+	err := h.getStore(shard.ID).Set(req.Key, format.Uint32ToBytes(uint32(value)))
 	if err != nil {
 		log.Fatalf("alloc id %+v failed with %+v", req.Key, err)
 	}
@@ -114,7 +112,7 @@ func (h *beeStorage) scan(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *goe
 
 	customResp := rpcpb.AcquireBytesSliceResponse()
 	err := h.getStore(shard.ID).Scan(req.Key, end, func(key, value []byte) (bool, error) {
-		customResp.Values = append(customResp.Values, value[customReq.Skip:])
+		customResp.Values = append(customResp.Values, value)
 		if uint64(len(customResp.Values)) >= customReq.Limit {
 			return false, nil
 		}
@@ -189,19 +187,21 @@ func (h *beeStorage) bmrange(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *
 	var values []uint32
 	if len(value) > 0 {
 		bm := util.MustParseBM(value)
-		count := uint64(0)
-		itr := bm.Iterator()
-		itr.AdvanceIfNeeded(customReq.Start)
-		for {
-			if !itr.HasNext() {
-				break
-			}
+		if bm.GetCardinality() > 0 {
+			count := uint64(0)
+			itr := bm.Iterator()
+			itr.AdvanceIfNeeded(customReq.Start)
+			for {
+				if !itr.HasNext() {
+					break
+				}
 
-			values = append(values, itr.Next())
-			count++
+				values = append(values, itr.Next())
+				count++
 
-			if count >= customReq.Limit {
-				break
+				if count >= customReq.Limit {
+					break
+				}
 			}
 		}
 	}
@@ -245,8 +245,7 @@ func (h *beeStorage) updateMapping(shard bhmetapb.Shard, req *raftcmdpb.Request,
 		}
 	}
 
-	err = h.getStore(shard.ID).Set(req.Key,
-		appendValuePrefix(buf, protoc.MustMarshal(&set), kvType))
+	err = h.getStore(shard.ID).Set(req.Key, protoc.MustMarshal(&set))
 	if err != nil {
 		log.Fatalf("set mapping id failed with %+v", err)
 	}

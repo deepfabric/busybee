@@ -30,9 +30,9 @@ var (
 	bmCountPool                  sync.Pool
 	bmRangePool                  sync.Pool
 	startingInstancePool         sync.Pool
-	updateInstancePool           sync.Pool
 	startedInstancePool          sync.Pool
 	stopInstancePool             sync.Pool
+	stoppedInstancePool          sync.Pool
 	createInstanceStateShardPool sync.Pool
 	updateInstanceStateShardPool sync.Pool
 	removeInstanceStateShardPool sync.Pool
@@ -475,21 +475,6 @@ func ReleaseStartingInstanceRequest(value *StartingInstanceRequest) {
 	startingInstancePool.Put(value)
 }
 
-// AcquireUpdateInstanceRequest returns value from pool
-func AcquireUpdateInstanceRequest() *UpdateInstanceRequest {
-	value := updateInstancePool.Get()
-	if value == nil {
-		return &UpdateInstanceRequest{}
-	}
-	return value.(*UpdateInstanceRequest)
-}
-
-// ReleaseUpdateInstanceRequest returns the value to pool
-func ReleaseUpdateInstanceRequest(value *UpdateInstanceRequest) {
-	value.Reset()
-	updateInstancePool.Put(value)
-}
-
 // AcquireStartedInstanceRequest returns value from pool
 func AcquireStartedInstanceRequest() *StartedInstanceRequest {
 	value := startedInstancePool.Get()
@@ -518,6 +503,21 @@ func AcquireStopInstanceRequest() *StopInstanceRequest {
 func ReleaseStopInstanceRequest(value *StopInstanceRequest) {
 	value.Reset()
 	stopInstancePool.Put(value)
+}
+
+// AcquireStoppedInstanceRequest returns value from pool
+func AcquireStoppedInstanceRequest() *StoppedInstanceRequest {
+	value := stoppedInstancePool.Get()
+	if value == nil {
+		return &StoppedInstanceRequest{}
+	}
+	return value.(*StoppedInstanceRequest)
+}
+
+// ReleaseStoppedInstanceRequest returns the value to pool
+func ReleaseStoppedInstanceRequest(value *StoppedInstanceRequest) {
+	value.Reset()
+	stoppedInstancePool.Put(value)
 }
 
 // AcquireCreateInstanceStateShardRequest returns value from pool

@@ -59,7 +59,7 @@ func (kv *kvBatch) reset() {
 }
 
 func (kv *kvBatch) set(req *rpcpb.SetRequest, buf *goetty.ByteBuf, wb *util.WriteBatch) {
-	wb.SetWithTTL(req.Key, appendValuePrefix(buf, req.Value, kvType), int32(req.TTL))
+	wb.SetWithTTL(req.Key, req.Value, int32(req.TTL))
 }
 
 func (kv *kvBatch) delete(req *rpcpb.DeleteRequest, wb *util.WriteBatch) {

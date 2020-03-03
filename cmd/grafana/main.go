@@ -19,8 +19,8 @@ import (
 )
 
 var (
-	addr   = flag.String("grafana", "http://127.0.0.1:3000", "Grafana api address")
-	key    = flag.String("key", "eyJrIjoiZ3BnN3NxRjVFcnVoSGkxZTJXT2lWQVhJZ0dpNXR6QWIiLCJuIjoidGVzdCIsImlkIjoxfQ==", "Grafana api key")
+	addr   = flag.String("grafana", "http://172.26.240.1:3000", "Grafana api address")
+	key    = flag.String("key", "eyJrIjoicGk1c0E3ajcySUMzOTczTk1EV21ybkQ1aEFxUTd2aVUiLCJuIjoidGVzdCIsImlkIjoxfQ==", "Grafana api key")
 	folder = flag.String("folder", "Busybee", "Busybee dashboard folder")
 	ds     = flag.String("ds", "Prometheus", "Prometheus datasource name")
 )
@@ -143,8 +143,8 @@ func workflowRow() grabana.DashboardBuilderOption {
 			"sum(busybee_engine_workflow_total) by (status)",
 			"{{ status }}"),
 		withTable("workflow shard count", height, 3,
-			"sum(busybee_engine_workflow_shard_total) by (status)",
-			"{{ status }}"),
+			"sum(busybee_engine_workflow_shard_total)",
+			"workers"),
 
 		withTable("Input queue size", height, 3,
 			"sum(busybee_event_input_queue_size) by (tenant)",

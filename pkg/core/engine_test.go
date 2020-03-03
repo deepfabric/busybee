@@ -36,16 +36,16 @@ func TestStop(t *testing.T) {
 	assert.NoError(t, ng.Stop(), "TestStop failed")
 }
 
-func TestCreateTenantQueue(t *testing.T) {
+func TestTenantInit(t *testing.T) {
 	store, deferFunc := storage.NewTestStorage(t, false)
 	defer deferFunc()
 
 	ng, err := NewEngine(store, notify.NewQueueBasedNotifier(store))
-	assert.NoError(t, err, "TestCreateTenantQueue failed")
-	assert.NoError(t, ng.Start(), "TestCreateTenantQueue failed")
+	assert.NoError(t, err, "TestTenantInit failed")
+	assert.NoError(t, ng.Start(), "TestTenantInit failed")
 
-	err = ng.CreateTenantQueue(10001, 1)
-	assert.NoError(t, err, "TestCreateTenantQueue failed")
+	err = ng.TenantInit(10001, 1)
+	assert.NoError(t, err, "TestTenantInit failed")
 
 	time.Sleep(time.Millisecond * 500)
 
@@ -53,7 +53,84 @@ func TestCreateTenantQueue(t *testing.T) {
 	err = store.RaftStore().Prophet().GetStore().LoadResources(16, func(res prophet.Resource) {
 		c++
 	})
-	assert.Equal(t, 3, c, "TestCreateTenantQueue failed")
+	assert.Equal(t, 3, c, "TestTenantInit failed")
+}
+
+func TestStopInstanceAndRestart(t *testing.T) {
+	store, deferFunc := storage.NewTestStorage(t, false)
+	defer deferFunc()
+
+	ng, err := NewEngine(store, notify.NewQueueBasedNotifier(store))
+	assert.NoError(t, err, "TestStopInstance failed")
+	assert.NoError(t, ng.Start(), "TestStopInstance failed")
+
+	err = ng.TenantInit(10001, 1)
+	assert.NoError(t, err, "TestStopInstance failed")
+	time.Sleep(time.Second)
+
+	for i := 0; i < 2; i++ {
+		bm := roaring.BitmapOf(1, 2, 3, 4)
+		if i == 1 {
+			bm = roaring.BitmapOf(1, 2, 3, 4, 5, 6, 7, 8, 9)
+		}
+
+		err = ng.StartInstance(metapb.Workflow{
+			ID:       10000,
+			TenantID: 10001,
+			Name:     "test_wf",
+			Steps: []metapb.Step{
+				metapb.Step{
+					Name: "step_end_1",
+					Execution: metapb.Execution{
+						Type:   metapb.Direct,
+						Direct: &metapb.DirectExecution{},
+					},
+				},
+			},
+		}, metapb.RawLoader, util.MustMarshalBM(bm), 3)
+
+		time.Sleep(time.Second * 1)
+		c := 0
+		ng.(*engine).workers.Range(func(key, value interface{}) bool {
+			c++
+			return true
+		})
+		assert.Equal(t, 3, c, "TestStopInstance failed")
+
+		err = ng.StopInstance(10000)
+		assert.NoError(t, err, "TestStopInstance failed")
+
+		time.Sleep(time.Second * 1)
+		c = 0
+		ng.(*engine).workers.Range(func(key, value interface{}) bool {
+			c++
+			return true
+		})
+		assert.Equal(t, 0, c, "TestStopInstance failed")
+
+		value, err := ng.Storage().Get(storage.WorkflowCurrentInstanceKey(10000))
+		assert.NoError(t, err, "TestStopInstance failed")
+
+		instance := &metapb.WorkflowInstance{}
+		protoc.MustUnmarshal(instance, value)
+		assert.Equal(t, metapb.Stopped, instance.State, "TestStopInstance failed")
+		assert.True(t, instance.StoppedAt > 0, "TestStopInstance failed")
+		shards, err := ng.(*engine).getInstanceWorkers(instance)
+		assert.NoError(t, err, "TestStopInstance failed")
+		assert.Empty(t, shards, "TestStopInstance failed")
+		if i == 1 {
+			bm, err := ng.(*engine).loadBM(instance.Loader, instance.LoaderMeta)
+			assert.NoError(t, err, "TestStopInstance failed")
+
+			assert.Equal(t, uint32(5), bm.Minimum(), "TestStopInstance failed")
+			assert.Equal(t, uint32(9), bm.Maximum(), "TestStopInstance failed")
+		}
+
+		buf := goetty.NewByteBuf(32)
+		value, err = ng.Storage().Get(storage.WorkflowHistoryInstanceKey(instance.Snapshot.ID, instance.InstanceID, buf))
+		assert.NoError(t, err, "TestStopInstance failed")
+		assert.NotEmpty(t, value, "TestStopInstance failed")
+	}
 }
 
 func TestStartInstance(t *testing.T) {
@@ -64,7 +141,7 @@ func TestStartInstance(t *testing.T) {
 	assert.NoError(t, err, "TestStartInstance failed")
 	assert.NoError(t, ng.Start(), "TestStartInstance failed")
 
-	err = ng.CreateTenantQueue(10001, 1)
+	err = ng.TenantInit(10001, 1)
 	assert.NoError(t, err, "TestStartInstance failed")
 	time.Sleep(time.Second)
 
@@ -110,7 +187,7 @@ func TestStartInstance(t *testing.T) {
 				},
 			},
 		},
-	}, util.MustMarshalBM(bm), 3)
+	}, metapb.RawLoader, util.MustMarshalBM(bm), 3)
 	assert.NoError(t, err, "TestStartInstance failed")
 
 	time.Sleep(time.Second * 2)
@@ -162,7 +239,9 @@ func TestStartInstance(t *testing.T) {
 
 	state, err := ng.InstanceStepState(10000, "step_start")
 	assert.NoError(t, err, "TestStartInstance failed")
-	bm = util.MustParseBM(state.Crowd)
+
+	bm, err = ng.(*engine).loadBM(state.Loader, state.LoaderMeta)
+	assert.NoError(t, err, "TestStartInstance failed")
 	assert.Equal(t, uint64(3), bm.GetCardinality(), "TestStartInstance failed")
 
 	time.Sleep(time.Second * 9)
@@ -185,7 +264,7 @@ func TestUpdateCrowd(t *testing.T) {
 	assert.NoError(t, err, "TestUpdateCrowd failed")
 	assert.NoError(t, ng.Start(), "TestUpdateCrowd failed")
 
-	err = ng.CreateTenantQueue(tid, 1)
+	err = ng.TenantInit(tid, 1)
 	assert.NoError(t, err, "TestUpdateCrowd failed")
 	time.Sleep(time.Second)
 
@@ -230,7 +309,7 @@ func TestUpdateCrowd(t *testing.T) {
 				},
 			},
 		},
-	}, util.MustMarshalBM(bm), 3)
+	}, metapb.RawLoader, util.MustMarshalBM(bm), 3)
 	assert.NoError(t, err, "TestUpdateCrowd failed")
 
 	time.Sleep(time.Second * 2)
@@ -292,7 +371,7 @@ func TestUpdateCrowd(t *testing.T) {
 	assert.Equal(t, uint64(0), m["step_end_1"], "TestUpdateCrowd failed")
 	assert.Equal(t, uint64(3), m["step_end_else"], "TestUpdateCrowd failed")
 
-	err = ng.UpdateCrowd(wid, util.MustMarshalBM(roaring.BitmapOf(1, 2, 3, 5)))
+	err = ng.UpdateCrowd(wid, metapb.RawLoader, util.MustMarshalBM(roaring.BitmapOf(1, 2, 3, 5)))
 	assert.NoError(t, err, "TestUpdateCrowd failed")
 
 	err = ng.Storage().PutToQueue(tid, 0, metapb.TenantInputGroup, protoc.MustMarshal(&metapb.Event{
@@ -334,7 +413,7 @@ func TestUpdateWorkflow(t *testing.T) {
 	assert.NoError(t, err, "TestUpdateWorkflow failed")
 	assert.NoError(t, ng.Start(), "TestUpdateWorkflow failed")
 
-	err = ng.CreateTenantQueue(tid, 1)
+	err = ng.TenantInit(tid, 1)
 	assert.NoError(t, err, "TestUpdateWorkflow failed")
 	time.Sleep(time.Second)
 
@@ -418,7 +497,7 @@ func TestUpdateWorkflow(t *testing.T) {
 				},
 			},
 		},
-	}, util.MustMarshalBM(bm), 3)
+	}, metapb.RawLoader, util.MustMarshalBM(bm), 3)
 	assert.NoError(t, err, "TestUpdateWorkflow failed")
 
 	time.Sleep(time.Second * 2)
@@ -483,7 +562,7 @@ func TestUpdateWorkflow(t *testing.T) {
 	assert.Equal(t, uint64(0), m["step_end_4"], "TestUpdateWorkflow failed")
 	assert.Equal(t, uint64(0), m["step_end_else"], "TestUpdateWorkflow failed")
 
-	err = ng.UpdateCrowd(wid, util.MustMarshalBM(roaring.BitmapOf(1, 2, 3, 5)))
+	err = ng.UpdateCrowd(wid, metapb.RawLoader, util.MustMarshalBM(roaring.BitmapOf(1, 2, 3, 5)))
 	assert.NoError(t, err, "TestUpdateCrowd failed")
 
 	err = ng.UpdateWorkflow(metapb.Workflow{
@@ -593,7 +672,7 @@ func TestStartInstanceWithStepTTL(t *testing.T) {
 	assert.NoError(t, err, "TestStartInstanceWithStepTTL failed")
 	assert.NoError(t, ng.Start(), "TestStartInstanceWithStepTTL failed")
 
-	err = ng.CreateTenantQueue(10001, 1)
+	err = ng.TenantInit(10001, 1)
 	assert.NoError(t, err, "TestStartInstanceWithStepTTL failed")
 	time.Sleep(time.Second)
 
@@ -665,7 +744,7 @@ func TestStartInstanceWithStepTTL(t *testing.T) {
 				},
 			},
 		},
-	}, util.MustMarshalBM(bm), 3)
+	}, metapb.RawLoader, util.MustMarshalBM(bm), 3)
 	assert.NoError(t, err, "TestStartInstanceWithStepTTL failed")
 
 	time.Sleep(time.Second * 2)
@@ -798,7 +877,7 @@ func TestStartInstanceWithNotifyError(t *testing.T) {
 	assert.NoError(t, err, "TestStartInstance failed")
 	assert.NoError(t, ng.Start(), "TestStartInstance failed")
 
-	err = ng.CreateTenantQueue(10001, 1)
+	err = ng.TenantInit(10001, 1)
 	assert.NoError(t, err, "TestStartInstance failed")
 	time.Sleep(time.Second)
 
@@ -843,7 +922,7 @@ func TestStartInstanceWithNotifyError(t *testing.T) {
 				},
 			},
 		},
-	}, util.MustMarshalBM(bm), 3)
+	}, metapb.RawLoader, util.MustMarshalBM(bm), 3)
 	assert.NoError(t, err, "TestStartInstance failed")
 
 	time.Sleep(time.Second)
@@ -895,6 +974,7 @@ func TestStartInstanceWithNotifyError(t *testing.T) {
 
 	state, err := ng.InstanceStepState(10000, "step_start")
 	assert.NoError(t, err, "TestStartInstance failed")
-	bm = util.MustParseBM(state.Crowd)
+	bm, err = ng.(*engine).loadBM(state.Loader, state.LoaderMeta)
+	assert.NoError(t, err, "TestStartInstance failed")
 	assert.Equal(t, uint64(3), bm.GetCardinality(), "TestStartInstance failed")
 }

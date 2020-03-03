@@ -1,6 +1,8 @@
 package storage
 
 import (
+	"time"
+
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/util/hack"
@@ -11,16 +13,26 @@ const (
 	mappingPrefix         byte = 1
 	profilePrefix         byte = 2
 	queueMetadataPrefix   byte = 3
-	workflowMetataPrefix  byte = 4
-	workflowStepTTLPrefix byte = 5
-
-	instance      byte = 1
-	instanceShard byte = 2
+	workflowCurrentPrefix byte = 4
+	workflowWorkerPrefix  byte = 5
+	workflowHistoryPrefix byte = 6
+	workflowStepTTLPrefix byte = 7
+	workflowCrowdPrefix   byte = 8
+	tempPrefix            byte = 9
 
 	queueOffsetField    byte = 0
 	queueItemField      byte = 1
 	queueCommittedField byte = 2
 )
+
+// TempKey returns the temp key
+func TempKey(key []byte, buf *goetty.ByteBuf) []byte {
+	buf.MarkWrite()
+	buf.WriteByte(tempPrefix)
+	buf.WriteInt64(time.Now().Unix())
+	buf.Write(key)
+	return buf.WrittenDataAfterMark()
+}
 
 // WorkflowStepTTLKey returns the ttl key for user on the step
 func WorkflowStepTTLKey(wid uint64, uid uint32, name string, buf *goetty.ByteBuf) []byte {
@@ -49,22 +61,47 @@ func QueueMetadataKey(id uint64, group metapb.Group) []byte {
 	return key
 }
 
-// StartedInstanceKey instance key
-func StartedInstanceKey(id uint64) []byte {
-	key := make([]byte, 10, 10)
-	key[0] = workflowMetataPrefix
-	key[1] = instance
-	goetty.Uint64ToBytesTo(id, key[2:])
+// WorkflowCurrentInstanceKey workflow current instance key
+func WorkflowCurrentInstanceKey(id uint64) []byte {
+	key := make([]byte, 9, 9)
+	key[0] = workflowCurrentPrefix
+	goetty.Uint64ToBytesTo(id, key[1:])
 	return key
+}
+
+// WorkflowHistoryInstanceKey returns workflow instance history key
+func WorkflowHistoryInstanceKey(wid, instanceID uint64, buf *goetty.ByteBuf) []byte {
+	buf.MarkWrite()
+	buf.WriteByte(workflowHistoryPrefix)
+	buf.WriteUInt64(wid)
+	buf.WriteUInt64(instanceID)
+	return buf.WrittenDataAfterMark()
+}
+
+// ShardBitmapKey returns bitmap shard key
+func ShardBitmapKey(key []byte, index uint32, buf *goetty.ByteBuf) []byte {
+	buf.MarkWrite()
+	buf.Write(key)
+	buf.WriteUInt32(index)
+	return buf.WrittenDataAfterMark()
+}
+
+// WorkflowCrowdShardKey returns workflow instance crow shard key
+func WorkflowCrowdShardKey(wid, instanceID uint64, version uint32, buf *goetty.ByteBuf) []byte {
+	buf.MarkWrite()
+	buf.WriteByte(workflowCrowdPrefix)
+	buf.WriteUInt64(wid)
+	buf.WriteUInt64(instanceID)
+	buf.WriteUInt32(version)
+	return buf.WrittenDataAfterMark()
 }
 
 // InstanceShardKey instance shard key
 func InstanceShardKey(id uint64, index uint32) []byte {
-	key := make([]byte, 14, 14)
-	key[0] = workflowMetataPrefix
-	key[1] = instanceShard
-	goetty.Uint64ToBytesTo(id, key[2:])
-	goetty.Uint32ToBytesTo(index, key[10:])
+	key := make([]byte, 13, 13)
+	key[0] = workflowWorkerPrefix
+	goetty.Uint64ToBytesTo(id, key[1:])
+	goetty.Uint32ToBytesTo(index, key[9:])
 	return key
 }
 

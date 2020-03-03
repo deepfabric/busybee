@@ -156,6 +156,25 @@ func NewByteBufPool(capacity int, pool Pool) *ByteBuf {
 	}
 }
 
+// WrapBytes wrap a bytes as a bytebuf
+func WrapBytes(data []byte) *ByteBuf {
+	return &ByteBuf{
+		capacity:    cap(data),
+		buf:         data,
+		readerIndex: 0,
+		writerIndex: len(data),
+		pool:        getDefaultMP(),
+	}
+}
+
+// Wrap wrap a bytes
+func (b *ByteBuf) Wrap(data []byte) {
+	b.Clear()
+	b.Release()
+	b.buf = data
+	b.writerIndex = len(data)
+}
+
 // RawBuf get the raw byte array
 func (b *ByteBuf) RawBuf() []byte {
 	return b.buf
