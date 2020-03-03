@@ -172,6 +172,9 @@ func BMAlloc(new *roaring.Bitmap, shards ...*roaring.Bitmap) {
 				perAdded[op]--
 				if perAdded[op] <= 0 {
 					op++
+					if op > lastOp {
+						op = 0
+					}
 				}
 				continue
 			}

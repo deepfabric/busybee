@@ -497,8 +497,9 @@ func (eng *engine) loadRunningInstance(id uint64) (*metapb.WorkflowInstance, err
 	}
 
 	if instance == nil || instance.State != metapb.Running {
-		return nil, fmt.Errorf("workflow-%d is not running",
-			id)
+		return nil, fmt.Errorf("workflow-%d state %s, not running",
+			id,
+			instance.State.String())
 	}
 
 	return instance, nil

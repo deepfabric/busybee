@@ -77,11 +77,25 @@ func TestBMAlloc(t *testing.T) {
 	bm2 := roaring.BitmapOf(4, 5, 6)
 	bm3 := roaring.BitmapOf(7, 8, 9)
 
-	new := roaring.BitmapOf(4, 5, 6, 7, 8, 9, 10, 11, 12)
+	new := roaring.BitmapOf(4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21)
 	BMAlloc(new, bm1, bm2, bm3)
-	assert.Equal(t, uint64(3), bm1.GetCardinality(), "TestBMAlloc failed")
-	assert.Equal(t, uint64(3), bm2.GetCardinality(), "TestBMAlloc failed")
-	assert.Equal(t, uint64(3), bm3.GetCardinality(), "TestBMAlloc failed")
+	assert.Equal(t, uint64(6), bm1.GetCardinality(), "TestBMAlloc failed")
+	assert.Equal(t, uint64(6), bm2.GetCardinality(), "TestBMAlloc failed")
+	assert.Equal(t, uint64(6), bm3.GetCardinality(), "TestBMAlloc failed")
+}
+
+func TestBMAllocWithBig(t *testing.T) {
+	bm := AcquireBitmap()
+	for i := uint32(0); i < 400000000; i++ {
+		if i%333 == 0 {
+			bm.Add(i)
+		}
+	}
+
+	bmNew := AcquireBitmap()
+	bmNew.AddMany([]uint32{1, 2, 3, 4})
+	shards := BMSplit(bm, 128)
+	BMAlloc(bmNew, shards...)
 }
 
 func TestBMSplitAndAlloc(t *testing.T) {
