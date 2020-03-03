@@ -4,11 +4,10 @@ ifeq ("$(VERSION)","")
 endif
 
 ROOT_DIR = $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))/
-VERSION_PATH	   = $(shell echo $(ROOT_DIR) | sed -e "s;${GOPATH}/src/;;g")pkg/util
-LD_GIT_COMMIT      = -X '$(VERSION_PATH).GitCommit=`git rev-parse --short HEAD`'
-LD_BUILD_TIME      = -X '$(VERSION_PATH).BuildTime=`date +%FT%T%z`'
-LD_GO_VERSION      = -X '$(VERSION_PATH).GoVersion=`go version`'
-LD_BIN_VERSION     = -X '$(VERSION_PATH).Version=$(VERSION)'
+LD_GIT_COMMIT      = -X 'github.com/deepfabric/busybee/pkg/util.GitCommit=`git rev-parse --short HEAD`'
+LD_BUILD_TIME      = -X 'github.com/deepfabric/busybee/pkg/util.BuildTime=`date +%FT%T%z`'
+LD_GO_VERSION      = -X 'github.com/deepfabric/busybee/pkg/util.GoVersion=`go version`'
+LD_BIN_VERSION     = -X 'github.com/deepfabric/busybee/pkg/util.Version=$(VERSION)'
 LD_FLAGS = -ldflags "$(LD_GIT_COMMIT) $(LD_BUILD_TIME) $(LD_GO_VERSION) $(LD_BIN_VERSION) -w -s"
 
 GOOS 		= linux
@@ -21,11 +20,11 @@ dist_dir: ; $(info ======== prepare distribute dir:)
 
 .PHONY: grafana
 grafana: dist_dir; $(info ======== compiled busybee)
-	env GO111MODULE=off GOOS=$(GOOS) go build -o $(DIST_DIR)grafana $(LD_FLAGS) $(ROOT_DIR)/cmd/grafana/*.go
+	env GO111MODULE=off GOOS=$(GOOS) go build -o $(DIST_DIR)grafana $(LD_FLAGS) $(ROOT_DIR)cmd/grafana/*.go
 
 .PHONY: busybee
 busybee: dist_dir; $(info ======== compiled busybee)
-	env GO111MODULE=off GOOS=$(GOOS) go build -o $(DIST_DIR)busybee $(LD_FLAGS) $(ROOT_DIR)/cmd/server/*.go
+	env GO111MODULE=off GOOS=$(GOOS) go build -o $(DIST_DIR)busybee $(LD_FLAGS) $(ROOT_DIR)cmd/server/*.go
 
 .PHONY: docker
 docker: ; $(info ======== compiled busybee docker)
