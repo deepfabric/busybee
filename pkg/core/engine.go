@@ -539,6 +539,8 @@ func (eng *engine) buildSnapshot(instance *metapb.WorkflowInstance, buf *goetty.
 		Snapshot:  *instance,
 		Timestamp: time.Now().Unix(),
 	}
+	snapshot.Snapshot.State = metapb.Stopped
+	snapshot.Snapshot.StoppedAt = time.Now().Unix()
 
 	value := make(map[string]*roaring.Bitmap)
 	for _, shard := range shards {
