@@ -26,6 +26,14 @@ func newFuncVar(name string, valueType engine.VarType) (engine.Expr, error) {
 		expr.dynaFunc = monthFunc
 	case "day":
 		expr.dynaFunc = dayFunc
+	case "week":
+		expr.dynaFunc = weekFunc
+	case "time":
+		expr.dynaFunc = timeFunc
+	case "date":
+		expr.dynaFunc = dateFunc
+	case "datetime":
+		expr.dynaFunc = datetimeFunc
 	case "wf_step_crowd":
 		expr.dynaFunc = stepCrowdFunc
 	case "wf_step_ttl":
@@ -49,6 +57,22 @@ func (v *funcVar) Exec(data interface{}) (interface{}, error) {
 	}
 
 	return convertByType(value, v.valueType)
+}
+
+func weekFunc(ctx Ctx) (interface{}, error) {
+	return int64(time.Now().Weekday()), nil
+}
+
+func timeFunc(ctx Ctx) (interface{}, error) {
+	return time.Now().Format("150405"), nil
+}
+
+func datetimeFunc(ctx Ctx) (interface{}, error) {
+	return time.Now().Format("20060102150405"), nil
+}
+
+func dateFunc(ctx Ctx) (interface{}, error) {
+	return time.Now().Format("20060102"), nil
 }
 
 func yearFunc(ctx Ctx) (interface{}, error) {
