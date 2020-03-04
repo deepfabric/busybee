@@ -97,3 +97,11 @@ type constRegexp struct {
 func (expr *constRegexp) Exec(ctx interface{}) (interface{}, error) {
 	return expr.value, nil
 }
+
+type constArray struct {
+	values []string
+}
+
+func (expr *constArray) Exec(ctx interface{}) (interface{}, error) {
+	return expr.values, nil
+}

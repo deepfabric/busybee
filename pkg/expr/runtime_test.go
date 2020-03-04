@@ -137,6 +137,94 @@ func TestAddWithString(t *testing.T) {
 	assert.True(t, ok, "TestAddWithString failed")
 }
 
+func TestInWithString(t *testing.T) {
+	ctx := newTestCtx()
+	ctx.kvs["key1"] = "1"
+	ctx.kvs["key2"] = "2"
+
+	rt, err := NewRuntime(metapb.Expr{
+		Value: []byte("{kv.key1} in [1,2]"),
+	})
+	assert.NoError(t, err, "TestInWithString failed")
+
+	ok, value, err := rt.Exec(ctx)
+	assert.NoError(t, err, "TestInWithString failed")
+	assert.Nil(t, value, "TestInWithString failed")
+	assert.True(t, ok, "TestInWithString failed")
+
+	ctx.kvs["key1"] = "3"
+	ok, value, err = rt.Exec(ctx)
+	assert.NoError(t, err, "TestInWithString failed")
+	assert.Nil(t, value, "TestInWithString failed")
+	assert.False(t, ok, "TestInWithString failed")
+}
+
+func TestInWithNumber(t *testing.T) {
+	ctx := newTestCtx()
+	ctx.kvs["key1"] = "1"
+	ctx.kvs["key2"] = "2"
+
+	rt, err := NewRuntime(metapb.Expr{
+		Value: []byte("{num: kv.key1} in [1,2]"),
+	})
+	assert.NoError(t, err, "TestInWithString failed")
+
+	ok, value, err := rt.Exec(ctx)
+	assert.NoError(t, err, "TestInWithString failed")
+	assert.Nil(t, value, "TestInWithString failed")
+	assert.True(t, ok, "TestInWithString failed")
+
+	ctx.kvs["key1"] = "3"
+	ok, value, err = rt.Exec(ctx)
+	assert.NoError(t, err, "TestInWithString failed")
+	assert.Nil(t, value, "TestInWithString failed")
+	assert.False(t, ok, "TestInWithString failed")
+}
+
+func TestNotInWithString(t *testing.T) {
+	ctx := newTestCtx()
+	ctx.kvs["key1"] = "1"
+	ctx.kvs["key2"] = "2"
+
+	rt, err := NewRuntime(metapb.Expr{
+		Value: []byte("{kv.key1} !in [1,2]"),
+	})
+	assert.NoError(t, err, "TestNotInWithString failed")
+
+	ok, value, err := rt.Exec(ctx)
+	assert.NoError(t, err, "TestNotInWithString failed")
+	assert.Nil(t, value, "TestNotInWithString failed")
+	assert.False(t, ok, "TestNotInWithString failed")
+
+	ctx.kvs["key1"] = "3"
+	ok, value, err = rt.Exec(ctx)
+	assert.NoError(t, err, "TestNotInWithString failed")
+	assert.Nil(t, value, "TestNotInWithString failed")
+	assert.True(t, ok, "TestNotInWithString failed")
+}
+
+func TestNotInWithNumber(t *testing.T) {
+	ctx := newTestCtx()
+	ctx.kvs["key1"] = "1"
+	ctx.kvs["key2"] = "2"
+
+	rt, err := NewRuntime(metapb.Expr{
+		Value: []byte("{num: kv.key1} !in [1,2]"),
+	})
+	assert.NoError(t, err, "TestNotInWithNumber failed")
+
+	ok, value, err := rt.Exec(ctx)
+	assert.NoError(t, err, "TestNotInWithNumber failed")
+	assert.Nil(t, value, "TestNotInWithNumber failed")
+	assert.False(t, ok, "TestNotInWithNumber failed")
+
+	ctx.kvs["key1"] = "3"
+	ok, value, err = rt.Exec(ctx)
+	assert.NoError(t, err, "TestNotInWithNumber failed")
+	assert.Nil(t, value, "TestNotInWithNumber failed")
+	assert.True(t, ok, "TestNotInWithNumber failed")
+}
+
 func TestMinusWithNumber(t *testing.T) {
 	ctx := newTestCtx()
 	ctx.kvs["key1"] = "2"

@@ -3,6 +3,7 @@ package expr
 import (
 	"fmt"
 	"regexp"
+	"strings"
 
 	"github.com/fagongzi/util/format"
 )
@@ -15,14 +16,20 @@ const (
 	tokenVarEnd     = 4
 	tokenLiteral    = 5
 	tokenRegexp     = 6
+	tokenArrayStart = 7
+	tokenArrayEnd   = 8
 	tokenCustom     = 100
 
-	slash                    = '\\'
-	quotation                = '"'
-	vertical                 = '|'
-	quotationConversion byte = 0x00
-	slashConversion     byte = 0x01
-	verticalConversion  byte = 0x02
+	slash                     = '\\'
+	quotation                 = '"'
+	vertical                  = '|'
+	arrayLeft                 = '['
+	arrayRight                = ']'
+	quotationConversion  byte = 0x00
+	slashConversion      byte = 0x01
+	verticalConversion   byte = 0x02
+	arrayLeftConversion  byte = 0x03
+	arrayRightConversion byte = 0x04
 )
 
 var (
@@ -30,6 +37,8 @@ var (
 	symbolRightParen = []byte(")")
 	symbolVarStart   = []byte("{")
 	symbolVarEnd     = []byte("}")
+	symbolArrayStart = []byte("[")
+	symbolArrayEnd   = []byte("]")
 	symbolLiteral    = []byte{quotation}
 	symbolRegexp     = []byte{vertical}
 )
@@ -113,6 +122,8 @@ func (p *parserTemplate) registerInternal(lexer Lexer) {
 	lexer.AddSymbol(symbolVarStart, tokenVarStart)
 	lexer.AddSymbol(symbolVarEnd, tokenVarEnd)
 	lexer.AddSymbol(symbolLiteral, tokenLiteral)
+	lexer.AddSymbol(symbolArrayStart, tokenArrayStart)
+	lexer.AddSymbol(symbolArrayEnd, tokenArrayEnd)
 	lexer.AddSymbol(symbolRegexp, tokenRegexp)
 
 	for tokenValue, token := range p.opsTokens {
@@ -153,6 +164,8 @@ func (p *parser) parse() (Expr, error) {
 			token = tokenVarEnd
 		} else if token == tokenLiteral {
 			err = p.doLiteral()
+		} else if token == tokenArrayStart {
+			err = p.doArray()
 		} else if token == tokenRegexp {
 			err = p.doRegexp()
 		} else if _, ok := p.template.opsTokens[token]; ok {
@@ -172,7 +185,10 @@ func (p *parser) parse() (Expr, error) {
 			return nil, err
 		}
 
-		if token != tokenLiteral && token != tokenRegexp {
+		if token != tokenLiteral &&
+			token != tokenArrayStart &&
+			token != tokenArrayEnd &&
+			token != tokenRegexp {
 			p.prevToken = token
 		}
 	}
@@ -262,6 +278,25 @@ func (p *parser) doLiteral() error {
 			if p.lexer.Token() == TokenEOI {
 				return fmt.Errorf("missing \"")
 			} else if p.lexer.Token() == tokenLiteral {
+				break
+			}
+		}
+	} else {
+		return fmt.Errorf("unexpect token <%s> before %d",
+			p.lexer.TokenSymbol(p.prevToken),
+			p.lexer.TokenIndex())
+	}
+
+	return nil
+}
+
+func (p *parser) doArray() error {
+	if _, ok := p.template.opsFunc[p.prevToken]; ok { // a in [
+		for {
+			p.lexer.NextToken()
+			if p.lexer.Token() == TokenEOI {
+				return fmt.Errorf("missing ]")
+			} else if p.lexer.Token() == tokenArrayEnd {
 				break
 			}
 		}
@@ -391,9 +426,15 @@ func newConstExpr(value []byte) (Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-
 		return &constRegexp{
 			value: pattern,
+		}, nil
+	}
+
+	if len(value) >= 2 && value[0] == arrayLeft && value[len(value)-1] == arrayRight {
+		values := strings.Split(string(revertConversion(value[1:len(value)-1])), ",")
+		return &constArray{
+			values: values,
 		}, nil
 	}
 
@@ -419,6 +460,10 @@ func revertConversion(src []byte) []byte {
 			dst = append(dst, quotation)
 		} else if v == verticalConversion {
 			dst = append(dst, vertical)
+		} else if v == arrayLeftConversion {
+			dst = append(dst, arrayLeft)
+		} else if v == arrayRightConversion {
+			dst = append(dst, arrayRight)
 		} else {
 			dst = append(dst, v)
 		}
@@ -452,6 +497,10 @@ func conversion(src []byte) []byte {
 			dst = append(dst, quotationConversion)
 		} else if src[0] == slash && src[1] == vertical {
 			dst = append(dst, verticalConversion)
+		} else if src[0] == slash && src[1] == arrayLeft {
+			dst = append(dst, arrayLeftConversion)
+		} else if src[0] == slash && src[1] == arrayRight {
+			dst = append(dst, arrayRightConversion)
 		} else {
 			dst = append(dst, src[0:2]...)
 		}

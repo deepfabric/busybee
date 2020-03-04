@@ -44,6 +44,8 @@ func init() {
 		engine.WithOp("||", logicOr),
 		engine.WithOp("!&", andnot),
 		engine.WithOp("^|", xor),
+		engine.WithOp("in", in),
+		engine.WithOp("!in", notIn),
 		engine.WithVarType("str:", engine.Str),
 		engine.WithVarType("num:", engine.Num),
 		engine.WithVarType("reg:", engine.Regexp),

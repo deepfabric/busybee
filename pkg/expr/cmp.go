@@ -2,11 +2,88 @@ package expr
 
 import (
 	"fmt"
+	"regexp"
+
 	"github.com/RoaringBitmap/roaring"
 	"github.com/deepfabric/busybee/pkg/util"
 	engine "github.com/fagongzi/expr"
-	"regexp"
 )
+
+func notIn(left interface{}, right engine.Expr, ctx interface{}) (interface{}, error) {
+	value, err := right.Exec(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var ok bool
+	var expect []string
+	if expect, ok = value.([]string); !ok {
+		return false, fmt.Errorf("right value is not []")
+	}
+
+	if v1, ok := left.(string); ok {
+		for _, v := range expect {
+			if v1 == v {
+				return false, nil
+			}
+		}
+
+		return true, nil
+	} else if v1, ok := left.(int64); ok {
+		for _, v := range expect {
+			v2, err := toInt64(v)
+			if err != nil {
+				return nil, err
+			}
+
+			if v1 == v2 {
+				return false, nil
+			}
+		}
+
+		return true, nil
+	}
+
+	return false, fmt.Errorf("!in not support var type %T", left)
+}
+
+func in(left interface{}, right engine.Expr, ctx interface{}) (interface{}, error) {
+	value, err := right.Exec(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var ok bool
+	var expect []string
+	if expect, ok = value.([]string); !ok {
+		return false, fmt.Errorf("right value is not []")
+	}
+
+	if v1, ok := left.(string); ok {
+		for _, v := range expect {
+			if v1 == v {
+				return true, nil
+			}
+		}
+
+		return false, nil
+	} else if v1, ok := left.(int64); ok {
+		for _, v := range expect {
+			v2, err := toInt64(v)
+			if err != nil {
+				return nil, err
+			}
+
+			if v1 == v2 {
+				return true, nil
+			}
+		}
+
+		return false, nil
+	}
+
+	return false, fmt.Errorf("in not support var type %T", left)
+}
 
 func mod(left interface{}, right engine.Expr, ctx interface{}) (interface{}, error) {
 	if v1, ok := left.(int64); ok {
