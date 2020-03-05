@@ -54,14 +54,14 @@ func TestAllocRange(t *testing.T) {
 	// range1 [1,10)
 	range1 := data[0:rangeLength]
 	range1[0] = availableState
-	goetty.Int64ToBytesTo(now, range1[rangeStateOffset:])
+	goetty.Int64ToBytesTo(now, range1[rangeAllocTSOffset:])
 	goetty.Uint64ToBytesTo(1, range1[rangeStartOffset:])
 	goetty.Uint64ToBytesTo(10, range1[rangeEndOffset:])
 
 	// range2 [10,20)
 	range2 := data[rangeLength : rangeLength*2]
 	range2[0] = availableState
-	goetty.Int64ToBytesTo(now, range2[rangeStateOffset:])
+	goetty.Int64ToBytesTo(now, range2[rangeAllocTSOffset:])
 	goetty.Uint64ToBytesTo(10, range2[rangeStartOffset:])
 	goetty.Uint64ToBytesTo(20, range2[rangeEndOffset:])
 
@@ -138,4 +138,62 @@ func TestAllocRange(t *testing.T) {
 	assert.Equal(t, byte(processingState), range2[rangeStateOffset], "TestPreAlloc failed")
 	assert.Equal(t, uint64(10), start, "TestPreAlloc failed")
 	assert.Equal(t, uint64(20), end, "TestPreAlloc failed")
+
+	// range1 completed
+	req.CompletedOffset = 9
+	allocRange(key, store, bhutil.NewWriteBatch(), *req, buf)
+	assert.False(t, alloc, "TestPreAlloc failed")
+	assert.Equal(t, byte(completedState), range1[rangeStateOffset], "TestPreAlloc failed")
+	assert.Equal(t, byte(processingState), range2[rangeStateOffset], "TestPreAlloc failed")
+
+	// range2 completed
+	req.CompletedOffset = 19
+	allocRange(key, store, bhutil.NewWriteBatch(), *req, buf)
+	assert.False(t, alloc, "TestPreAlloc failed")
+	assert.Equal(t, byte(completedState), range1[rangeStateOffset], "TestPreAlloc failed")
+	assert.Equal(t, byte(completedState), range2[rangeStateOffset], "TestPreAlloc failed")
+
+}
+
+func TestAllocRangeWith3(t *testing.T) {
+	store := mem.NewStorage()
+
+	key := []byte("key1")
+	// offset(0~7) + last ts(8~15) + min(16~23) + max(24~31)
+	value := make([]byte, rangeLength*3+preAllocLen, rangeLength*3+preAllocLen)
+	goetty.Uint64ToBytesTo(1, value[minPreFieldOffset:])
+	goetty.Uint64ToBytesTo(30, value[maxPreFieldOffset:])
+
+	now := time.Now().Unix()
+	data := value[preAllocLen:]
+	// range1 [1,10)
+	range1 := data[0:rangeLength]
+	range1[0] = completedState
+	goetty.Int64ToBytesTo(now, range1[rangeAllocTSOffset:])
+	goetty.Uint64ToBytesTo(1, range1[rangeStartOffset:])
+	goetty.Uint64ToBytesTo(10, range1[rangeEndOffset:])
+
+	// range2 [10,20)
+	range2 := data[rangeLength : rangeLength*2]
+	range2[0] = processingState
+	goetty.Int64ToBytesTo(now, range2[rangeAllocTSOffset:])
+	goetty.Uint64ToBytesTo(10, range2[rangeStartOffset:])
+	goetty.Uint64ToBytesTo(20, range2[rangeEndOffset:])
+
+	// range3 [20,30)
+	range3 := data[rangeLength*2 : rangeLength*3]
+	range3[0] = processingState
+	goetty.Int64ToBytesTo(now, range3[rangeAllocTSOffset:])
+	goetty.Uint64ToBytesTo(20, range3[rangeStartOffset:])
+	goetty.Uint64ToBytesTo(30, range3[rangeEndOffset:])
+
+	store.Set(key, value)
+
+	buf := goetty.NewByteBuf(256)
+	req := rpcpb.AcquireQueueFetchRequest()
+	req.Concurrency = 4
+	req.Consumer = []byte("c1")
+	req.Count = 16
+	req.CompletedOffset = 20
+	allocRange(key, store, bhutil.NewWriteBatch(), *req, buf)
 }

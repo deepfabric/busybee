@@ -133,7 +133,6 @@ func allocRange(key []byte, store storage.DataStorage, wb *util.WriteBatch,
 	offset := preAllocLen
 	if completed >= min && completed < max {
 		for i := 0; i < n; i++ {
-			offset += rangeLength * i
 			start := goetty.Byte2UInt64(value[offset+rangeStartOffset:])
 			end := goetty.Byte2UInt64(value[offset+rangeEndOffset:])
 
@@ -172,6 +171,8 @@ func allocRange(key []byte, store storage.DataStorage, wb *util.WriteBatch,
 
 				break
 			}
+
+			offset += rangeLength
 		}
 	}
 
@@ -204,9 +205,9 @@ func allocRange(key []byte, store storage.DataStorage, wb *util.WriteBatch,
 		}
 	}
 
-	if completedCount != n && processingCount != n {
-		log.Fatalf("BUG: must all range in completed or processing state, but %d completed and %d processing",
-			completedCount, processingCount)
+	if completedCount+processingCount != n {
+		log.Fatalf("BUG: must all range in completed or processing state, but %d completed and %d processing, total is %d",
+			completedCount, processingCount, n)
 	}
 
 	// all in processing
