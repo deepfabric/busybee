@@ -787,11 +787,6 @@ func (eng *engine) doStartInstanceEvent(instance *metapb.WorkflowInstance) {
 	logger.Infof("starting workflow-%d",
 		instance.Snapshot.ID)
 
-	var stopAt int64
-	if instance.Snapshot.Duration > 0 {
-		stopAt = time.Now().Add(time.Second * time.Duration(instance.Snapshot.Duration)).Unix()
-	}
-
 	bm, err := eng.loadBM(instance.Loader, instance.LoaderMeta)
 	if err != nil {
 		logger.Errorf("start workflow-%d failed with %+v, retry later",
@@ -811,7 +806,7 @@ func (eng *engine) doStartInstanceEvent(instance *metapb.WorkflowInstance) {
 		state.TenantID = instance.Snapshot.TenantID
 		state.WorkflowID = instance.Snapshot.ID
 		state.Index = uint32(index)
-		state.StopAt = stopAt
+		state.StopAt = instance.Snapshot.StopAt
 
 		for _, step := range instance.Snapshot.Steps {
 			state.States = append(state.States, metapb.StepState{
@@ -830,14 +825,14 @@ func (eng *engine) doStartInstanceEvent(instance *metapb.WorkflowInstance) {
 }
 
 func (eng *engine) doStartedInstanceEvent(instance *metapb.WorkflowInstance) {
-	if instance.Snapshot.Duration == 0 {
+	if instance.Snapshot.StopAt == 0 {
 		logger.Infof("workflow-%d started",
 			instance.Snapshot.ID)
 		return
 	}
 
 	now := time.Now().Unix()
-	after := instance.Snapshot.Duration - (now - instance.StartedAt)
+	after := instance.Snapshot.StopAt - now
 	if after <= 0 {
 		eng.addToInstanceStop(instance.Snapshot.ID)
 		return

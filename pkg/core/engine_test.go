@@ -149,7 +149,7 @@ func TestStartInstance(t *testing.T) {
 	err = ng.StartInstance(metapb.Workflow{
 		ID:       10000,
 		TenantID: 10001,
-		Duration: 10,
+		StopAt:   time.Now().Add(time.Second * 10).Unix(),
 		Name:     "test_wf",
 		Steps: []metapb.Step{
 			metapb.Step{

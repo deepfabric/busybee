@@ -116,7 +116,7 @@ message Workflow {
     uint64         tenantID  = 2;
     string         name      = 3;
     repeated Step  steps     = 4 [(gogoproto.nullable) = false];
-    int64          duration  = 5;
+    int64          stopAt    = 5;
 }
 
 // WorkflowInstance workflow instance
