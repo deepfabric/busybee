@@ -2,6 +2,7 @@ package raftstore
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"sync"
 	"time"
@@ -55,6 +56,8 @@ type peerReplica struct {
 	metrics  localMetrics
 	buf      *goetty.ByteBuf
 	stopOnce sync.Once
+
+	readyCtx *readyContext
 }
 
 func createPeerReplica(store *store, shard *metapb.Shard) (*peerReplica, error) {
@@ -119,6 +122,9 @@ func newPeerReplica(store *store, shard *metapb.Shard, peerID uint64) (*peerRepl
 	pr.applyResults = &task.Queue{}
 	pr.requests = &task.Queue{}
 	pr.actions = &task.Queue{}
+	pr.readyCtx = &readyContext{
+		wb: util.NewWriteBatch(),
+	}
 
 	pr.store = store
 	pr.pendingReads = &readIndexQueue{
@@ -217,7 +223,7 @@ func (pr *peerReplica) mustDestroy() {
 func (pr *peerReplica) onReq(req *raftcmdpb.Request, cb func(*raftcmdpb.RaftCMDResponse)) error {
 	metric.IncComandCount(hack.SliceToString(format.UInt64ToString(req.CustemType)))
 
-	r := acquireReqCtx()
+	r := reqCtx{}
 	r.req = req
 	r.cb = cb
 	return pr.addRequest(r)
@@ -227,12 +233,20 @@ func (pr *peerReplica) stopEventLoop() {
 	pr.events.Dispose()
 }
 
-func (pr *peerReplica) doExecReadCmd(c *cmd) {
+func (pr *peerReplica) doExecReadCmd(c cmd) {
 	resp := pb.AcquireRaftCMDResponse()
 	pr.buf.Clear()
 	for _, req := range c.req.Requests {
 		if h, ok := pr.store.readHandlers[req.CustemType]; ok {
+			if logger.DebugEnabled() {
+				logger.Debugf("%s exec", hex.EncodeToString(req.ID))
+			}
+
 			resp.Responses = append(resp.Responses, h(pr.ps.shard, req, pr.buf))
+
+			if logger.DebugEnabled() {
+				logger.Debugf("%s exec completed", hex.EncodeToString(req.ID))
+			}
 		}
 	}
 

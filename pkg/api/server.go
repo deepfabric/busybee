@@ -68,6 +68,9 @@ func (s *server) doConnection(conn goetty.IOSession) error {
 	defer func() {
 		s.sessions.Delete(rs.ID)
 		rs.Close()
+		log.Infof("session %d[%s] closed",
+			rs.ID,
+			rs.Addr)
 	}()
 
 	for {
@@ -86,6 +89,10 @@ func (s *server) doConnection(conn goetty.IOSession) error {
 
 		req := value.(*rpcpb.Request)
 		metric.IncRequestReceived(req.Type.String())
+
+		if log.DebugEnabled() {
+			log.Infof("%d received request from session %+v", req.ID, rs.ID)
+		}
 
 		err = s.onReq(rs.ID, req)
 		if err != nil {

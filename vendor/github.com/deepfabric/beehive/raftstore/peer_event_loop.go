@@ -23,7 +23,7 @@ const (
 	doCampaignAction
 )
 
-func (pr *peerReplica) addRequest(req *reqCtx) error {
+func (pr *peerReplica) addRequest(req reqCtx) error {
 	err := pr.requests.Put(req)
 	if err != nil {
 		return err
@@ -57,7 +57,7 @@ func (pr *peerReplica) addEvent() (bool, error) {
 	return pr.events.Offer(struct{}{})
 }
 
-func (pr *peerReplica) addApplyResult(result *asyncApplyResult) {
+func (pr *peerReplica) addApplyResult(result asyncApplyResult) {
 	err := pr.applyResults.Put(result)
 	if err != nil {
 		logger.Infof("shard %d raft apply result stopped",
@@ -80,7 +80,7 @@ func (pr *peerReplica) step(msg etcdraftpb.Message) {
 }
 
 func (pr *peerReplica) onAdmin(req *raftcmdpb.AdminRequest) error {
-	r := acquireReqCtx()
+	r := reqCtx{}
 	r.admin = req
 	return pr.addRequest(r)
 }
@@ -121,20 +121,17 @@ func (pr *peerReplica) handleEvent() bool {
 			pr.ticks.Dispose()
 			pr.steps.Dispose()
 			pr.reports.Dispose()
-
-			results := pr.applyResults.Dispose()
-			for _, result := range results {
-				releaseAsyncApplyResult(result.(*asyncApplyResult))
-			}
+			pr.applyResults.Dispose()
 
 			// resp all stale requests in batch and queue
 			for {
 				if pr.batch.isEmpty() {
 					break
 				}
-				c := pr.batch.pop()
-				for _, req := range c.req.Requests {
-					respStoreNotMatch(errStoreNotMatch, req, c.cb)
+				if c, ok := pr.batch.pop(); ok {
+					for _, req := range c.req.Requests {
+						respStoreNotMatch(errStoreNotMatch, req, c.cb)
+					}
 				}
 			}
 
@@ -146,7 +143,6 @@ func (pr *peerReplica) handleEvent() bool {
 				}
 
 				pb.ReleaseRequest(req.req)
-				releaseReqCtx(req)
 			}
 
 			logger.Infof("shard %d handle serve raft stopped",

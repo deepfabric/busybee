@@ -281,8 +281,11 @@ func (h *beeStorage) removeInstanceWorker(shard bhmetapb.Shard, req *raftcmdpb.R
 
 	if h.store.MaybeLeader(shard.ID) {
 		h.eventC <- Event{
-			EventType: StoppedInstanceEvent,
-			Data:      cmd.WorkflowID,
+			EventType: RemoveInstanceWorkerEvent,
+			Data: metapb.WorkflowInstanceWorkerState{
+				WorkflowID: cmd.WorkflowID,
+				Index:      cmd.Index,
+			},
 		}
 	}
 	return uint64(len(req.Key)), -int64(len(req.Key)), resp

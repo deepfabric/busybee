@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"encoding/hex"
 	"sync"
 	"time"
 
@@ -49,13 +50,16 @@ func NewShardsProxyWithStore(store raftstore.Store,
 		return nil, err
 	}
 
-	return &shardsProxy{
+	sp := &shardsProxy{
 		store:       store,
 		local:       store.Meta(),
 		router:      router,
 		doneCB:      doneCB,
 		errorDoneCB: errorDoneCB,
-	}, nil
+	}
+
+	sp.store.RegisterLocalRequestCB(sp.onLocalResp)
+	return sp, nil
 }
 
 type shardsProxy struct {
@@ -71,6 +75,11 @@ func (p *shardsProxy) Dispatch(req *raftcmdpb.Request) error {
 	shard, leader := p.router.SelectShard(req.Group, req.Key)
 	// No leader, retry after a leader tick
 	if leader == "" {
+		if logger.DebugEnabled() {
+			logger.Infof("%s retry with no leader",
+				hex.EncodeToString(req.ID))
+		}
+
 		p.retryWithRaftError(req)
 		return nil
 	}
@@ -80,7 +89,7 @@ func (p *shardsProxy) Dispatch(req *raftcmdpb.Request) error {
 
 func (p *shardsProxy) forwardToBackend(req *raftcmdpb.Request, shard uint64, leader string) error {
 	if p.store != nil && p.local.RPCAddr == leader {
-		return p.store.OnRequest(req, p.onLocalResp)
+		return p.store.OnRequest(req)
 	}
 
 	bc, err := p.getConn(leader)
@@ -91,24 +100,19 @@ func (p *shardsProxy) forwardToBackend(req *raftcmdpb.Request, shard uint64, lea
 	return bc.addReq(req)
 }
 
-func (p *shardsProxy) onLocalResp(resp *raftcmdpb.RaftCMDResponse) {
-	hasError := resp.Header != nil
-	for _, rsp := range resp.Responses {
-		if hasError {
-			if resp.Header.Error.RaftEntryTooLarge == nil {
-				rsp.Type = raftcmdpb.RaftError
-			} else {
-				rsp.Type = raftcmdpb.Invalid
-			}
-
-			rsp.Error = resp.Header.Error
+func (p *shardsProxy) onLocalResp(header *raftcmdpb.RaftResponseHeader, rsp *raftcmdpb.Response) {
+	if header != nil {
+		if header.Error.RaftEntryTooLarge == nil {
+			rsp.Type = raftcmdpb.RaftError
+		} else {
+			rsp.Type = raftcmdpb.Invalid
 		}
 
-		p.done(rsp)
-		pb.ReleaseResponse(rsp)
+		rsp.Error = header.Error
 	}
 
-	pb.ReleaseRaftCMDResponse(resp)
+	p.done(rsp)
+	pb.ReleaseResponse(rsp)
 }
 
 func (p *shardsProxy) done(rsp *raftcmdpb.Response) {

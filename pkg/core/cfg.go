@@ -14,6 +14,7 @@ type options struct {
 	clickhousePassword  string
 	tempKeyTTL          uint32
 	snapshotTTL         uint32
+	workerCreateCount   uint64
 }
 
 func (opts *options) adjust() {
@@ -39,6 +40,10 @@ func (opts *options) adjust() {
 
 	if opts.snapshotTTL == 0 {
 		opts.snapshotTTL = 3600 * 24 * 7 // 7 day
+	}
+
+	if opts.workerCreateCount == 0 {
+		opts.workerCreateCount = 8
 	}
 }
 
@@ -93,5 +98,12 @@ func WithTempKeyTTL(value uint32) Option {
 func WithSnapshotTTL(value uint32) Option {
 	return func(opts *options) {
 		opts.snapshotTTL = value
+	}
+}
+
+// WithWorkerCreateCount set worker create count option
+func WithWorkerCreateCount(value uint64) Option {
+	return func(opts *options) {
+		opts.workerCreateCount = value
 	}
 }

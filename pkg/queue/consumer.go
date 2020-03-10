@@ -81,6 +81,7 @@ func (c *consumer) startPartition(ctx context.Context, idx, batch, concurrency u
 	offset := uint64(0)
 	key := storage.PartitionKey(c.id, idx)
 	go func() {
+		resp := &rpcpb.BytesSliceResponse{}
 		for {
 			select {
 			case <-ctx.Done():
@@ -106,7 +107,7 @@ func (c *consumer) startPartition(ctx context.Context, idx, batch, concurrency u
 					continue
 				}
 
-				resp := rpcpb.AcquireBytesSliceResponse()
+				resp.Reset()
 				protoc.MustUnmarshal(resp, value)
 
 				if len(resp.Values) == 0 {

@@ -16,14 +16,27 @@ func NewRawLoader() Loader {
 }
 
 func (l *rawLoader) Get(value []byte) (*roaring.Bitmap, error) {
+	total := uint64(len(value))
 	bm := util.AcquireBitmap()
 	err := bm.UnmarshalBinary(value)
 	if err != nil {
 		return nil, err
 	}
 
-	logger.Infof("load %d crowd from raw bytes",
-		bm.GetCardinality())
+	if total < kb {
+		logger.Debugf("load %d crowd from raw %d bytes",
+			bm.GetCardinality(),
+			total)
+	} else if total < mb {
+		logger.Debugf("load %d crowd from raw %d KB",
+			bm.GetCardinality(),
+			total/kb)
+	} else {
+		logger.Debugf("load %d crowd from raw %d MB",
+			bm.GetCardinality(),
+			total/mb)
+	}
+
 	return bm, nil
 }
 

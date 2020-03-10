@@ -66,7 +66,8 @@ func (pr *peerReplica) handleReady() {
 	}
 
 	rd := pr.rn.ReadySince(pr.ps.lastReadyIndex)
-	ctx := acquireReadyContext()
+	ctx := pr.readyCtx
+	ctx.reset()
 
 	// If snapshot is received, further handling
 	if !raft.IsEmptySnap(rd.Snapshot) {
@@ -91,8 +92,6 @@ func (pr *peerReplica) handleReady() {
 
 	pr.handleRaftReadyAppend(ctx, &rd)
 	pr.handleRaftReadyApply(ctx, &rd)
-
-	releaseReadyContext(ctx)
 }
 
 // ====================== append raft log methods
@@ -390,13 +389,14 @@ func (pr *peerReplica) applyCommittedEntries(rd *raft.Ready) {
 func (pr *peerReplica) doApplyReads(rd *raft.Ready) {
 	if pr.readyToHandleRead() {
 		for _, state := range rd.ReadStates {
-			c := pr.pendingReads.pop()
-			if bytes.Compare(state.RequestCtx, c.getUUID()) != 0 {
-				logger.Fatalf("shard %d apply read failed, uuid not match",
-					pr.shardID)
-			}
+			if c, ok := pr.pendingReads.pop(); ok {
+				if bytes.Compare(state.RequestCtx, c.getUUID()) != 0 {
+					logger.Fatalf("shard %d apply read failed, uuid not match",
+						pr.shardID)
+				}
 
-			pr.doExecReadCmd(c)
+				pr.doExecReadCmd(c)
+			}
 		}
 	} else {
 		for range rd.ReadStates {
@@ -412,8 +412,9 @@ func (pr *peerReplica) doApplyReads(rd *raft.Ready) {
 			if n > 0 {
 				// all uncommitted reads will be dropped silently in raft.
 				for index := 0; index < n; index++ {
-					c := pr.pendingReads.pop()
-					c.resp(errorStaleCMDResp(c.getUUID(), pr.getCurrentTerm()))
+					if c, ok := pr.pendingReads.pop(); ok {
+						c.resp(errorStaleCMDResp(c.getUUID(), pr.getCurrentTerm()))
+					}
 				}
 			}
 
@@ -421,8 +422,9 @@ func (pr *peerReplica) doApplyReads(rd *raft.Ready) {
 
 			// we are not leader now, so all writes in the batch is actually stale
 			for i := 0; i < pr.batch.size(); i++ {
-				c := pr.batch.pop()
-				c.resp(errorStaleCMDResp(c.getUUID(), pr.getCurrentTerm()))
+				if c, ok := pr.batch.pop(); ok {
+					c.resp(errorStaleCMDResp(c.getUUID(), pr.getCurrentTerm()))
+				}
 			}
 			pr.resetBatch()
 		}

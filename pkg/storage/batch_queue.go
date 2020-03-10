@@ -124,7 +124,9 @@ func (qb *queueBatch) exec(s bhstorage.DataStorage, b *batch) error {
 				from := itemKey(qb.queueKey, qb.removedOffset, qb.buf)
 				to := itemKey(qb.queueKey, low+1, qb.buf)
 				err = s.RangeDelete(from, to)
-				log.Fatalf("exec queue add batch failed with %+v", err)
+				if err != nil {
+					log.Fatalf("exec queue add batch failed with %+v", err)
+				}
 				qb.removedOffset = low
 			}
 		}

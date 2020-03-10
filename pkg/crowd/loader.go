@@ -7,6 +7,9 @@ import (
 
 var (
 	logger = log.NewLoggerWithPrefix("[bm-loader]")
+
+	kb uint64 = 1024
+	mb uint64 = kb * 1024
 )
 
 // Loader loader

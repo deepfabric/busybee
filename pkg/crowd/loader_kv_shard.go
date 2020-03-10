@@ -61,8 +61,10 @@ func (l *kvShardLoader) Get(meta []byte) (*roaring.Bitmap, error) {
 	var loadMeta metapb.ShardBitmapLoadMeta
 	protoc.MustUnmarshal(&loadMeta, meta)
 
-	key := loadMeta.String()
+	key := hex.EncodeToString(loadMeta.Key)
 	if bm, ok := l.cache.Get(key); ok {
+		logger.Infof("load bitmap %s completed, from cache",
+			key)
 		return bm, nil
 	}
 
@@ -84,6 +86,21 @@ func (l *kvShardLoader) Get(meta []byte) (*roaring.Bitmap, error) {
 	}
 
 	l.cache.Add(key, bm, loadMeta.Total)
+
+	if loadMeta.Total < kb {
+		logger.Infof("load bitmap %s completed with %d bytes",
+			key,
+			loadMeta.Total)
+	} else if loadMeta.Total < mb {
+		logger.Infof("load bitmap %s completed with %d KB",
+			key,
+			loadMeta.Total/kb)
+	} else {
+		logger.Infof("load bitmap %s completed with %d MB",
+			key,
+			loadMeta.Total/mb)
+	}
+
 	return bm, nil
 }
 
@@ -113,6 +130,10 @@ func (l *kvShardLoader) Set(meta []byte, data []byte) (uint64, uint32, error) {
 	}
 
 	wg.Wait()
+
+	key := hex.EncodeToString(putMeta.Key)
+	l.cache.Add(key, bbutil.MustParseBM(data), uint64(n))
+	logger.Infof("put bitmap %s completed", key)
 	return uint64(n), index, nil
 }
 
@@ -147,44 +168,50 @@ func (l *kvShardLoader) do(c chan interface{}) {
 }
 
 func (l *kvShardLoader) doPut(value putCtx, buf *goetty.ByteBuf) {
-	logger.Infof("put bitmap shard %s",
-		hex.EncodeToString(value.key))
+	logger.Infof("put bitmap shard %s/%d",
+		hex.EncodeToString(value.key),
+		value.index)
 
 	buf.Clear()
 	key := storage.ShardBitmapKey(value.key, value.index, buf)
 	err := l.store.SetWithTTL(key, value.data, int64(value.ttl))
 	if err != nil {
-		logger.Infof("put bitmap shard %s failed with %+v, retry later",
+		logger.Infof("put bitmap shard %s/%d failed with %+v, retry later",
 			hex.EncodeToString(value.key),
+			value.index,
 			err)
 		util.DefaultTimeoutWheel().Schedule(l.retry, l.addToRetry, value)
 		l.addToRetry(value)
 		return
 	}
 
-	logger.Infof("put bitmap shard %s completed",
-		hex.EncodeToString(value.key))
+	logger.Infof("put bitmap shard %s/%d completed",
+		hex.EncodeToString(value.key),
+		value.index)
 	value.wg.Done()
 }
 
 func (l *kvShardLoader) doLoad(value loadCtx, buf *goetty.ByteBuf) {
-	logger.Infof("load bitmap shard %s",
-		hex.EncodeToString(value.key))
+	logger.Infof("load bitmap shard %s/%d",
+		hex.EncodeToString(value.key),
+		value.index)
 
 	buf.Clear()
 	key := storage.ShardBitmapKey(value.key, value.index, buf)
 	data, err := l.store.Get(key)
 	if err != nil {
-		logger.Errorf("load bitmap shard %s failed with %+v, retry later",
+		logger.Errorf("load bitmap shard %s/%d failed with %+v, retry later",
 			hex.EncodeToString(value.key),
+			value.index,
 			err)
 		util.DefaultTimeoutWheel().Schedule(l.retry, l.addToRetry, value)
 		l.addToRetry(value)
 		return
 	}
 
-	logger.Infof("load bitmap shard %s completed",
-		hex.EncodeToString(value.key))
+	logger.Infof("load bitmap shard %s/%d completed",
+		hex.EncodeToString(value.key),
+		value.index)
 	value.cb.add(int(value.index), data)
 }
 

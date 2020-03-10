@@ -114,8 +114,8 @@ func (h *beeStorage) doWorkflowEvent(value []byte) {
 }
 
 func (h *beeStorage) doWorkflowWorkerEvent(value []byte, leader bool) {
-	state := &metapb.WorkflowInstanceWorkerState{}
-	protoc.MustUnmarshal(state, value)
+	state := metapb.WorkflowInstanceWorkerState{}
+	protoc.MustUnmarshal(&state, value)
 
 	et := RunningInstanceWorkerEvent
 	if !leader {

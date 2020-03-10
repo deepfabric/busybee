@@ -13,7 +13,6 @@ import (
 	"github.com/deepfabric/busybee/pkg/storage"
 	bbutil "github.com/deepfabric/busybee/pkg/util"
 	"github.com/fagongzi/goetty"
-	"github.com/fagongzi/log"
 	"github.com/fagongzi/util/format"
 	"github.com/fagongzi/util/hack"
 	"github.com/fagongzi/util/protoc"
@@ -283,19 +282,19 @@ func (w *stateWorker) execBatch(batch *executionbatch) {
 		}
 
 		w.retryDo("exec notify", batch, w.execNotify)
-		log.Infof("worker %s added %d notifies to tenant %d",
+		logger.Infof("worker %s added %d notifies to tenant %d",
 			w.key,
 			len(batch.notifies),
 			w.state.TenantID)
 
 		for _, nt := range batch.notifies {
-			log.Infof("worker %s notify %s",
+			logger.Infof("worker %s notify %s",
 				w.key,
 				nt.String())
 		}
 
 		w.retryDo("exec update state", batch, w.execUpdate)
-		log.Infof("worker %s state update to version %d",
+		logger.Infof("worker %s state update to version %d",
 			w.key,
 			w.state.Version)
 	}
@@ -420,7 +419,7 @@ func (w *stateWorker) doUpdateCrowd(crowd []byte) error {
 	w.state.Version++
 
 	w.retryDo("exec update crowd", nil, w.execUpdate)
-	log.Infof("worker %s crowd updated: %d -> %d",
+	logger.Infof("worker %s crowd updated: %d -> %d",
 		w.key,
 		old,
 		w.totalCrowds.GetCardinality())
@@ -492,13 +491,13 @@ func (w *stateWorker) doUpdateWorkflow(workflow metapb.Workflow) error {
 	w.state.Version++
 
 	w.retryDo("exec update workflow", nil, w.execUpdate)
-	log.Infof("worker %s workflow updated", w.key)
+	logger.Infof("worker %s workflow updated", w.key)
 	return nil
 }
 
 func (w *stateWorker) doStepEvents(events []metapb.UserEvent, batch *executionbatch) {
 	for _, event := range events {
-		log.Infof("worker %s step event %+v", w.key, event)
+		logger.Infof("worker %s step event %+v", w.key, event)
 
 		for idx, crowd := range w.stepCrowds {
 			if crowd.Contains(event.UserID) {
@@ -523,7 +522,7 @@ func (w *stateWorker) doStepTimer(batch *executionbatch, idx int) {
 		return
 	}
 
-	log.Infof("worker %s step timer %s", idx)
+	logger.Infof("worker %s step timer %s", idx)
 
 	err := w.steps[step.Step.Name].Execute(newExprCtx(metapb.UserEvent{
 		TenantID:   w.state.TenantID,

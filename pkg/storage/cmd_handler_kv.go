@@ -85,24 +85,19 @@ func (h *beeStorage) get(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *goet
 }
 
 func (h *beeStorage) scan(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *goetty.ByteBuf) *raftcmdpb.Response {
-	resp := pb.AcquireResponse()
+	resp := &raftcmdpb.Response{}
 	customReq := rpcpb.ScanRequest{}
 	protoc.MustUnmarshal(&customReq, req.Cmd)
 
-	prefix := req.Key[0 : len(req.Key)-len(customReq.End)]
 	buf.MarkWrite()
-	if len(prefix) > 0 {
-		buf.Write(prefix)
-		buf.Write(customReq.End)
-	}
+	buf.Write(req.Key[0:9])
+	buf.Write(customReq.End)
 	end := buf.WrittenDataAfterMark()
 
 	if len(shard.End) > 0 {
 		buf.MarkWrite()
-		if len(prefix) > 0 {
-			buf.Write(prefix)
-			buf.Write(shard.End)
-		}
+		buf.Write(req.Key[0:9])
+		buf.Write(shard.End)
 		max := buf.WrittenDataAfterMark()
 
 		if bytes.Compare(end, max) > 0 {
@@ -110,9 +105,16 @@ func (h *beeStorage) scan(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *goe
 		}
 	}
 
-	customResp := rpcpb.AcquireBytesSliceResponse()
+	customResp := rpcpb.BytesSliceResponse{}
 	err := h.getStore(shard.ID).Scan(req.Key, end, func(key, value []byte) (bool, error) {
-		customResp.Values = append(customResp.Values, value)
+		buf.MarkWrite()
+		buf.Write(key[9:])
+		customResp.Keys = append(customResp.Keys, buf.WrittenDataAfterMark())
+
+		buf.MarkWrite()
+		buf.Write(value)
+		customResp.Values = append(customResp.Values, buf.WrittenDataAfterMark())
+
 		if uint64(len(customResp.Values)) >= customReq.Limit {
 			return false, nil
 		}
@@ -122,8 +124,7 @@ func (h *beeStorage) scan(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *goe
 		log.Fatalf("scan %+v failed with %+v", req.Key, err)
 	}
 
-	resp.Value = protoc.MustMarshal(customResp)
-	rpcpb.ReleaseBytesSliceResponse(customResp)
+	resp.Value = protoc.MustMarshal(&customResp)
 	return resp
 }
 

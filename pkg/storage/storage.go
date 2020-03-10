@@ -40,7 +40,7 @@ type Storage interface {
 	// Delete remove the key from the store
 	Delete([]byte) error
 	// Scan scan [start,end) data
-	Scan([]byte, []byte, uint64) ([][]byte, error)
+	Scan([]byte, []byte, uint64) ([][]byte, [][]byte, error)
 	// PutToQueue put data to queue
 	PutToQueue(id uint64, partition uint64, group metapb.Group, data ...[]byte) error
 	// ExecCommand exec command
@@ -160,7 +160,7 @@ func (h *beeStorage) Delete(key []byte) error {
 	return err
 }
 
-func (h *beeStorage) Scan(start []byte, end []byte, limit uint64) ([][]byte, error) {
+func (h *beeStorage) Scan(start []byte, end []byte, limit uint64) ([][]byte, [][]byte, error) {
 	req := rpcpb.AcquireScanRequest()
 	req.Start = start
 	req.End = end
@@ -168,15 +168,15 @@ func (h *beeStorage) Scan(start []byte, end []byte, limit uint64) ([][]byte, err
 
 	data, err := h.ExecCommand(req)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	resp := rpcpb.AcquireBytesSliceResponse()
-	protoc.MustUnmarshal(resp, data)
-	items := resp.Values
+	resp := rpcpb.BytesSliceResponse{}
+	protoc.MustUnmarshal(&resp, data)
 
-	rpcpb.ReleaseBytesSliceResponse(resp)
-	return items, nil
+	items := resp.Values
+	keys := resp.Keys
+	return keys, items, nil
 }
 
 func (h *beeStorage) PutToQueue(id uint64, partition uint64, group metapb.Group, data ...[]byte) error {
@@ -247,7 +247,6 @@ func (h *beeStorage) doWorkflowScan(ctx context.Context) {
 		case <-timer.C:
 			log.Infof("start scan workflow")
 			h.scanWorkflow()
-			h.scanWorkflowShards()
 		}
 	}
 }
@@ -263,7 +262,7 @@ func (h *beeStorage) scanWorkflow() {
 	end := WorkflowCurrentInstanceKey(math.MaxUint64)
 
 	for {
-		values, err := h.Scan(start, end, 16)
+		_, values, err := h.Scan(start, end, 16)
 		if err != nil {
 			metric.IncStorageFailed()
 			log.Errorf("scan workflow failed with %+v")
@@ -301,40 +300,6 @@ func (h *beeStorage) scanWorkflow() {
 		stoppingCount,
 		stoppedCount)
 	metric.SetWorkflowCount(startingCount, startedCount, stoppingCount, stoppedCount)
-}
-
-func (h *beeStorage) scanWorkflowShards() {
-	shard := &metapb.WorkflowInstanceWorkerState{}
-	count := 0
-	start := InstanceShardKey(0, 0)
-	end := InstanceShardKey(math.MaxUint64, math.MaxUint32)
-	for {
-		values, err := h.Scan(start, end, 16)
-		if err != nil {
-			metric.IncStorageFailed()
-			log.Errorf("scan workflow shard failed with %+v",
-				err)
-			return
-		}
-
-		if len(values) == 0 {
-			break
-		}
-
-		for idx, value := range values {
-			count++
-
-			if idx == len(values)-1 {
-				shard.Reset()
-				protoc.MustUnmarshal(shard, value)
-				start = InstanceShardKey(shard.WorkflowID, shard.Index+1)
-			}
-		}
-	}
-
-	log.Infof("start scan workflow with %d running workers",
-		count)
-	metric.SetWorkflowShardsCount(count)
 }
 
 func (h *beeStorage) getStore(shard uint64) bhstorage.DataStorage {

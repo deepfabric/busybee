@@ -29,6 +29,7 @@ func (l *kvLoader) Get(key []byte) (*roaring.Bitmap, error) {
 	bm := util.AcquireBitmap()
 	resp := rpcpb.AcquireUint32SliceResponse()
 	start := uint32(0)
+	total := uint64(0)
 	for {
 		req := rpcpb.AcquireBMRangeRequest()
 		req.Key = key
@@ -45,14 +46,31 @@ func (l *kvLoader) Get(key []byte) (*roaring.Bitmap, error) {
 		if len(resp.Values) == 0 {
 			break
 		}
+
+		total += uint64(len(resp.Values))
 		bm.AddMany(resp.Values)
 		start = bm.Maximum() + 1
 	}
 
 	rpcpb.ReleaseUint32SliceResponse(resp)
 
-	logger.Infof("load %d crowd from KV with key<%s>",
-		bm.GetCardinality(), string(key))
+	if total < kb {
+		logger.Infof("load %d crowd from KV with key<%s>, %d bytes",
+			bm.GetCardinality(),
+			string(key),
+			total)
+	} else if total < mb {
+		logger.Infof("load %d crowd from KV with key<%s>, %d KB",
+			bm.GetCardinality(),
+			string(key),
+			total/kb)
+	} else {
+		logger.Infof("load %d crowd from KV with key<%s>, %d MB",
+			bm.GetCardinality(),
+			string(key),
+			total/mb)
+	}
+
 	return bm, nil
 }
 

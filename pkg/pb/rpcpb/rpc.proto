@@ -367,8 +367,9 @@ message Uint32SliceResponse {
 
 // BytesSliceResponse response
 message BytesSliceResponse {
-    repeated bytes values     = 1;
-    uint64         lastValue  = 2;
+    repeated bytes keys       = 1;
+    repeated bytes values     = 2;
+    uint64         lastValue  = 3;
 }
 
 // Uint32Response uint32 response

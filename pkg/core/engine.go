@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/RoaringBitmap/roaring"
@@ -75,6 +76,21 @@ type Engine interface {
 	StopCronJob(cron.EntryID)
 }
 
+type createWorkerAction struct {
+	bootstrap bool
+	state     metapb.WorkflowInstanceWorkerState
+	completed *actionCompleted
+}
+
+type actionCompleted struct {
+	completed uint64
+	total     uint64
+}
+
+func (c *actionCompleted) done() bool {
+	return atomic.AddUint64(&c.completed, 1) == c.total
+}
+
 // NewEngine returns a engine
 func NewEngine(store storage.Storage, notifier notify.Notifier, opts ...Option) (Engine, error) {
 	eng := &engine{
@@ -114,14 +130,18 @@ type engine struct {
 	retryStoppingInstanceC chan *metapb.WorkflowInstance
 	retryCompleteInstanceC chan uint64
 	stopInstanceC          chan uint64
+	workerCreateC          []chan createWorkerAction
+	op                     uint64
 
 	loaders map[metapb.BMLoader]crowd.Loader
 }
 
 func (eng *engine) Start() error {
 	eng.initBMLoaders()
+	eng.initWorkerCreate()
 	eng.initCron()
 	eng.initEvent()
+	eng.initReport()
 
 	err := eng.store.Start()
 	if err != nil {
@@ -131,12 +151,42 @@ func (eng *engine) Start() error {
 	return nil
 }
 
+func (eng *engine) initReport() {
+	eng.runner.RunCancelableTask(func(ctx context.Context) {
+		timer := time.NewTicker(time.Second * 5)
+		defer timer.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-timer.C:
+				c := 0
+				eng.workers.Range(func(key, value interface{}) bool {
+					c++
+					return true
+				})
+
+				logger.Debugf("%d running workers", c)
+				metric.SetWorkflowShardsCount(c)
+			}
+		}
+	})
+}
+
 func (eng *engine) initCron() {
 	eng.cronRunner.Start()
 }
 
 func (eng *engine) initEvent() {
 	eng.runner.RunCancelableTask(eng.handleEvent)
+}
+
+func (eng *engine) initWorkerCreate() {
+	for i := uint64(0); i < eng.opts.workerCreateCount; i++ {
+		c := make(chan createWorkerAction, 256)
+		eng.workerCreateC = append(eng.workerCreateC, c)
+		eng.handleCreateWorker(c)
+	}
 }
 
 func (eng *engine) Stop() error {
@@ -413,12 +463,13 @@ func (eng *engine) InstanceStepState(id uint64, name string) (metapb.StepState, 
 
 	var target metapb.Step
 	valueBM := bbutil.AcquireBitmap()
-	shards, err := eng.getInstanceWorkers(instance)
+
+	workers, err := eng.getInstanceWorkers(instance)
 	if err != nil {
 		return metapb.StepState{}, err
 	}
 
-	for _, stepState := range shards {
+	for _, stepState := range workers {
 		for _, ss := range stepState.States {
 			if ss.Step.Name == name {
 				target = ss.Step
@@ -497,6 +548,11 @@ func (eng *engine) loadRunningInstance(id uint64) (*metapb.WorkflowInstance, err
 	}
 
 	if instance == nil || instance.State != metapb.Running {
+		return nil, fmt.Errorf("workflow-%d has no instance",
+			id)
+	}
+
+	if instance.State != metapb.Running {
 		return nil, fmt.Errorf("workflow-%d state %s, not running",
 			id,
 			instance.State.String())
@@ -511,7 +567,7 @@ func (eng *engine) getInstanceWorkers(instance *metapb.WorkflowInstance) ([]meta
 
 	var shards []metapb.WorkflowInstanceWorkerState
 	for {
-		values, err := eng.store.Scan(from, end, instance.Workers)
+		_, values, err := eng.store.Scan(from, end, 4)
 		if err != nil {
 			return nil, err
 		}
@@ -632,10 +688,57 @@ func (eng *engine) doEvent(event storage.Event, buf *goetty.ByteBuf) {
 }
 
 func (eng *engine) doStartInstanceStateEvent(state metapb.WorkflowInstanceWorkerState) {
-	logger.Infof("create workflow-%d worker %d",
-		state.WorkflowID,
-		state.Index)
+	eng.addCreateWorkAction(createWorkerAction{
+		state:     state,
+		bootstrap: true,
+	})
+}
 
+func (eng *engine) addCreateWorkAction(action createWorkerAction) {
+	eng.workerCreateC[atomic.AddUint64(&eng.op, 1)%eng.opts.workerCreateCount] <- action
+}
+
+func (eng *engine) handleCreateWorker(c chan createWorkerAction) {
+	eng.runner.RunCancelableTask(func(ctx context.Context) {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case action, ok := <-c:
+				if !ok {
+					return
+				}
+
+				if action.bootstrap {
+					eng.doBootstrapWorker(action.state)
+				} else {
+					eng.doCreateWorker(action)
+				}
+			}
+		}
+	})
+}
+
+func (eng *engine) doCreateWorker(arg interface{}) {
+	action := arg.(createWorkerAction)
+	_, err := eng.store.ExecCommand(&rpcpb.CreateInstanceStateShardRequest{
+		State: action.state,
+	})
+	if err != nil {
+		metric.IncStorageFailed()
+		logger.Errorf("create worker %s failed with %+v, retry later",
+			workerKey(action.state),
+			err)
+		util.DefaultTimeoutWheel().Schedule(eng.opts.retryInterval, eng.doCreateWorker, arg)
+		return
+	}
+
+	if action.completed.done() {
+		eng.doCreateInstanceStateShardComplete(action.state.WorkflowID)
+	}
+}
+
+func (eng *engine) doBootstrapWorker(state metapb.WorkflowInstanceWorkerState) {
 	key := workerKey(state)
 	if _, ok := eng.workers.Load(key); ok {
 		logger.Fatalf("BUG: start a exists state worker")
@@ -649,7 +752,7 @@ func (eng *engine) doStartInstanceStateEvent(state metapb.WorkflowInstanceWorker
 	for {
 		w, err := newStateWorker(key, state, eng)
 		if err != nil {
-			logger.Errorf("create worker %s failed with %+v",
+			logger.Errorf("create worker %s failed with %+v, retry later",
 				key,
 				err)
 			continue
@@ -664,7 +767,6 @@ func (eng *engine) doStartInstanceStateEvent(state metapb.WorkflowInstanceWorker
 		}
 		break
 	}
-
 }
 
 func (eng *engine) stopWorker(arg interface{}) {
@@ -674,10 +776,6 @@ func (eng *engine) stopWorker(arg interface{}) {
 }
 
 func (eng *engine) doInstanceStateRemovedEvent(state metapb.WorkflowInstanceWorkerState) {
-	logger.Infof("stop workflow-%d shard %d, moved to the other node",
-		state.WorkflowID,
-		state.Index)
-
 	key := workerKey(state)
 	if w, ok := eng.workers.Load(key); ok {
 		eng.workers.Delete(key)
@@ -702,8 +800,12 @@ func (eng *engine) doStartInstanceEvent(instance *metapb.WorkflowInstance) {
 			eng.addToRetryCompleteInstance, instance.Snapshot.ID)
 		return
 	}
+	logger.Infof("starting workflow-%d load bitmap completed",
+		instance.Snapshot.ID)
 
 	bms := bbutil.BMSplit(bm, instance.Workers)
+	completed := &actionCompleted{0, uint64(len(bms))}
+
 	for index, bm := range bms {
 		state := metapb.WorkflowInstanceWorkerState{}
 		state.TenantID = instance.Snapshot.TenantID
@@ -722,12 +824,9 @@ func (eng *engine) doStartInstanceEvent(instance *metapb.WorkflowInstance) {
 
 		state.States[0].TotalCrowd = bm.GetCardinality()
 		state.States[0].LoaderMeta = bbutil.MustMarshalBM(bm)
-		if !eng.doCreateInstanceState(instance, state) {
-			return
-		}
-	}
 
-	eng.doCreateInstanceStateShardComplete(instance.Snapshot.ID)
+		eng.addCreateWorkAction(createWorkerAction{false, state, completed})
+	}
 }
 
 func (eng *engine) doStartedInstanceEvent(instance *metapb.WorkflowInstance) {
@@ -789,8 +888,6 @@ func (eng *engine) doInstanceStoppingComplete(instance *metapb.WorkflowInstance)
 		return
 	}
 
-	logger.Infof("workflow-%d stopped", instance.Snapshot.ID)
-
 	go eng.doRemoveShardBitmaps(instance)
 }
 
@@ -849,14 +946,15 @@ func (eng *engine) doCreateInstanceState(instance *metapb.WorkflowInstance, stat
 	})
 	if err != nil {
 		metric.IncStorageFailed()
-		logger.Errorf("create workflow-%d state %s failed with %+v, retry later",
-			instance.Snapshot.ID,
+		logger.Errorf("create worker %s failed with %+v, retry later",
 			workerKey(state),
 			err)
 		util.DefaultTimeoutWheel().Schedule(eng.opts.retryInterval, eng.addToRetryNewInstance, instance)
 		return false
 	}
 
+	logger.Infof("worker %s created",
+		workerKey(state))
 	return true
 }
 
@@ -906,14 +1004,14 @@ func (eng *engine) doRemoveShardBitmaps(instance *metapb.WorkflowInstance) {
 			buf.Clear()
 			err := eng.store.Delete(storage.ShardBitmapKey(meta.Key, i, buf))
 			if err != nil {
-				logger.Errorf("remove workflow shard bitmap workflow-%d/%d(%d) failed",
+				logger.Errorf("remove workflow shard bitmap workflow-%d/%d/%d failed",
 					instance.Snapshot.ID,
 					instance.InstanceID,
 					i)
 				continue
 			}
 
-			logger.Errorf("remove workflow shard bitmap workflow-%d/%d(%d) completed",
+			logger.Infof("remove workflow shard bitmap workflow-%d/%d/%d completed",
 				instance.Snapshot.ID,
 				instance.InstanceID,
 				i)

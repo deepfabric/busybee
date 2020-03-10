@@ -8,6 +8,7 @@ import (
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/deepfabric/busybee/pkg/storage"
+	"github.com/fagongzi/log"
 	"github.com/fagongzi/util/protoc"
 )
 
@@ -354,6 +355,9 @@ func (s *server) doBMRange(ctx ctx) error {
 
 func (s *server) onResp(arg interface{}, value []byte, err error) {
 	ctx := arg.(ctx)
+	if log.DebugEnabled() {
+		log.Debugf("%d api received response", ctx.req.ID)
+	}
 	if rs, ok := s.sessions.Load(ctx.sid); ok {
 		resp := rpcpb.AcquireResponse()
 		resp.Type = ctx.req.Type
@@ -392,5 +396,9 @@ func (s *server) onResp(arg interface{}, value []byte, err error) {
 
 		rs.(*util.Session).OnResp(resp)
 		metric.IncRequestSucceed(resp.Type.String())
+	} else {
+		if log.DebugEnabled() {
+			log.Debugf("%d api received response, missing session", ctx.req.ID)
+		}
 	}
 }
