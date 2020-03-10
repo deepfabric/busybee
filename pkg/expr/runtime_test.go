@@ -52,6 +52,10 @@ func (c *testCtx) KV(key []byte) ([]byte, error) {
 	return nil, nil
 }
 
+func (c *testCtx) TotalCrowd() *roaring.Bitmap {
+	return nil
+}
+
 func (c *testCtx) StepCrowd() *roaring.Bitmap {
 	return nil
 }

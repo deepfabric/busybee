@@ -34,6 +34,8 @@ func newFuncVar(name string, valueType engine.VarType) (engine.Expr, error) {
 		expr.dynaFunc = dateFunc
 	case "datetime":
 		expr.dynaFunc = datetimeFunc
+	case "wf_crowd":
+		expr.dynaFunc = totalCrowdFunc
 	case "wf_step_crowd":
 		expr.dynaFunc = stepCrowdFunc
 	case "wf_step_ttl":
@@ -89,6 +91,10 @@ func dayFunc(ctx Ctx) (interface{}, error) {
 
 func stepCrowdFunc(ctx Ctx) (interface{}, error) {
 	return ctx.StepCrowd(), nil
+}
+
+func totalCrowdFunc(ctx Ctx) (interface{}, error) {
+	return ctx.TotalCrowd(), nil
 }
 
 func stepTTLFunc(ctx Ctx) (interface{}, error) {

@@ -568,6 +568,10 @@ func (c *exprCtx) KV(key []byte) ([]byte, error) {
 	return c.w.eng.Storage().Get(key)
 }
 
+func (c *exprCtx) TotalCrowd() *roaring.Bitmap {
+	return c.w.totalCrowds
+}
+
 func (c *exprCtx) StepCrowd() *roaring.Bitmap {
 	return c.w.stepCrowds[c.idx]
 }
