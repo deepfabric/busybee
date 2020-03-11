@@ -6,12 +6,49 @@ import (
 	"github.com/RoaringBitmap/roaring"
 	"github.com/deepfabric/busybee/pkg/expr"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
+	"github.com/deepfabric/busybee/pkg/util"
 )
 
-type stepChangedFunc func(batch *executionbatch) error
+type who struct {
+	user  uint32
+	users *roaring.Bitmap
+}
+
+type changedCtx struct {
+	from string
+	to   string
+	who  who
+	ttl  int32
+}
+
+func (ctx changedCtx) user() uint32 {
+	if ctx.who.users.GetCardinality() == 1 {
+		return ctx.who.users.Minimum()
+	}
+
+	return 0
+}
+
+func (ctx changedCtx) crowd() []byte {
+	if nil == ctx.who.users {
+		return nil
+	}
+
+	return util.MustMarshalBM(ctx.who.users)
+}
+
+func (ctx *changedCtx) add(changed changedCtx) {
+	if changed.who.user > 0 {
+		ctx.who.users.Add(changed.who.user)
+	} else {
+		ctx.who.users.Or(changed.who.users)
+	}
+}
+
+type stepChangedFunc func(batch *executionbatch, ctx changedCtx) error
 
 type excution interface {
-	Execute(expr.Ctx, stepChangedFunc, *executionbatch) error
+	Execute(expr.Ctx, stepChangedFunc, *executionbatch, who) error
 }
 
 func checkExcution(workflow metapb.Workflow) error {
@@ -52,10 +89,8 @@ func newExcution(currentStep string, exec metapb.Execution) (excution, error) {
 
 		return &conditionExecution{
 			conditionExpr: exprRuntime,
-			exec: &directExecution{
-				step:     currentStep,
-				nextStep: exec.Timer.NextStep,
-			},
+			step:          currentStep,
+			nextStep:      exec.Timer.NextStep,
 		}, nil
 	case metapb.Branch:
 		if len(exec.Branches) < 2 {
@@ -82,10 +117,8 @@ func newExcution(currentStep string, exec metapb.Execution) (excution, error) {
 			} else {
 				value.branches = append(value.branches, &conditionExecution{
 					conditionExpr: r,
-					exec: &directExecution{
-						step:     currentStep,
-						nextStep: branch.NextStep,
-					},
+					step:          currentStep,
+					nextStep:      branch.NextStep,
 				})
 			}
 		}
@@ -121,19 +154,20 @@ type directExecution struct {
 	nextStep string
 }
 
-func (e *directExecution) Execute(ctx expr.Ctx, cb stepChangedFunc, batch *executionbatch) error {
-	batch.event = ctx.Event()
-	batch.from = e.step
-	batch.to = e.nextStep
-	return cb(batch)
+func (e *directExecution) Execute(ctx expr.Ctx, cb stepChangedFunc,
+	batch *executionbatch, target who) error {
+	return cb(batch, changedCtx{e.step, e.nextStep, target, 0})
 }
 
 type conditionExecution struct {
 	conditionExpr expr.Runtime
 	exec          excution
+	step          string
+	nextStep      string
 }
 
-func (e *conditionExecution) executeWithMatches(ctx expr.Ctx, cb stepChangedFunc, batch *executionbatch) (bool, error) {
+func (e *conditionExecution) executeWithMatches(ctx expr.Ctx, cb stepChangedFunc,
+	batch *executionbatch, target who) (bool, error) {
 	if e.conditionExpr != nil {
 		matches, value, err := e.conditionExpr.Exec(ctx)
 		if err != nil {
@@ -145,25 +179,24 @@ func (e *conditionExecution) executeWithMatches(ctx expr.Ctx, cb stepChangedFunc
 		}
 
 		if bm, ok := value.(*roaring.Bitmap); ok {
-			batch.crowd = bm
-			err := e.exec.Execute(ctx, cb, batch)
-			if err != nil {
-				return false, err
-			}
-
-			return true, nil
+			target = who{0, bm}
 		}
 	}
 
-	err := e.exec.Execute(ctx, cb, batch)
-	if err != nil {
-		return false, err
+	if e.exec != nil {
+		err := e.exec.Execute(ctx, cb, batch, target)
+		if err != nil {
+			return false, err
+		}
+
+		return true, nil
 	}
 
-	return true, nil
+	return true, cb(batch, changedCtx{e.step, e.nextStep, target, 0})
 }
 
-func (e *conditionExecution) Execute(ctx expr.Ctx, cb stepChangedFunc, batch *executionbatch) error {
+func (e *conditionExecution) Execute(ctx expr.Ctx, cb stepChangedFunc,
+	batch *executionbatch, target who) error {
 	if e.conditionExpr != nil {
 		matches, value, err := e.conditionExpr.Exec(ctx)
 		if err != nil {
@@ -175,21 +208,30 @@ func (e *conditionExecution) Execute(ctx expr.Ctx, cb stepChangedFunc, batch *ex
 		}
 
 		if bm, ok := value.(*roaring.Bitmap); ok {
-			batch.crowd = bm
-			return e.exec.Execute(ctx, cb, batch)
+			target = who{0, bm}
 		}
 	}
 
-	return e.exec.Execute(ctx, cb, batch)
+	if e.exec != nil {
+		err := e.exec.Execute(ctx, cb, batch, target)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}
+
+	return cb(batch, changedCtx{e.step, e.nextStep, target, 0})
 }
 
 type branchExecution struct {
 	branches []*conditionExecution
 }
 
-func (e *branchExecution) Execute(ctx expr.Ctx, cb stepChangedFunc, batch *executionbatch) error {
+func (e *branchExecution) Execute(ctx expr.Ctx, cb stepChangedFunc,
+	batch *executionbatch, target who) error {
 	for _, exec := range e.branches {
-		ok, err := exec.executeWithMatches(ctx, cb, batch)
+		ok, err := exec.executeWithMatches(ctx, cb, batch, target)
 		if err != nil {
 			return err
 		}
@@ -208,17 +250,14 @@ type parallelExecution struct {
 	exectuors []excution
 }
 
-func (e *parallelExecution) Execute(ctx expr.Ctx, cb stepChangedFunc, batch *executionbatch) error {
+func (e *parallelExecution) Execute(ctx expr.Ctx, cb stepChangedFunc,
+	batch *executionbatch, target who) error {
 	for _, exec := range e.exectuors {
-		err := exec.Execute(ctx, cb, batch)
+		err := exec.Execute(ctx, cb, batch, target)
 		if err != nil {
 			return err
 		}
-
 	}
 
-	batch.event = ctx.Event()
-	batch.from = e.step
-	batch.to = e.nextStep
-	return cb(batch)
+	return cb(batch, changedCtx{e.step, e.nextStep, target, 0})
 }

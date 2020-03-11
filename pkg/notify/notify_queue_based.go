@@ -43,6 +43,12 @@ func (n *queueNotifier) Notify(id uint64, buf *goetty.ByteBuf, notifies ...metap
 
 func (n *queueNotifier) addTTL(buf *goetty.ByteBuf, nt *metapb.Notify) error {
 	if nt.UserID > 0 {
+		logger.Debugf("add %d TTL secs on workflow %d/%d step %s for user %d",
+			nt.TTL,
+			nt.WorkflowID,
+			nt.InstanceID,
+			nt.ToStep,
+			nt.UserID)
 		key := storage.WorkflowStepTTLKey(nt.WorkflowID, nt.UserID, nt.ToStep, buf)
 		return n.store.SetWithTTL(key, ttlValue, int64(nt.TTL))
 	}
@@ -59,11 +65,19 @@ func (n *queueNotifier) addTTL(buf *goetty.ByteBuf, nt *metapb.Notify) error {
 		}
 
 		buf.Clear()
-		key := storage.WorkflowStepTTLKey(nt.WorkflowID, itr.Next(), nt.ToStep, buf)
+		user := itr.Next()
+		key := storage.WorkflowStepTTLKey(nt.WorkflowID, user, nt.ToStep, buf)
 		err := n.store.SetWithTTL(key, ttlValue, int64(nt.TTL))
 		if err != nil {
 			return err
 		}
+
+		logger.Debugf("add %d TTL secs on workflow %d/%d step %s for user %d",
+			nt.TTL,
+			nt.WorkflowID,
+			nt.InstanceID,
+			nt.ToStep,
+			user)
 	}
 
 	return nil

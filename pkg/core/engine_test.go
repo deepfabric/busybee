@@ -89,7 +89,8 @@ func TestStopInstanceAndRestart(t *testing.T) {
 			},
 		}, metapb.RawLoader, util.MustMarshalBM(bm), 3)
 
-		time.Sleep(time.Second * 1)
+		assert.NoError(t, waitTestWorkflow(ng, 10000, metapb.Running), "TestStopInstance failed")
+
 		c := 0
 		ng.(*engine).workers.Range(func(key, value interface{}) bool {
 			c++
@@ -100,7 +101,7 @@ func TestStopInstanceAndRestart(t *testing.T) {
 		err = ng.StopInstance(10000)
 		assert.NoError(t, err, "TestStopInstance failed")
 
-		time.Sleep(time.Second * 1)
+		assert.NoError(t, waitTestWorkflow(ng, 10000, metapb.Stopped), "TestStopInstance failed")
 		c = 0
 		ng.(*engine).workers.Range(func(key, value interface{}) bool {
 			c++
@@ -190,7 +191,8 @@ func TestStartInstance(t *testing.T) {
 	}, metapb.RawLoader, util.MustMarshalBM(bm), 3)
 	assert.NoError(t, err, "TestStartInstance failed")
 
-	time.Sleep(time.Second * 2)
+	assert.NoError(t, waitTestWorkflow(ng, 10000, metapb.Running), "TestStartInstance failed")
+
 	c := 0
 	ng.(*engine).workers.Range(func(key, value interface{}) bool {
 		c++
@@ -376,7 +378,8 @@ func TestUpdateCrowd(t *testing.T) {
 	}, metapb.RawLoader, util.MustMarshalBM(bm), 3)
 	assert.NoError(t, err, "TestUpdateCrowd failed")
 
-	time.Sleep(time.Second * 2)
+	assert.NoError(t, waitTestWorkflow(ng, 10000, metapb.Running), "TestUpdateCrowd failed")
+
 	c := 0
 	ng.(*engine).workers.Range(func(key, value interface{}) bool {
 		c++
@@ -564,7 +567,7 @@ func TestUpdateWorkflow(t *testing.T) {
 	}, metapb.RawLoader, util.MustMarshalBM(bm), 3)
 	assert.NoError(t, err, "TestUpdateWorkflow failed")
 
-	time.Sleep(time.Second * 2)
+	assert.NoError(t, waitTestWorkflow(ng, 10000, metapb.Running), "TestUpdateWorkflow failed")
 	c := 0
 	ng.(*engine).workers.Range(func(key, value interface{}) bool {
 		c++
@@ -811,7 +814,7 @@ func TestStartInstanceWithStepTTL(t *testing.T) {
 	}, metapb.RawLoader, util.MustMarshalBM(bm), 3)
 	assert.NoError(t, err, "TestStartInstanceWithStepTTL failed")
 
-	time.Sleep(time.Second * 2)
+	assert.NoError(t, waitTestWorkflow(ng, 10000, metapb.Running), "TestStartInstanceWithStepTTL failed")
 	c := 0
 	ng.(*engine).workers.Range(func(key, value interface{}) bool {
 		c++

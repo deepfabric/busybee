@@ -28,9 +28,13 @@ const (
 	stopAction = iota
 	timerAction
 	userEventAction
+	directAction
 	updateCrowdEventAction
 	updateWorkflowEventAction
 )
+
+type directCtx struct {
+}
 
 type item struct {
 	action int
@@ -46,6 +50,7 @@ type stateWorker struct {
 	state        metapb.WorkflowInstanceWorkerState
 	totalCrowds  *roaring.Bitmap
 	stepCrowds   []*roaring.Bitmap
+	directSteps  map[string]struct{}
 	steps        map[string]excution
 	entryActions map[string]string
 	leaveActions map[string]string
@@ -87,6 +92,7 @@ func newStateWorker(key string, state metapb.WorkflowInstanceWorkerState, eng En
 func (w *stateWorker) resetByState() error {
 	w.totalCrowds.Clear()
 	w.stepCrowds = w.stepCrowds[:0]
+	w.directSteps = make(map[string]struct{})
 	w.steps = make(map[string]excution)
 	w.entryActions = make(map[string]string)
 	w.leaveActions = make(map[string]string)
@@ -122,6 +128,11 @@ func (w *stateWorker) resetByState() error {
 		w.steps[stepState.Step.Name] = exec
 		w.entryActions[stepState.Step.Name] = stepState.Step.EnterAction
 		w.leaveActions[stepState.Step.Name] = stepState.Step.LeaveAction
+
+		if stepState.Step.Execution.Type == metapb.Direct &&
+			stepState.Step.Execution.Direct.NextStep != "" {
+			w.directSteps[stepState.Step.Name] = struct{}{}
+		}
 	}
 
 	return nil
@@ -280,25 +291,8 @@ func (w *stateWorker) doEvent(action int, data interface{}) error {
 }
 
 func (w *stateWorker) execBatch(batch *executionbatch) {
-	if len(batch.notifies) > 0 {
-		for idx := range batch.notifies {
-			batch.notifies[idx].FromAction = w.leaveActions[batch.notifies[idx].FromStep]
-			batch.notifies[idx].ToAction = w.entryActions[batch.notifies[idx].ToStep]
-		}
-
+	if len(batch.changes) > 0 {
 		w.retryDo("exec notify", batch, w.execNotify)
-		logger.Infof("worker %s added %d notifies to tenant %d",
-			w.key,
-			len(batch.notifies),
-			w.state.TenantID)
-
-		for _, nt := range batch.notifies {
-			if logger.DebugEnabled() {
-				logger.Infof("worker %s notify %s",
-					w.key,
-					nt.String())
-			}
-		}
 
 		w.retryDo("exec update state", batch, w.execUpdate)
 		logger.Infof("worker %s state update to version %d",
@@ -309,43 +303,45 @@ func (w *stateWorker) execBatch(batch *executionbatch) {
 	for _, c := range batch.cbs {
 		c.complete(nil)
 	}
+
 	batch.reset()
 }
 
-func (w *stateWorker) retryDo(thing string, batch *executionbatch, fn func(*executionbatch) error) {
-	times := 1
-	after := 2
-	maxAfter := 30
-	for {
-		if w.isStopped() {
-			return
-		}
-
-		err := fn(batch)
-		if err == nil {
-			return
-		}
-
-		metric.IncStorageFailed()
-		logger.Errorf("worker %s do %s failed %d times with %+v, retry after %d sec",
-			w.key,
-			thing,
-			times,
-			err,
-			after)
-		times++
-		if after < maxAfter {
-			after = after * 2
-			if after > maxAfter {
-				after = maxAfter
-			}
-		}
-		time.Sleep(time.Second * time.Duration(after))
-	}
-}
-
 func (w *stateWorker) execNotify(batch *executionbatch) error {
-	return w.eng.Notifier().Notify(w.state.TenantID, w.buf, batch.notifies...)
+	notifies := make([]metapb.Notify, 0, len(batch.changes))
+	for _, changed := range batch.changes {
+		nt := metapb.Notify{
+			TenantID:   w.state.TenantID,
+			WorkflowID: w.state.WorkflowID,
+			InstanceID: w.state.InstanceID,
+			UserID:     changed.user(),
+			Crowd:      changed.crowd(),
+			FromStep:   changed.from,
+			ToStep:     changed.to,
+			TTL:        changed.ttl,
+			FromAction: w.leaveActions[changed.from],
+			ToAction:   w.entryActions[changed.to],
+		}
+		notifies = append(notifies, nt)
+
+		if logger.DebugEnabled() {
+			logger.Debugf("worker %s notify to %d users, notify %+v",
+				w.key,
+				changed.who.users.GetCardinality(),
+				nt)
+		}
+		// If the to action was direct, trigger next time
+		// if _, ok := w.directSteps[to]; ok {
+		// 	userEvents = append(userEvents, metapb.UserEvent{
+		// 		UserID:     batch.notifies[idx].UserID,
+		// 		TenantID:   batch.notifies[idx].TenantID,
+		// 		WorkflowID: w.state.WorkflowID,
+		// 		InstanceID: w.state.InstanceID,
+		// 	})
+		// }
+	}
+
+	return w.eng.Notifier().Notify(w.state.TenantID, w.buf, notifies...)
 }
 
 func (w *stateWorker) execUpdate(batch *executionbatch) error {
@@ -357,41 +353,44 @@ func (w *stateWorker) execUpdate(batch *executionbatch) error {
 
 // this function will called by every step exectuion, if the target crowd or user
 // removed to other step.
-func (w *stateWorker) stepChanged(batch *executionbatch) error {
+func (w *stateWorker) stepChanged(batch *executionbatch, ctx changedCtx) error {
 	// the batch.crowd is the timer step to filter a crowd on the all workflow crowd,
 	// so it's contains other shards crowds.
-	if batch.crowd != nil {
+	if ctx.who.users != nil {
 		// filter other shard state crowds
-		batch.crowd.And(w.totalCrowds)
+		ctx.who.users.And(w.totalCrowds)
 	}
 
-	doNotify := false
 	for idx := range w.state.States {
 		changed := false
-		if w.state.States[idx].Step.Name == batch.from {
+		if w.state.States[idx].Step.Name == ctx.from {
 			changed = true
-			if nil != batch.crowd {
-				afterChanged := bbutil.BMAndnot(w.stepCrowds[idx], batch.crowd)
+			if nil != ctx.who.users {
+				afterChanged := bbutil.BMAndnot(w.stepCrowds[idx], ctx.who.users)
 				if w.stepCrowds[idx].GetCardinality() == afterChanged.GetCardinality() {
 					changed = false
 				} else {
 					w.stepCrowds[idx] = afterChanged
 				}
 			} else {
-				w.stepCrowds[idx].Remove(batch.event.UserID)
+				w.stepCrowds[idx].Remove(ctx.who.user)
 			}
-		} else if w.state.States[idx].Step.Name == batch.to {
+		} else if w.state.States[idx].Step.Name == ctx.to {
 			changed = true
-			batch.ttl = w.state.States[idx].Step.TTL
-			if nil != batch.crowd {
-				afterChanged := bbutil.BMOr(w.stepCrowds[idx], batch.crowd)
+			ctx.ttl = w.state.States[idx].Step.TTL
+			if nil != ctx.who.users {
+				afterChanged := bbutil.BMOr(w.stepCrowds[idx], ctx.who.users)
 				if w.stepCrowds[idx].GetCardinality() == afterChanged.GetCardinality() {
 					changed = false
 				} else {
 					w.stepCrowds[idx] = afterChanged
 				}
 			} else {
-				w.stepCrowds[idx].Add(batch.event.UserID)
+				w.stepCrowds[idx].Add(ctx.who.user)
+			}
+
+			if changed {
+				batch.addChanged(ctx)
 			}
 		}
 
@@ -399,11 +398,8 @@ func (w *stateWorker) stepChanged(batch *executionbatch) error {
 			w.state.States[idx].TotalCrowd = w.stepCrowds[idx].GetCardinality()
 			w.state.States[idx].LoaderMeta = bbutil.MustMarshalBM(w.stepCrowds[idx])
 			w.state.Version++
-			doNotify = true
 		}
 	}
-
-	batch.next(doNotify)
 	return nil
 }
 
@@ -444,6 +440,7 @@ func (w *stateWorker) doUpdateWorkflow(workflow metapb.Workflow) error {
 		oldCrowds[step.Step.Name] = w.stepCrowds[idx]
 	}
 
+	w.directSteps = make(map[string]struct{})
 	w.steps = make(map[string]excution)
 	w.entryActions = make(map[string]string)
 	w.leaveActions = make(map[string]string)
@@ -474,6 +471,11 @@ func (w *stateWorker) doUpdateWorkflow(workflow metapb.Workflow) error {
 		w.steps[step.Name] = exec
 		w.entryActions[step.Name] = step.EnterAction
 		w.leaveActions[step.Name] = step.LeaveAction
+
+		if step.Execution.Type == metapb.Direct &&
+			step.Execution.Direct.NextStep != "" {
+			w.directSteps[step.Name] = struct{}{}
+		}
 
 		if bm, ok := oldCrowds[step.Name]; ok {
 			newCrowds = append(newCrowds, bm)
@@ -509,7 +511,7 @@ func (w *stateWorker) doStepEvents(events []metapb.UserEvent, batch *executionba
 		for idx, crowd := range w.stepCrowds {
 			if crowd.Contains(event.UserID) {
 				err := w.steps[w.state.States[idx].Step.Name].Execute(newExprCtx(event, w, idx),
-					w.stepChanged, batch)
+					w.stepChanged, batch, who{event.UserID, nil})
 				if err != nil {
 					metric.IncWorkflowWorkerFailed()
 					logger.Errorf("worker %s step event %+v failed with %+v",
@@ -540,7 +542,7 @@ func (w *stateWorker) doStepTimer(batch *executionbatch, idx int) {
 		WorkflowID: w.state.WorkflowID,
 		InstanceID: w.state.InstanceID,
 	}, w, idx),
-		w.stepChanged, batch)
+		w.stepChanged, batch, who{})
 	if err != nil {
 		metric.IncWorkflowWorkerFailed()
 		logger.Errorf("worker %s trigger timer failed with %+v",
@@ -599,6 +601,38 @@ func timeStepLastTriggerKey(wid, instanceID uint64, name string, buf *goetty.Byt
 	buf.WriteUint64(wid)
 	buf.WriteUInt64(instanceID)
 	return buf.WrittenDataAfterMark()
+}
+
+func (w *stateWorker) retryDo(thing string, batch *executionbatch, fn func(*executionbatch) error) {
+	times := 1
+	after := 2
+	maxAfter := 30
+	for {
+		if w.isStopped() {
+			return
+		}
+
+		err := fn(batch)
+		if err == nil {
+			return
+		}
+
+		metric.IncStorageFailed()
+		logger.Errorf("worker %s do %s failed %d times with %+v, retry after %d sec",
+			w.key,
+			thing,
+			times,
+			err,
+			after)
+		times++
+		if after < maxAfter {
+			after = after * 2
+			if after > maxAfter {
+				after = maxAfter
+			}
+		}
+		time.Sleep(time.Second * time.Duration(after))
+	}
 }
 
 type exprCtx struct {

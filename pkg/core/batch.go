@@ -1,58 +1,57 @@
 package core
 
 import (
+	"sync"
+
 	"github.com/RoaringBitmap/roaring"
-	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/util"
 )
 
+var (
+	pool = sync.Pool{
+		New: func() interface{} {
+			return util.AcquireBitmap()
+		},
+	}
+)
+
+func acquireBM() *roaring.Bitmap {
+	return pool.Get().(*roaring.Bitmap)
+}
+
+func releaseBM(value *roaring.Bitmap) {
+	value.Clear()
+	pool.Put(value)
+}
+
 type executionbatch struct {
-	event    metapb.UserEvent
-	from     string
-	to       string
-	ttl      int32
-	crowd    *roaring.Bitmap
-	notifies []metapb.Notify
-	cbs      []*stepCB
+	changes []changedCtx
+	cbs     []*stepCB
 }
 
 func newExecutionbatch() *executionbatch {
 	return &executionbatch{}
 }
 
-func (b *executionbatch) notify() {
-	value := metapb.Notify{
-		UserID:     b.event.UserID,
-		TenantID:   b.event.TenantID,
-		WorkflowID: b.event.WorkflowID,
-		FromStep:   b.from,
-		ToStep:     b.to,
-		TTL:        b.ttl,
-	}
-	if b.crowd != nil {
-		value.Crowd = util.MustMarshalBM(b.crowd)
-	}
-	b.notifies = append(b.notifies, value)
-}
-
-func (b *executionbatch) next(notify bool) {
-	if notify {
-		b.notify()
+func (b *executionbatch) addChanged(changed changedCtx) {
+	for idx := range b.changes {
+		if b.changes[idx].from == changed.from &&
+			b.changes[idx].to == changed.to {
+			b.changes[idx].add(changed)
+			return
+		}
 	}
 
-	b.event = metapb.UserEvent{}
-	b.from = ""
-	b.to = ""
-	b.crowd = nil
-	b.ttl = 0
+	ctx := changedCtx{changed.from, changed.to, who{0, acquireBM()}, changed.ttl}
+	ctx.add(changed)
+	b.changes = append(b.changes, ctx)
 }
 
 func (b *executionbatch) reset() {
-	b.event = metapb.UserEvent{}
-	b.from = ""
-	b.to = ""
-	b.ttl = 0
-	b.crowd = nil
-	b.notifies = b.notifies[:0]
+	for _, changed := range b.changes {
+		releaseBM(changed.who.users)
+	}
+
+	b.changes = b.changes[:0]
 	b.cbs = b.cbs[:0]
 }
