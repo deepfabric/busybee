@@ -47,7 +47,7 @@ type Engine interface {
 	// StartInstance start instance, an instance may contain a lot of people,
 	// so an instance will be divided into many shards, each shard handles some
 	// people's events.
-	StartInstance(workflow metapb.Workflow, loader metapb.BMLoader, crowd []byte, workers uint64) error
+	StartInstance(workflow metapb.Workflow, loader metapb.BMLoader, crowd []byte, workers uint64) (uint64, error)
 	// LastInstance returns last instance
 	LastInstance(id uint64) (*metapb.WorkflowInstance, error)
 	// HistoryInstance returens a workflow instance snapshot
@@ -74,6 +74,8 @@ type Engine interface {
 	AddCronJob(string, func()) (cron.EntryID, error)
 	// StopCronJob stop the cron job
 	StopCronJob(cron.EntryID)
+	// NextTriggerTime returns the trigger time with unix timestamp after the last trigger time
+	NextTriggerTime(int64, string) (int64, error)
 }
 
 type createWorkerAction struct {
@@ -104,8 +106,11 @@ func NewEngine(store storage.Storage, notifier notify.Notifier, opts ...Option) 
 		stopInstanceC:          make(chan uint64, 1024),
 		runner:                 task.NewRunner(),
 		cronRunner:             cron.New(cron.WithSeconds()),
-		service:                crm.NewService(store),
-		loaders:                make(map[metapb.BMLoader]crowd.Loader),
+		cronParser: cron.NewParser(
+			cron.Second | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor,
+		),
+		service: crm.NewService(store),
+		loaders: make(map[metapb.BMLoader]crowd.Loader),
 	}
 
 	for _, opt := range opts {
@@ -123,6 +128,7 @@ type engine struct {
 	notifier   notify.Notifier
 	runner     *task.Runner
 	cronRunner *cron.Cron
+	cronParser cron.ScheduleParser
 
 	workers                sync.Map // key -> *worker
 	eventC                 chan storage.Event
@@ -224,9 +230,9 @@ func (eng *engine) TenantInit(id, partitions uint64) error {
 	return eng.store.RaftStore().AddShards(shards...)
 }
 
-func (eng *engine) StartInstance(workflow metapb.Workflow, loader metapb.BMLoader, crowdMeta []byte, workers uint64) error {
+func (eng *engine) StartInstance(workflow metapb.Workflow, loader metapb.BMLoader, crowdMeta []byte, workers uint64) (uint64, error) {
 	if err := checkExcution(workflow); err != nil {
-		return err
+		return 0, err
 	}
 
 	logger.Infof("workflow-%d start load bitmap crowd",
@@ -236,18 +242,18 @@ func (eng *engine) StartInstance(workflow metapb.Workflow, loader metapb.BMLoade
 		logger.Errorf("start workflow-%d failed with %+v",
 			workflow.ID,
 			err)
-		return err
+		return 0, err
 	}
 
 	old, err := eng.loadInstance(workflow.ID)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if old != nil {
 		if old.State != metapb.Stopped {
 			logger.Warningf("workflow-%d last instance is not stopped",
 				workflow.ID)
-			return nil
+			return 0, nil
 		}
 
 		oldBM, err := eng.loadBM(old.Loader, old.LoaderMeta)
@@ -255,7 +261,7 @@ func (eng *engine) StartInstance(workflow metapb.Workflow, loader metapb.BMLoade
 			logger.Errorf("start workflow-%d failed with %+v",
 				workflow.ID,
 				err)
-			return err
+			return 0, err
 		}
 
 		bm.AndNot(oldBM)
@@ -275,7 +281,7 @@ func (eng *engine) StartInstance(workflow metapb.Workflow, loader metapb.BMLoade
 		logger.Errorf("start workflow-%d failed with %+v",
 			workflow.ID,
 			err)
-		return err
+		return 0, err
 	}
 
 	buf := goetty.NewByteBuf(32)
@@ -284,7 +290,7 @@ func (eng *engine) StartInstance(workflow metapb.Workflow, loader metapb.BMLoade
 
 	loader, loaderMeta, err := eng.putBM(bm, key, 0)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	instance := metapb.WorkflowInstance{
@@ -306,7 +312,7 @@ func (eng *engine) StartInstance(workflow metapb.Workflow, loader metapb.BMLoade
 			err)
 	}
 
-	return err
+	return id, err
 }
 
 func (eng *engine) LastInstance(id uint64) (*metapb.WorkflowInstance, error) {
@@ -516,6 +522,16 @@ func (eng *engine) AddCronJob(cronExpr string, fn func()) (cron.EntryID, error) 
 
 func (eng *engine) StopCronJob(id cron.EntryID) {
 	eng.cronRunner.Remove(id)
+}
+
+func (eng *engine) NextTriggerTime(last int64, spec string) (int64, error) {
+	t := time.Unix(last, 0)
+	s, err := eng.cronParser.Parse(spec)
+	if err != nil {
+		return 0, err
+	}
+
+	return s.Next(t).Unix(), nil
 }
 
 func (eng *engine) doUpdateWorkflow(value metapb.Workflow) error {
@@ -805,6 +821,7 @@ func (eng *engine) doStartInstanceEvent(instance *metapb.WorkflowInstance) {
 		state := metapb.WorkflowInstanceWorkerState{}
 		state.TenantID = instance.Snapshot.TenantID
 		state.WorkflowID = instance.Snapshot.ID
+		state.InstanceID = instance.InstanceID
 		state.Index = uint32(index)
 		state.StopAt = instance.Snapshot.StopAt
 

@@ -102,6 +102,9 @@ func (w *stateWorker) resetByState() error {
 		}
 
 		if stepState.Step.Execution.Timer != nil {
+			if err := w.maybeTriggerIfMissing(stepState, idx); err != nil {
+				return err
+			}
 			id, err := w.eng.AddCronJob(stepState.Step.Execution.Timer.Cron, func() {
 				w.queue.Put(item{
 					action: timerAction,
@@ -150,6 +153,7 @@ func (w *stateWorker) run() {
 				logger.Fatalf("BUG: fetch from work queue failed with %+v", err)
 			}
 
+			w.buf.Clear()
 			for i := int64(0); i < n; i++ {
 				value := items[i].(item)
 				if value.action == stopAction {
@@ -328,7 +332,7 @@ func (w *stateWorker) retryDo(thing string, batch *executionbatch, fn func(*exec
 			after)
 		times++
 		if after < maxAfter {
-			after = after * times
+			after = after * 2
 			if after > maxAfter {
 				after = maxAfter
 			}
@@ -523,6 +527,10 @@ func (w *stateWorker) doStepTimer(batch *executionbatch, idx int) {
 	}
 
 	logger.Infof("worker %s step timer %s", idx)
+	w.retryDo("store last trigger", nil, func(*executionbatch) error {
+		return w.eng.Storage().Set(timeStepLastTriggerKey(w.state.WorkflowID,
+			w.state.InstanceID, step.Step.Name, w.buf), goetty.Int64ToBytes(time.Now().Unix()))
+	})
 
 	err := w.steps[step.Step.Name].Execute(newExprCtx(metapb.UserEvent{
 		TenantID:   w.state.TenantID,
@@ -535,6 +543,58 @@ func (w *stateWorker) doStepTimer(batch *executionbatch, idx int) {
 			w.key,
 			err)
 	}
+}
+
+func (w *stateWorker) maybeTriggerIfMissing(step metapb.StepState, idx int) error {
+	last, err := w.readLastTriggerTime(step.Step.Name)
+	if err != nil {
+		return nil
+	}
+
+	if last == 0 {
+		return nil
+	}
+
+	next, err := w.eng.NextTriggerTime(last, step.Step.Execution.Timer.Cron)
+	if err != nil {
+		return err
+	}
+
+	if next < time.Now().Unix() {
+		w.queue.Put(item{
+			action: timerAction,
+			value:  idx,
+		})
+	}
+
+	return nil
+}
+
+func (w *stateWorker) readLastTriggerTime(name string) (int64, error) {
+	last, err := w.eng.Storage().Get(timeStepLastTriggerKey(w.state.WorkflowID,
+		w.state.InstanceID, name, w.buf))
+	if err != nil {
+		return 0, err
+	}
+
+	if len(last) == 0 {
+		return 0, nil
+	}
+
+	if len(last) != 8 {
+		logger.Fatalf("The step last tigeer value must be a int64 value, but %d bytes",
+			len(last))
+	}
+
+	return goetty.Byte2Int64(last), nil
+}
+
+func timeStepLastTriggerKey(wid, instanceID uint64, name string, buf *goetty.ByteBuf) []byte {
+	buf.MarkWrite()
+	buf.Write(hack.StringToSlice(name))
+	buf.WriteUint64(wid)
+	buf.WriteUInt64(instanceID)
+	return buf.WrittenDataAfterMark()
 }
 
 type exprCtx struct {

@@ -144,10 +144,11 @@ message WorkflowInstanceSnapshot {
 message WorkflowInstanceWorkerState {
     uint64             tenantID   = 1;
     uint64             workflowID = 2;
-    uint32             index      = 3;
-    repeated StepState states     = 4 [(gogoproto.nullable) = false];
-    uint64             version    = 5;
-    int64              stopAt     = 6;
+    uint64             instanceID = 3;
+    uint32             index      = 4;
+    repeated StepState states     = 5 [(gogoproto.nullable) = false];
+    uint64             version    = 6;
+    int64              stopAt     = 7;
 }
 
 // CountState step count state

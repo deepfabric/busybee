@@ -74,7 +74,7 @@ func TestStopInstanceAndRestart(t *testing.T) {
 			bm = roaring.BitmapOf(1, 2, 3, 4, 5, 6, 7, 8, 9)
 		}
 
-		err = ng.StartInstance(metapb.Workflow{
+		_, err = ng.StartInstance(metapb.Workflow{
 			ID:       10000,
 			TenantID: 10001,
 			Name:     "test_wf",
@@ -146,7 +146,7 @@ func TestStartInstance(t *testing.T) {
 	time.Sleep(time.Second)
 
 	bm := roaring.BitmapOf(1, 2, 3, 4)
-	err = ng.StartInstance(metapb.Workflow{
+	_, err = ng.StartInstance(metapb.Workflow{
 		ID:       10000,
 		TenantID: 10001,
 		StopAt:   time.Now().Add(time.Second * 10).Unix(),
@@ -253,6 +253,70 @@ func TestStartInstance(t *testing.T) {
 	assert.Equal(t, 0, c, "TestStartInstance failed")
 }
 
+func TestTriggerMissing(t *testing.T) {
+	store, deferFunc := storage.NewTestStorage(t, false)
+	defer deferFunc()
+
+	ng, err := NewEngine(store, notify.NewQueueBasedNotifier(store))
+	assert.NoError(t, err, "TestTriggerMissing failed")
+	assert.NoError(t, ng.Start(), "TestTriggerMissing failed")
+
+	err = ng.TenantInit(10001, 1)
+	assert.NoError(t, err, "TestTriggerMissing failed")
+
+	bm := roaring.BitmapOf(1, 2, 3, 4)
+	instanceID, err := ng.StartInstance(metapb.Workflow{
+		ID:       10000,
+		TenantID: 10001,
+		Name:     "test_wf",
+		Steps: []metapb.Step{
+			metapb.Step{
+				Name: "step_start",
+				Execution: metapb.Execution{
+					Type: metapb.Timer,
+					Timer: &metapb.TimerExecution{
+						Condition: &metapb.Expr{
+							Value: []byte("{bm: func.wf_crowd}"),
+							Type:  metapb.BMResult,
+						},
+						Cron:     "*/20 * * * * ?", // every 20 seconds
+						NextStep: "step_end",
+					},
+				},
+			},
+			metapb.Step{
+				Name: "step_end",
+				Execution: metapb.Execution{
+					Type:   metapb.Direct,
+					Direct: &metapb.DirectExecution{},
+				},
+			},
+		},
+	}, metapb.RawLoader, util.MustMarshalBM(bm), 3)
+	assert.NoError(t, err, "TestTriggerMissing failed")
+
+	err = store.Set(timeStepLastTriggerKey(10000, instanceID, "step_start", goetty.NewByteBuf(32)),
+		goetty.Int64ToBytes(time.Now().Unix()-40))
+	assert.NoError(t, err, "TestTriggerMissing failed")
+
+	assert.NoError(t, waitTestWorkflow(ng, 10000, metapb.Running), "TestTriggerMissing failed")
+	c := 0
+	ng.(*engine).workers.Range(func(key, value interface{}) bool {
+		c++
+		return true
+	})
+	assert.Equal(t, 3, c, "TestTriggerMissing failed")
+
+	states, err := ng.InstanceCountState(10000)
+	assert.NoError(t, err, "TestTriggerMissing failed")
+	m := make(map[string]uint64)
+	for _, state := range states.States {
+		m[state.Step] = state.Count
+	}
+	assert.Equal(t, uint64(0), m["step_start"], "TestTriggerMissing failed")
+	assert.Equal(t, uint64(4), m["step_end"], "TestTriggerMissing failed")
+}
+
 func TestUpdateCrowd(t *testing.T) {
 	store, deferFunc := storage.NewTestStorage(t, false)
 	defer deferFunc()
@@ -269,7 +333,7 @@ func TestUpdateCrowd(t *testing.T) {
 	time.Sleep(time.Second)
 
 	bm := roaring.BitmapOf(2, 3, 4)
-	err = ng.StartInstance(metapb.Workflow{
+	_, err = ng.StartInstance(metapb.Workflow{
 		ID:       wid,
 		TenantID: tid,
 		Name:     "test_wf",
@@ -418,7 +482,7 @@ func TestUpdateWorkflow(t *testing.T) {
 	time.Sleep(time.Second)
 
 	bm := roaring.BitmapOf(1, 2, 3, 4)
-	err = ng.StartInstance(metapb.Workflow{
+	_, err = ng.StartInstance(metapb.Workflow{
 		ID:       wid,
 		TenantID: tid,
 		Name:     "test_wf",
@@ -677,7 +741,7 @@ func TestStartInstanceWithStepTTL(t *testing.T) {
 	time.Sleep(time.Second)
 
 	bm := roaring.BitmapOf(1, 2)
-	err = ng.StartInstance(metapb.Workflow{
+	_, err = ng.StartInstance(metapb.Workflow{
 		ID:       10000,
 		TenantID: 10001,
 		Name:     "test_wf",
@@ -882,7 +946,7 @@ func TestStartInstanceWithNotifyError(t *testing.T) {
 	time.Sleep(time.Second)
 
 	bm := roaring.BitmapOf(1, 2, 3, 4)
-	err = ng.StartInstance(metapb.Workflow{
+	_, err = ng.StartInstance(metapb.Workflow{
 		ID:       10000,
 		TenantID: 10001,
 		Name:     "test_wf",
@@ -977,4 +1041,20 @@ func TestStartInstanceWithNotifyError(t *testing.T) {
 	bm, err = ng.(*engine).loadBM(state.Loader, state.LoaderMeta)
 	assert.NoError(t, err, "TestStartInstance failed")
 	assert.Equal(t, uint64(3), bm.GetCardinality(), "TestStartInstance failed")
+}
+
+func waitTestWorkflow(ng Engine, wid uint64, state metapb.WorkflowInstanceState) error {
+	for {
+		instance, err := ng.LastInstance(wid)
+		if err != nil {
+			return err
+		}
+
+		if instance.State == state {
+			time.Sleep(time.Millisecond * 100)
+			return nil
+		}
+
+		time.Sleep(time.Microsecond * 10)
+	}
 }
