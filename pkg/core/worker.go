@@ -211,6 +211,7 @@ func (w *stateWorker) onEvent(offset uint64, items ...[]byte) error {
 			if w.matches(event.User.UserID) {
 				evt := *event.User
 				evt.WorkflowID = w.state.WorkflowID
+				evt.InstanceID = w.state.InstanceID
 				userEvents = append(userEvents, evt)
 			}
 		case metapb.UpdateCrowdType:
@@ -292,9 +293,11 @@ func (w *stateWorker) execBatch(batch *executionbatch) {
 			w.state.TenantID)
 
 		for _, nt := range batch.notifies {
-			logger.Infof("worker %s notify %s",
-				w.key,
-				nt.String())
+			if logger.DebugEnabled() {
+				logger.Infof("worker %s notify %s",
+					w.key,
+					nt.String())
+			}
 		}
 
 		w.retryDo("exec update state", batch, w.execUpdate)
@@ -535,6 +538,7 @@ func (w *stateWorker) doStepTimer(batch *executionbatch, idx int) {
 	err := w.steps[step.Step.Name].Execute(newExprCtx(metapb.UserEvent{
 		TenantID:   w.state.TenantID,
 		WorkflowID: w.state.WorkflowID,
+		InstanceID: w.state.InstanceID,
 	}, w, idx),
 		w.stepChanged, batch)
 	if err != nil {

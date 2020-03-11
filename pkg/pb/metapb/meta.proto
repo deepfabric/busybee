@@ -81,7 +81,8 @@ message UserEvent {
     uint32 userID     = 1;
     uint64 tenantID   = 2;
     uint64 workflowID = 3;
-    repeated KV data  = 4 [(gogoproto.nullable) = false];
+    uint64 instanceID = 4;
+    repeated KV data  = 5 [(gogoproto.nullable) = false];
 }
 
 // KV custom KV data
@@ -96,11 +97,12 @@ message Notify {
     bytes  crowd      = 2;
     uint64 tenantID   = 3;
     uint64 workflowID = 4;
-    string fromStep   = 5;
-    string fromAction = 6;
-    string toStep     = 7;
-    string toAction   = 8;
-    int32  ttl        = 9 [(gogoproto.customname) = "TTL"];
+    uint64 instanceID = 5;
+    string fromStep   = 6;
+    string fromAction = 7;
+    string toStep     = 8;
+    string toAction   = 9;
+    int32  ttl        = 10 [(gogoproto.customname) = "TTL"];
 }
 
 // Group shard group
