@@ -28,7 +28,6 @@ const (
 	stopAction = iota
 	timerAction
 	userEventAction
-	directAction
 	updateCrowdEventAction
 	updateWorkflowEventAction
 )
@@ -50,7 +49,7 @@ type stateWorker struct {
 	state        metapb.WorkflowInstanceWorkerState
 	totalCrowds  *roaring.Bitmap
 	stepCrowds   []*roaring.Bitmap
-	directSteps  map[string]struct{}
+	directSteps  map[string]string
 	steps        map[string]excution
 	entryActions map[string]string
 	leaveActions map[string]string
@@ -92,7 +91,7 @@ func newStateWorker(key string, state metapb.WorkflowInstanceWorkerState, eng En
 func (w *stateWorker) resetByState() error {
 	w.totalCrowds.Clear()
 	w.stepCrowds = w.stepCrowds[:0]
-	w.directSteps = make(map[string]struct{})
+	w.directSteps = make(map[string]string)
 	w.steps = make(map[string]excution)
 	w.entryActions = make(map[string]string)
 	w.leaveActions = make(map[string]string)
@@ -131,7 +130,7 @@ func (w *stateWorker) resetByState() error {
 
 		if stepState.Step.Execution.Type == metapb.Direct &&
 			stepState.Step.Execution.Direct.NextStep != "" {
-			w.directSteps[stepState.Step.Name] = struct{}{}
+			w.directSteps[stepState.Step.Name] = stepState.Step.Execution.Direct.NextStep
 		}
 	}
 
@@ -330,21 +329,18 @@ func (w *stateWorker) execNotify(batch *executionbatch) error {
 				changed.who.users.GetCardinality(),
 				nt)
 		}
-		// If the to action was direct, trigger next time
-		// if _, ok := w.directSteps[to]; ok {
-		// 	userEvents = append(userEvents, metapb.UserEvent{
-		// 		UserID:     batch.notifies[idx].UserID,
-		// 		TenantID:   batch.notifies[idx].TenantID,
-		// 		WorkflowID: w.state.WorkflowID,
-		// 		InstanceID: w.state.InstanceID,
-		// 	})
-		// }
 	}
 
 	return w.eng.Notifier().Notify(w.state.TenantID, w.buf, notifies...)
 }
 
 func (w *stateWorker) execUpdate(batch *executionbatch) error {
+	for idx := range w.state.States {
+		w.state.States[idx].TotalCrowd = w.stepCrowds[idx].GetCardinality()
+		w.state.States[idx].LoaderMeta = bbutil.MustMarshalBM(w.stepCrowds[idx])
+	}
+
+	w.state.Version++
 	req := rpcpb.AcquireUpdateInstanceStateShardRequest()
 	req.State = w.state
 	_, err := w.eng.Storage().ExecCommand(req)
@@ -353,7 +349,7 @@ func (w *stateWorker) execUpdate(batch *executionbatch) error {
 
 // this function will called by every step exectuion, if the target crowd or user
 // removed to other step.
-func (w *stateWorker) stepChanged(batch *executionbatch, ctx changedCtx) error {
+func (w *stateWorker) stepChanged(batch *executionbatch, ctx changedCtx) {
 	// the batch.crowd is the timer step to filter a crowd on the all workflow crowd,
 	// so it's contains other shards crowds.
 	if ctx.who.users != nil {
@@ -364,43 +360,73 @@ func (w *stateWorker) stepChanged(batch *executionbatch, ctx changedCtx) error {
 	for idx := range w.state.States {
 		changed := false
 		if w.state.States[idx].Step.Name == ctx.from {
-			changed = true
-			if nil != ctx.who.users {
-				afterChanged := bbutil.BMAndnot(w.stepCrowds[idx], ctx.who.users)
-				if w.stepCrowds[idx].GetCardinality() == afterChanged.GetCardinality() {
-					changed = false
-				} else {
-					w.stepCrowds[idx] = afterChanged
-				}
-			} else {
-				w.stepCrowds[idx].Remove(ctx.who.user)
-			}
+			changed = w.removeFromStep(idx, ctx.who)
 		} else if w.state.States[idx].Step.Name == ctx.to {
-			changed = true
+			changed = w.moveToStep(idx, ctx.who)
 			ctx.ttl = w.state.States[idx].Step.TTL
-			if nil != ctx.who.users {
-				afterChanged := bbutil.BMOr(w.stepCrowds[idx], ctx.who.users)
-				if w.stepCrowds[idx].GetCardinality() == afterChanged.GetCardinality() {
-					changed = false
-				} else {
-					w.stepCrowds[idx] = afterChanged
-				}
-			} else {
-				w.stepCrowds[idx].Add(ctx.who.user)
-			}
-
 			if changed {
 				batch.addChanged(ctx)
+				w.maybeTriggerDirectSteps(idx, batch, ctx)
 			}
 		}
+	}
+}
 
-		if changed {
-			w.state.States[idx].TotalCrowd = w.stepCrowds[idx].GetCardinality()
-			w.state.States[idx].LoaderMeta = bbutil.MustMarshalBM(w.stepCrowds[idx])
-			w.state.Version++
+func (w *stateWorker) maybeTriggerDirectSteps(idx int, batch *executionbatch, ctx changedCtx) {
+	if !w.isDirectStep(ctx.to) {
+		return
+	}
+
+	from := ctx.to
+	to := w.directSteps[from]
+	for {
+		batch.addChanged(changedCtx{from, to, ctx.who, 0})
+
+		if !w.isDirectStep(to) {
+			break
+		}
+		from = to
+		to = w.directSteps[from]
+	}
+
+	w.removeFromStep(idx, ctx.who)
+	for idx := range w.state.States {
+		if w.state.States[idx].Step.Name == to {
+			w.moveToStep(idx, ctx.who)
+			return
 		}
 	}
-	return nil
+}
+
+func (w *stateWorker) removeFromStep(idx int, target who) bool {
+	changed := false
+	if nil != target.users {
+		afterChanged := bbutil.BMAndnot(w.stepCrowds[idx], target.users)
+		if w.stepCrowds[idx].GetCardinality() == afterChanged.GetCardinality() {
+			changed = false
+		} else {
+			w.stepCrowds[idx] = afterChanged
+		}
+	} else {
+		w.stepCrowds[idx].Remove(target.user)
+	}
+	return changed
+}
+
+func (w *stateWorker) moveToStep(idx int, target who) bool {
+	changed := true
+	if nil != target.users {
+		afterChanged := bbutil.BMOr(w.stepCrowds[idx], target.users)
+		if w.stepCrowds[idx].GetCardinality() == afterChanged.GetCardinality() {
+			changed = false
+		} else {
+			w.stepCrowds[idx] = afterChanged
+		}
+	} else {
+		w.stepCrowds[idx].Add(target.user)
+	}
+
+	return changed
 }
 
 func (w *stateWorker) doUpdateCrowd(crowd []byte) error {
@@ -440,7 +466,7 @@ func (w *stateWorker) doUpdateWorkflow(workflow metapb.Workflow) error {
 		oldCrowds[step.Step.Name] = w.stepCrowds[idx]
 	}
 
-	w.directSteps = make(map[string]struct{})
+	w.directSteps = make(map[string]string)
 	w.steps = make(map[string]excution)
 	w.entryActions = make(map[string]string)
 	w.leaveActions = make(map[string]string)
@@ -474,7 +500,7 @@ func (w *stateWorker) doUpdateWorkflow(workflow metapb.Workflow) error {
 
 		if step.Execution.Type == metapb.Direct &&
 			step.Execution.Direct.NextStep != "" {
-			w.directSteps[step.Name] = struct{}{}
+			w.directSteps[step.Name] = step.Execution.Direct.NextStep
 		}
 
 		if bm, ok := oldCrowds[step.Name]; ok {
@@ -601,6 +627,11 @@ func timeStepLastTriggerKey(wid, instanceID uint64, name string, buf *goetty.Byt
 	buf.WriteUint64(wid)
 	buf.WriteUInt64(instanceID)
 	return buf.WrittenDataAfterMark()
+}
+
+func (w *stateWorker) isDirectStep(name string) bool {
+	_, ok := w.directSteps[name]
+	return ok
 }
 
 func (w *stateWorker) retryDo(thing string, batch *executionbatch, fn func(*executionbatch) error) {

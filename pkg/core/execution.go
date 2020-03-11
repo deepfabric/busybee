@@ -45,7 +45,7 @@ func (ctx *changedCtx) add(changed changedCtx) {
 	}
 }
 
-type stepChangedFunc func(batch *executionbatch, ctx changedCtx) error
+type stepChangedFunc func(batch *executionbatch, ctx changedCtx)
 
 type excution interface {
 	Execute(expr.Ctx, stepChangedFunc, *executionbatch, who) error
@@ -156,7 +156,8 @@ type directExecution struct {
 
 func (e *directExecution) Execute(ctx expr.Ctx, cb stepChangedFunc,
 	batch *executionbatch, target who) error {
-	return cb(batch, changedCtx{e.step, e.nextStep, target, 0})
+	cb(batch, changedCtx{e.step, e.nextStep, target, 0})
+	return nil
 }
 
 type conditionExecution struct {
@@ -192,7 +193,8 @@ func (e *conditionExecution) executeWithMatches(ctx expr.Ctx, cb stepChangedFunc
 		return true, nil
 	}
 
-	return true, cb(batch, changedCtx{e.step, e.nextStep, target, 0})
+	cb(batch, changedCtx{e.step, e.nextStep, target, 0})
+	return true, nil
 }
 
 func (e *conditionExecution) Execute(ctx expr.Ctx, cb stepChangedFunc,
@@ -221,7 +223,8 @@ func (e *conditionExecution) Execute(ctx expr.Ctx, cb stepChangedFunc,
 		return nil
 	}
 
-	return cb(batch, changedCtx{e.step, e.nextStep, target, 0})
+	cb(batch, changedCtx{e.step, e.nextStep, target, 0})
+	return nil
 }
 
 type branchExecution struct {
@@ -259,5 +262,6 @@ func (e *parallelExecution) Execute(ctx expr.Ctx, cb stepChangedFunc,
 		}
 	}
 
-	return cb(batch, changedCtx{e.step, e.nextStep, target, 0})
+	cb(batch, changedCtx{e.step, e.nextStep, target, 0})
+	return nil
 }
