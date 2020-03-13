@@ -210,9 +210,10 @@ message Execution {
 
 // TimerExecution is a timer performable operation
 message TimerExecution {
-    Expr   condition  = 1;
-    string cron       = 2;
-    string nextStep   = 3;
+    Expr   condition           = 1;
+    string cron                = 2;
+    string nextStep            = 3;
+    bool   useStepCrowdToDrive = 4;
 }
 
 // ParallelExecution is a parallel execution

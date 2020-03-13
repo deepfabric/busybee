@@ -1205,6 +1205,61 @@ func TestTransaction(t *testing.T) {
 	assert.Equal(t, uint64(0), m["step_end_else"], "TestTransaction failed")
 }
 
+func TestTimerWithUseStepCrowdToDrive(t *testing.T) {
+	store, deferFunc := storage.NewTestStorage(t, false)
+	defer deferFunc()
+
+	tid := uint64(10001)
+	wid := uint64(10000)
+
+	ng, err := NewEngine(store, notify.NewQueueBasedNotifier(store))
+	assert.NoError(t, err, "TestTimerWithUseStepCrowdToDrive failed")
+	assert.NoError(t, ng.Start(), "TestTimerWithUseStepCrowdToDrive failed")
+
+	err = ng.TenantInit(tid, 1)
+	assert.NoError(t, err, "TestTimerWithUseStepCrowdToDrive failed")
+	time.Sleep(time.Second)
+
+	bm := roaring.BitmapOf(1, 2)
+	_, err = ng.StartInstance(metapb.Workflow{
+		ID:       wid,
+		TenantID: tid,
+		Name:     "test_wf",
+		Steps: []metapb.Step{
+			metapb.Step{
+				Name: "step_start",
+				Execution: metapb.Execution{
+					Type: metapb.Timer,
+					Timer: &metapb.TimerExecution{
+						Cron:                "*/1 * * * * ?",
+						UseStepCrowdToDrive: true,
+						NextStep:            "step_end",
+					},
+				},
+			},
+			metapb.Step{
+				Name: "step_end",
+				Execution: metapb.Execution{
+					Type:   metapb.Direct,
+					Direct: &metapb.DirectExecution{},
+				},
+			},
+		},
+	}, metapb.RawLoader, util.MustMarshalBM(bm), 3)
+	assert.NoError(t, err, "TestTimerWithUseStepCrowdToDrive failed")
+	assert.NoError(t, waitTestWorkflow(ng, 10000, metapb.Running), "TestTimerWithUseStepCrowdToDrive failed")
+
+	time.Sleep(time.Second * 2)
+	states, err := ng.InstanceCountState(wid)
+	assert.NoError(t, err, "TestTimerWithUseStepCrowdToDrive failed")
+	m := make(map[string]uint64)
+	for _, state := range states.States {
+		m[state.Step] = state.Count
+	}
+	assert.Equal(t, uint64(0), m["step_start"], "TestTimerWithUseStepCrowdToDrive failed")
+	assert.Equal(t, uint64(2), m["step_end"], "TestTimerWithUseStepCrowdToDrive failed")
+}
+
 type errorNotify struct {
 	times    int
 	max      int

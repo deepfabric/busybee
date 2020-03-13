@@ -59,7 +59,6 @@ func (tran *transaction) start(w *stateWorker) {
 
 func (tran *transaction) doStepTimerEvent(item item) {
 	idx := item.value.(int)
-	logger.Infof("worker %s step timer %s", idx)
 	if tran.err != nil {
 		return
 	}
@@ -74,7 +73,16 @@ func (tran *transaction) doStepTimerEvent(item item) {
 		WorkflowID: tran.w.state.WorkflowID,
 		InstanceID: tran.w.state.InstanceID,
 	}, tran.w, idx)
-	err := tran.w.steps[step.Step.Name].Execute(ctx, tran, who{})
+
+	target := who{}
+	if step.Step.Execution.Timer.UseStepCrowdToDrive {
+		if tran.stepCrowds[idx].GetCardinality() <= 0 {
+			return
+		}
+		target.users = tran.stepCrowds[idx].Clone()
+	}
+
+	err := tran.w.steps[step.Step.Name].Execute(ctx, tran, target)
 	if err != nil {
 		metric.IncWorkflowWorkerFailed()
 		logger.Errorf("worker %s trigger timer failed with %+v",

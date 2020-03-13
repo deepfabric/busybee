@@ -111,10 +111,12 @@ func (w *stateWorker) resetByState() error {
 			if err := w.maybeTriggerIfMissing(stepState, idx); err != nil {
 				return err
 			}
+
+			i := idx
 			id, err := w.eng.AddCronJob(stepState.Step.Execution.Timer.Cron, func() {
 				w.queue.Put(item{
 					action: timerAction,
-					value:  idx,
+					value:  i,
 				})
 			})
 			if err != nil {
@@ -410,18 +412,18 @@ func (w *stateWorker) doUpdateWorkflow(workflow metapb.Workflow) error {
 
 	var newStates []metapb.StepState
 	var newCrowds []*roaring.Bitmap
-	for _, step := range workflow.Steps {
+	for idx, step := range workflow.Steps {
 		exec, err := newExcution(step.Name, step.Execution)
 		if err != nil {
 			return err
 		}
 
 		if step.Execution.Timer != nil {
-			name := step.Name
+			i := idx
 			id, err := w.eng.AddCronJob(step.Execution.Timer.Cron, func() {
 				w.queue.Put(item{
 					action: timerAction,
-					value:  name,
+					value:  i,
 				})
 			})
 			if err != nil {
