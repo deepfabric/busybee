@@ -229,6 +229,15 @@ func (eng *engine) StartInstance(workflow metapb.Workflow, loader metapb.BMLoade
 		return 0, err
 	}
 
+	value, err := eng.store.Get(storage.QueueMetadataKey(workflow.TenantID, metapb.TenantInputGroup))
+	if err != nil {
+		metric.IncStorageFailed()
+		return 0, err
+	}
+	if len(value) == 0 {
+		return 0, fmt.Errorf("%d not created", workflow.TenantID)
+	}
+
 	logger.Infof("workflow-%d start load bitmap crowd",
 		workflow.ID)
 	bm, err := eng.loadBM(loader, crowdMeta)
