@@ -579,6 +579,7 @@ func TestUpdateCrowd(t *testing.T) {
 	assert.Equal(t, uint64(0), m["step_end_1"], "TestUpdateCrowd failed")
 	assert.Equal(t, uint64(3), m["step_end_else"], "TestUpdateCrowd failed")
 
+	// 2,3,4 -> 1,2,3,5
 	err = ng.UpdateCrowd(wid, metapb.RawLoader, util.MustMarshalBM(roaring.BitmapOf(1, 2, 3, 5)))
 	assert.NoError(t, err, "TestUpdateCrowd failed")
 
@@ -1053,6 +1054,155 @@ func TestStartInstanceWithStepTTL(t *testing.T) {
 	assert.Equal(t, uint64(0), m["step_ttl_start"], "TestStartInstanceWithStepTTL failed")
 	assert.Equal(t, uint64(1), m["step_ttl_end"], "TestStartInstanceWithStepTTL failed")
 	assert.Equal(t, uint64(1), m["step_end"], "TestStartInstanceWithStepTTL failed")
+}
+
+func TestTransaction(t *testing.T) {
+	store, deferFunc := storage.NewTestStorage(t, false)
+	defer deferFunc()
+
+	tid := uint64(10001)
+	wid := uint64(10000)
+
+	ng, err := NewEngine(store, notify.NewQueueBasedNotifier(store))
+	assert.NoError(t, err, "TestTransaction failed")
+	assert.NoError(t, ng.Start(), "TestTransaction failed")
+
+	err = ng.TenantInit(tid, 1)
+	assert.NoError(t, err, "TestTransaction failed")
+	time.Sleep(time.Second)
+
+	bm := roaring.BitmapOf(1, 2)
+	_, err = ng.StartInstance(metapb.Workflow{
+		ID:       wid,
+		TenantID: tid,
+		Name:     "test_wf",
+		Steps: []metapb.Step{
+			metapb.Step{
+				Name: "step_start",
+				Execution: metapb.Execution{
+					Type: metapb.Branch,
+					Branches: []metapb.ConditionExecution{
+						metapb.ConditionExecution{
+							Condition: metapb.Expr{
+								Value: []byte("{num: event.uid} == 1"),
+							},
+							NextStep: "step_end_1",
+						},
+						metapb.ConditionExecution{
+							Condition: metapb.Expr{
+								Value: []byte("{num: kv.uid} == 2"),
+							},
+							NextStep: "step_end_2",
+						},
+						metapb.ConditionExecution{
+							Condition: metapb.Expr{
+								Value: []byte("1 == 1"),
+							},
+							NextStep: "step_end_else",
+						},
+					},
+				},
+			},
+			metapb.Step{
+				Name: "step_end_1",
+				Execution: metapb.Execution{
+					Type:   metapb.Direct,
+					Direct: &metapb.DirectExecution{},
+				},
+			},
+			metapb.Step{
+				Name: "step_end_2",
+				Execution: metapb.Execution{
+					Type:   metapb.Direct,
+					Direct: &metapb.DirectExecution{},
+				},
+			},
+			metapb.Step{
+				Name: "step_end_else",
+				Execution: metapb.Execution{
+					Type:   metapb.Direct,
+					Direct: &metapb.DirectExecution{},
+				},
+			},
+		},
+	}, metapb.RawLoader, util.MustMarshalBM(bm), 3)
+	assert.NoError(t, err, "TestTransaction failed")
+	assert.NoError(t, waitTestWorkflow(ng, 10000, metapb.Running), "TestTransaction failed")
+
+	changed := make(chan interface{})
+	ng.Storage().Set([]byte("uid"), []byte("abc"))
+	go func() {
+		time.Sleep(time.Second * 3)
+		ng.Storage().Set([]byte("uid"), []byte("2"))
+		changed <- 0
+	}()
+
+	err = ng.Storage().PutToQueue(tid, 0, metapb.TenantInputGroup, protoc.MustMarshal(&metapb.Event{
+		Type: metapb.UserType,
+		User: &metapb.UserEvent{
+			TenantID: tid,
+			UserID:   1,
+			Data: []metapb.KV{
+				metapb.KV{
+					Key:   []byte("uid"),
+					Value: []byte("1"),
+				},
+			},
+		},
+	}), protoc.MustMarshal(&metapb.Event{
+		Type: metapb.UpdateCrowdType,
+		UpdateCrowd: &metapb.UpdateCrowdEvent{
+			WorkflowID: wid,
+			Index:      0,
+			Crowd:      util.MustMarshalBM(roaring.BitmapOf(1, 2)),
+		},
+	}), protoc.MustMarshal(&metapb.Event{
+		Type: metapb.UpdateCrowdType,
+		UpdateCrowd: &metapb.UpdateCrowdEvent{
+			WorkflowID: wid,
+			Index:      1,
+			Crowd:      util.MustMarshalBM(roaring.BitmapOf(1, 2)),
+		},
+	}), protoc.MustMarshal(&metapb.Event{
+		Type: metapb.UpdateCrowdType,
+		UpdateCrowd: &metapb.UpdateCrowdEvent{
+			WorkflowID: wid,
+			Index:      2,
+			Crowd:      util.MustMarshalBM(roaring.BitmapOf(1, 2)),
+		},
+	}), protoc.MustMarshal(&metapb.Event{
+		Type: metapb.UserType,
+		User: &metapb.UserEvent{
+			TenantID: tid,
+			UserID:   2,
+		},
+	}))
+	assert.NoError(t, err, "TestTransaction failed")
+	time.Sleep(time.Second * 1)
+
+	states, err := ng.InstanceCountState(wid)
+	assert.NoError(t, err, "TestTransaction failed")
+	m := make(map[string]uint64)
+	for _, state := range states.States {
+		m[state.Step] = state.Count
+	}
+	assert.Equal(t, uint64(1), m["step_start"], "TestTransaction failed")
+	assert.Equal(t, uint64(1), m["step_end_1"], "TestTransaction failed")
+	assert.Equal(t, uint64(0), m["step_end_2"], "TestTransaction failed")
+	assert.Equal(t, uint64(0), m["step_end_else"], "TestTransaction failed")
+
+	<-changed
+	time.Sleep(time.Second)
+	states, err = ng.InstanceCountState(wid)
+	assert.NoError(t, err, "TestTransaction failed")
+	m = make(map[string]uint64)
+	for _, state := range states.States {
+		m[state.Step] = state.Count
+	}
+	assert.Equal(t, uint64(0), m["step_start"], "TestTransaction failed")
+	assert.Equal(t, uint64(1), m["step_end_1"], "TestTransaction failed")
+	assert.Equal(t, uint64(1), m["step_end_2"], "TestTransaction failed")
+	assert.Equal(t, uint64(0), m["step_end_else"], "TestTransaction failed")
 }
 
 type errorNotify struct {

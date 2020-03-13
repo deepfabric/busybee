@@ -25,7 +25,7 @@ func init() {
 // Consumer a simple queue consumer
 type Consumer interface {
 	// Start start the consumer
-	Start(batch, concurrency uint64, fn func(uint64, ...[]byte) error)
+	Start(batch, concurrency uint64, fn func(uint64, ...[]byte) (uint64, error))
 	// Stop stop consumer
 	Stop()
 }
@@ -63,7 +63,7 @@ func NewConsumer(id uint64, group metapb.Group, store storage.Storage, name []by
 	}, nil
 }
 
-func (c *consumer) Start(batch, concurrency uint64, fn func(uint64, ...[]byte) error) {
+func (c *consumer) Start(batch, concurrency uint64, fn func(uint64, ...[]byte) (uint64, error)) {
 	for i := uint64(0); i < c.partitions; i++ {
 		ctx, cancel := context.WithCancel(context.Background())
 		c.startPartition(ctx, i, batch, concurrency, fn)
@@ -77,7 +77,7 @@ func (c *consumer) Stop() {
 	}
 }
 
-func (c *consumer) startPartition(ctx context.Context, idx, batch, concurrency uint64, fn func(uint64, ...[]byte) error) {
+func (c *consumer) startPartition(ctx context.Context, idx, batch, concurrency uint64, fn func(uint64, ...[]byte) (uint64, error)) {
 	offset := uint64(0)
 	key := storage.PartitionKey(c.id, idx)
 	go func() {
@@ -115,10 +115,14 @@ func (c *consumer) startPartition(ctx context.Context, idx, batch, concurrency u
 					continue
 				}
 
-				err = fn(resp.LastValue, resp.Values...)
+				completedOffset, err := fn(resp.LastValue, resp.Values...)
+				if completedOffset > offset {
+					offset = completedOffset
+				}
 				if err != nil {
-					logger.Errorf("%s handle failed with %+v",
+					logger.Errorf("%s handle completed at %d, failed with %+v",
 						string(c.consumer),
+						completedOffset,
 						err)
 					continue
 				}

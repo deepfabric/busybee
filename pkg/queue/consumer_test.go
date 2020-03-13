@@ -76,7 +76,7 @@ func TestConsumer(t *testing.T) {
 
 	var lock sync.Mutex
 	var events []metapb.UserEvent
-	c.Start(3, 0, func(offset uint64, data ...[]byte) error {
+	c.Start(3, 0, func(offset uint64, data ...[]byte) (uint64, error) {
 		lock.Lock()
 		defer lock.Unlock()
 
@@ -85,7 +85,7 @@ func TestConsumer(t *testing.T) {
 			protoc.MustUnmarshal(evt, v)
 			events = append(events, *evt.User)
 		}
-		return nil
+		return offset, nil
 	})
 
 	time.Sleep(time.Second * 5)

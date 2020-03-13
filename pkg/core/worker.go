@@ -73,7 +73,7 @@ func newStateWorker(key string, state metapb.WorkflowInstanceWorkerState, eng En
 		state:       state,
 		eng:         eng,
 		buf:         goetty.NewByteBuf(32),
-		totalCrowds: bbutil.AcquireBitmap(),
+		totalCrowds: acquireBM(),
 		queue:       task.New(1024),
 		consumer:    consumer,
 		tenant:      string(format.UInt64ToString(state.TenantID)),
@@ -97,7 +97,8 @@ func (w *stateWorker) resetByState() error {
 	w.leaveActions = make(map[string]string)
 
 	for idx, stepState := range w.state.States {
-		bm := bbutil.MustParseBM(stepState.LoaderMeta)
+		bm := acquireBM()
+		bbutil.MustParseBMTo(stepState.LoaderMeta, bm)
 		w.stepCrowds = append(w.stepCrowds, bm)
 		w.totalCrowds.Or(bm)
 
@@ -152,63 +153,17 @@ func (w *stateWorker) matches(uid uint32) bool {
 	return w.totalCrowds.Contains(uid)
 }
 
-func (w *stateWorker) run() {
-	go func() {
-		items := make([]interface{}, workerBatch, workerBatch)
-		batch := newExecutionbatch()
-
-		for {
-			n, err := w.queue.Get(workerBatch, items)
-			if err != nil {
-				logger.Fatalf("BUG: fetch from work queue failed with %+v", err)
-			}
-
-			w.buf.Clear()
-			for i := int64(0); i < n; i++ {
-				value := items[i].(item)
-				if value.action == stopAction {
-					w.consumer.Stop()
-
-					for _, v := range w.queue.Dispose() {
-						(v.(item).cb).complete(task.ErrDisposed)
-					}
-
-					for _, id := range w.cronIDs {
-						w.eng.StopCronJob(id)
-					}
-					logger.Infof("worker %s stopped", w.key)
-					return
-				}
-
-				switch value.action {
-				case timerAction:
-					w.doStepTimer(batch, value.value.(int))
-				case userEventAction:
-					batch.cbs = append(batch.cbs, value.cb)
-					w.doStepEvents(value.value.([]metapb.UserEvent), batch)
-				case updateCrowdEventAction:
-					value.cb.complete(w.doUpdateCrowd(value.value.([]byte)))
-				case updateWorkflowEventAction:
-					value.cb.complete(w.doUpdateWorkflow(value.value.(metapb.Workflow)))
-				}
-			}
-
-			w.execBatch(batch)
-		}
-	}()
-
-	w.consumer.Start(uint64(workerBatch), 0, w.onEvent)
-	logger.Infof("worker %s started", w.key)
-}
-
-func (w *stateWorker) onEvent(offset uint64, items ...[]byte) error {
-	logger.Debugf("worker %s consumer from queue, offset %d, %d items",
+func (w *stateWorker) onEvent(maxOffset uint64, items ...[]byte) (uint64, error) {
+	logger.Debugf("worker %s consumer from queue, last offset %d, %d items",
 		w.key,
-		offset,
+		maxOffset,
 		len(items))
 
+	offset := maxOffset - uint64(len(items)) + 1
+	completed := uint64(0)
+
 	var event metapb.Event
-	var userEvents []metapb.UserEvent
+	var events []metapb.UserEvent
 	for _, item := range items {
 		event.Reset()
 		protoc.MustUnmarshal(&event, item)
@@ -222,91 +177,180 @@ func (w *stateWorker) onEvent(offset uint64, items ...[]byte) error {
 				evt := *event.User
 				evt.WorkflowID = w.state.WorkflowID
 				evt.InstanceID = w.state.InstanceID
-				userEvents = append(userEvents, evt)
+				events = append(events, evt)
 			}
 		case metapb.UpdateCrowdType:
 			if event.UpdateCrowd.WorkflowID == w.state.WorkflowID &&
 				event.UpdateCrowd.Index == w.state.Index {
-				err := w.doSystemEvent(updateCrowdEventAction,
-					event.UpdateCrowd.Crowd, userEvents)
-				if err != nil {
-					return err
+				if len(events) > 0 {
+					err := w.doEvent(userEventAction, events)
+					if err != nil {
+						return completed, err
+					}
+
+					completed = offset - 1
+					events = events[:0]
 				}
-				userEvents = userEvents[:0]
+
+				err := w.doEvent(updateCrowdEventAction, event.UpdateCrowd.Crowd)
+				if err != nil {
+					return completed, err
+				}
+				completed = offset
 			}
 		case metapb.UpdateWorkflowType:
 			if event.UpdateWorkflow.Workflow.ID == w.state.WorkflowID {
-				err := w.doSystemEvent(updateWorkflowEventAction,
-					event.UpdateWorkflow.Workflow, userEvents)
-				if err != nil {
-					return err
+				if len(events) > 0 {
+					err := w.doEvent(userEventAction, events)
+					if err != nil {
+						return completed, err
+					}
+
+					completed = offset - 1
+					events = events[:0]
 				}
-				userEvents = userEvents[:0]
+
+				err := w.doEvent(updateWorkflowEventAction, event.UpdateWorkflow.Workflow)
+				if err != nil {
+					return completed, err
+				}
+				completed = offset
 			}
 		}
+
+		offset++
 	}
 
-	if len(userEvents) > 0 {
-		return w.doEvent(userEventAction, userEvents)
+	if len(events) > 0 {
+		err := w.doEvent(userEventAction, events)
+		if err != nil {
+			return completed, err
+		}
 	}
 
 	if len(items) > 0 {
 		metric.IncEventHandled(len(items), w.tenant, metapb.TenantInputGroup)
 	}
-	return nil
-}
 
-func (w *stateWorker) doSystemEvent(action int, data interface{}, userEvents []metapb.UserEvent) error {
-	if len(userEvents) > 0 {
-		err := w.doEvent(userEventAction, userEvents)
-		if err != nil {
-			return err
-		}
-	}
-
-	return w.doEvent(action, data)
+	return maxOffset, nil
 }
 
 func (w *stateWorker) doEvent(action int, data interface{}) error {
 	cb := acquireCB()
-	cb.reset()
+	defer releaseCB(cb)
+
 	err := w.queue.Put(item{
 		action: action,
 		value:  data,
 		cb:     cb,
 	})
 	if err != nil {
-		releaseCB(cb)
 		return err
 	}
 
-	err = cb.wait()
-	releaseCB(cb)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return cb.wait()
 }
 
-func (w *stateWorker) execBatch(batch *executionbatch) {
-	if len(batch.changes) > 0 {
-		w.retryDo("exec notify", batch, w.execNotify)
+func (w *stateWorker) run() {
+	go func() {
+		items := make([]interface{}, workerBatch, workerBatch)
+		tran := newTransaction()
 
-		w.retryDo("exec update state", batch, w.execUpdate)
+		for {
+			n, err := w.queue.Get(workerBatch, items)
+			if err != nil {
+				logger.Fatalf("BUG: fetch from work queue failed with %+v", err)
+			}
+
+			w.buf.Clear()
+			tran.start(w)
+			for i := int64(0); i < n; i++ {
+				value := items[i].(item)
+				if value.action == stopAction {
+					w.consumer.Stop()
+
+					for _, v := range w.queue.Dispose() {
+						(v.(item).cb).complete(task.ErrDisposed)
+					}
+
+					for _, id := range w.cronIDs {
+						w.eng.StopCronJob(id)
+					}
+
+					for _, bm := range w.stepCrowds {
+						releaseBM(bm)
+					}
+					releaseBM(w.totalCrowds)
+					logger.Infof("worker %s stopped", w.key)
+					return
+				}
+
+				switch value.action {
+				case timerAction:
+					tran.doStepTimerEvent(value)
+				case userEventAction:
+					tran.doStepUserEvents(value)
+				case updateCrowdEventAction:
+					tran.doUpdateCrowd(value)
+				case updateWorkflowEventAction:
+					err = tran.err
+					w.completeTransaction(tran)
+					if err != nil {
+						value.cb.complete(err)
+					} else {
+						value.cb.complete(w.doUpdateWorkflow(value.value.(metapb.Workflow)))
+					}
+
+					tran.start(w)
+				}
+
+				if err != nil {
+					break
+				}
+			}
+
+			w.completeTransaction(tran)
+		}
+	}()
+
+	w.consumer.Start(uint64(workerBatch), 0, w.onEvent)
+	logger.Infof("worker %s started", w.key)
+}
+
+func (w *stateWorker) completeTransaction(tran *transaction) {
+	defer tran.reset()
+
+	if tran.err != nil {
+		for _, c := range tran.cbs {
+			c.complete(tran.err)
+		}
+		return
+	}
+
+	w.totalCrowds.Clear()
+	w.totalCrowds.Or(tran.totalCrowds)
+	for idx := range w.stepCrowds {
+		w.stepCrowds[idx].Clear()
+		w.stepCrowds[idx].Or(tran.stepCrowds[idx])
+	}
+
+	if len(tran.changes) > 0 {
+		w.retryDo("exec notify", tran, w.execNotify)
+	}
+
+	if tran.crowdChanged {
+		w.retryDo("exec update state", tran, w.execUpdate)
 		logger.Infof("worker %s state update to version %d",
 			w.key,
 			w.state.Version)
 	}
 
-	for _, c := range batch.cbs {
+	for _, c := range tran.cbs {
 		c.complete(nil)
 	}
-
-	batch.reset()
 }
 
-func (w *stateWorker) execNotify(batch *executionbatch) error {
+func (w *stateWorker) execNotify(batch *transaction) error {
 	notifies := make([]metapb.Notify, 0, len(batch.changes))
 	for _, changed := range batch.changes {
 		nt := metapb.Notify{
@@ -334,125 +378,18 @@ func (w *stateWorker) execNotify(batch *executionbatch) error {
 	return w.eng.Notifier().Notify(w.state.TenantID, w.buf, notifies...)
 }
 
-func (w *stateWorker) execUpdate(batch *executionbatch) error {
+func (w *stateWorker) execUpdate(batch *transaction) error {
+	w.state.Version++
 	for idx := range w.state.States {
-		w.state.States[idx].TotalCrowd = w.stepCrowds[idx].GetCardinality()
+		w.state.States[idx].Loader = metapb.RawLoader
 		w.state.States[idx].LoaderMeta = bbutil.MustMarshalBM(w.stepCrowds[idx])
+		w.state.States[idx].TotalCrowd = w.stepCrowds[idx].GetCardinality()
 	}
 
-	w.state.Version++
 	req := rpcpb.AcquireUpdateInstanceStateShardRequest()
 	req.State = w.state
 	_, err := w.eng.Storage().ExecCommand(req)
 	return err
-}
-
-// this function will called by every step exectuion, if the target crowd or user
-// removed to other step.
-func (w *stateWorker) stepChanged(batch *executionbatch, ctx changedCtx) {
-	// the batch.crowd is the timer step to filter a crowd on the all workflow crowd,
-	// so it's contains other shards crowds.
-	if ctx.who.users != nil {
-		// filter other shard state crowds
-		ctx.who.users.And(w.totalCrowds)
-	}
-
-	for idx := range w.state.States {
-		changed := false
-		if w.state.States[idx].Step.Name == ctx.from {
-			changed = w.removeFromStep(idx, ctx.who)
-		} else if w.state.States[idx].Step.Name == ctx.to {
-			changed = w.moveToStep(idx, ctx.who)
-			ctx.ttl = w.state.States[idx].Step.TTL
-			if changed {
-				batch.addChanged(ctx)
-				w.maybeTriggerDirectSteps(idx, batch, ctx)
-			}
-		}
-	}
-}
-
-func (w *stateWorker) maybeTriggerDirectSteps(idx int, batch *executionbatch, ctx changedCtx) {
-	if !w.isDirectStep(ctx.to) {
-		return
-	}
-
-	from := ctx.to
-	to := w.directSteps[from]
-	for {
-		batch.addChanged(changedCtx{from, to, ctx.who, 0})
-
-		if !w.isDirectStep(to) {
-			break
-		}
-		from = to
-		to = w.directSteps[from]
-	}
-
-	w.removeFromStep(idx, ctx.who)
-	for idx := range w.state.States {
-		if w.state.States[idx].Step.Name == to {
-			w.moveToStep(idx, ctx.who)
-			return
-		}
-	}
-}
-
-func (w *stateWorker) removeFromStep(idx int, target who) bool {
-	changed := false
-	if nil != target.users {
-		afterChanged := bbutil.BMAndnot(w.stepCrowds[idx], target.users)
-		if w.stepCrowds[idx].GetCardinality() == afterChanged.GetCardinality() {
-			changed = false
-		} else {
-			w.stepCrowds[idx] = afterChanged
-		}
-	} else {
-		w.stepCrowds[idx].Remove(target.user)
-	}
-	return changed
-}
-
-func (w *stateWorker) moveToStep(idx int, target who) bool {
-	changed := true
-	if nil != target.users {
-		afterChanged := bbutil.BMOr(w.stepCrowds[idx], target.users)
-		if w.stepCrowds[idx].GetCardinality() == afterChanged.GetCardinality() {
-			changed = false
-		} else {
-			w.stepCrowds[idx] = afterChanged
-		}
-	} else {
-		w.stepCrowds[idx].Add(target.user)
-	}
-
-	return changed
-}
-
-func (w *stateWorker) doUpdateCrowd(crowd []byte) error {
-	old := w.totalCrowds.GetCardinality()
-	bm := bbutil.MustParseBM(crowd)
-	new := bbutil.BMMinus(bm, w.totalCrowds)
-	w.totalCrowds = bm.Clone()
-	for idx, sc := range w.stepCrowds {
-		if idx == 0 {
-			sc.Or(new)
-		}
-		sc.And(bm)
-	}
-	for idx := range w.state.States {
-		w.state.States[idx].TotalCrowd = w.stepCrowds[idx].GetCardinality()
-		w.state.States[idx].Loader = metapb.RawLoader
-		w.state.States[idx].LoaderMeta = bbutil.MustMarshalBM(w.stepCrowds[idx])
-	}
-	w.state.Version++
-
-	w.retryDo("exec update crowd", nil, w.execUpdate)
-	logger.Infof("worker %s crowd updated: %d -> %d",
-		w.key,
-		old,
-		w.totalCrowds.GetCardinality())
-	return nil
 }
 
 func (w *stateWorker) doUpdateWorkflow(workflow metapb.Workflow) error {
@@ -504,12 +441,14 @@ func (w *stateWorker) doUpdateWorkflow(workflow metapb.Workflow) error {
 		}
 
 		if bm, ok := oldCrowds[step.Name]; ok {
-			newCrowds = append(newCrowds, bm)
+			newBM := acquireBM()
+			newBM.Or(bm)
+			newCrowds = append(newCrowds, newBM)
 			newStates = append(newStates, metapb.StepState{
 				Step:       step,
-				TotalCrowd: bm.GetCardinality(),
+				TotalCrowd: newBM.GetCardinality(),
 				Loader:     metapb.RawLoader,
-				LoaderMeta: bbutil.MustMarshalBM(bm),
+				LoaderMeta: bbutil.MustMarshalBM(newBM),
 			})
 			continue
 		}
@@ -520,61 +459,17 @@ func (w *stateWorker) doUpdateWorkflow(workflow metapb.Workflow) error {
 		})
 		newCrowds = append(newCrowds, bbutil.AcquireBitmap())
 	}
-	w.stepCrowds = newCrowds
 
+	for _, bm := range w.stepCrowds {
+		releaseBM(bm)
+	}
+	w.stepCrowds = newCrowds
 	w.state.States = newStates
 	w.state.Version++
 
 	w.retryDo("exec update workflow", nil, w.execUpdate)
 	logger.Infof("worker %s workflow updated", w.key)
 	return nil
-}
-
-func (w *stateWorker) doStepEvents(events []metapb.UserEvent, batch *executionbatch) {
-	for _, event := range events {
-		logger.Infof("worker %s step event %+v", w.key, event)
-
-		for idx, crowd := range w.stepCrowds {
-			if crowd.Contains(event.UserID) {
-				err := w.steps[w.state.States[idx].Step.Name].Execute(newExprCtx(event, w, idx),
-					w.stepChanged, batch, who{event.UserID, nil})
-				if err != nil {
-					metric.IncWorkflowWorkerFailed()
-					logger.Errorf("worker %s step event %+v failed with %+v",
-						w.key,
-						event,
-						err)
-				}
-				break
-			}
-		}
-	}
-}
-
-func (w *stateWorker) doStepTimer(batch *executionbatch, idx int) {
-	step := w.state.States[idx]
-	if step.Step.Execution.Type != metapb.Timer {
-		return
-	}
-
-	logger.Infof("worker %s step timer %s", idx)
-	w.retryDo("store last trigger", nil, func(*executionbatch) error {
-		return w.eng.Storage().Set(timeStepLastTriggerKey(w.state.WorkflowID,
-			w.state.InstanceID, step.Step.Name, w.buf), goetty.Int64ToBytes(time.Now().Unix()))
-	})
-
-	err := w.steps[step.Step.Name].Execute(newExprCtx(metapb.UserEvent{
-		TenantID:   w.state.TenantID,
-		WorkflowID: w.state.WorkflowID,
-		InstanceID: w.state.InstanceID,
-	}, w, idx),
-		w.stepChanged, batch, who{})
-	if err != nil {
-		metric.IncWorkflowWorkerFailed()
-		logger.Errorf("worker %s trigger timer failed with %+v",
-			w.key,
-			err)
-	}
 }
 
 func (w *stateWorker) maybeTriggerIfMissing(step metapb.StepState, idx int) error {
@@ -634,7 +529,7 @@ func (w *stateWorker) isDirectStep(name string) bool {
 	return ok
 }
 
-func (w *stateWorker) retryDo(thing string, batch *executionbatch, fn func(*executionbatch) error) {
+func (w *stateWorker) retryDo(thing string, tran *transaction, fn func(*transaction) error) {
 	times := 1
 	after := 2
 	maxAfter := 30
@@ -643,7 +538,7 @@ func (w *stateWorker) retryDo(thing string, batch *executionbatch, fn func(*exec
 			return
 		}
 
-		err := fn(batch)
+		err := fn(tran)
 		if err == nil {
 			return
 		}

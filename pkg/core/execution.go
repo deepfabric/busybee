@@ -45,10 +45,8 @@ func (ctx *changedCtx) add(changed changedCtx) {
 	}
 }
 
-type stepChangedFunc func(batch *executionbatch, ctx changedCtx)
-
 type excution interface {
-	Execute(expr.Ctx, stepChangedFunc, *executionbatch, who) error
+	Execute(expr.Ctx, *transaction, who) error
 }
 
 func checkExcution(workflow metapb.Workflow) error {
@@ -154,9 +152,8 @@ type directExecution struct {
 	nextStep string
 }
 
-func (e *directExecution) Execute(ctx expr.Ctx, cb stepChangedFunc,
-	batch *executionbatch, target who) error {
-	cb(batch, changedCtx{e.step, e.nextStep, target, 0})
+func (e *directExecution) Execute(ctx expr.Ctx, tran *transaction, target who) error {
+	tran.stepChanged(changedCtx{e.step, e.nextStep, target, 0})
 	return nil
 }
 
@@ -167,8 +164,7 @@ type conditionExecution struct {
 	nextStep      string
 }
 
-func (e *conditionExecution) executeWithMatches(ctx expr.Ctx, cb stepChangedFunc,
-	batch *executionbatch, target who) (bool, error) {
+func (e *conditionExecution) executeWithMatches(ctx expr.Ctx, tran *transaction, target who) (bool, error) {
 	if e.conditionExpr != nil {
 		matches, value, err := e.conditionExpr.Exec(ctx)
 		if err != nil {
@@ -185,7 +181,7 @@ func (e *conditionExecution) executeWithMatches(ctx expr.Ctx, cb stepChangedFunc
 	}
 
 	if e.exec != nil {
-		err := e.exec.Execute(ctx, cb, batch, target)
+		err := e.exec.Execute(ctx, tran, target)
 		if err != nil {
 			return false, err
 		}
@@ -193,12 +189,11 @@ func (e *conditionExecution) executeWithMatches(ctx expr.Ctx, cb stepChangedFunc
 		return true, nil
 	}
 
-	cb(batch, changedCtx{e.step, e.nextStep, target, 0})
+	tran.stepChanged(changedCtx{e.step, e.nextStep, target, 0})
 	return true, nil
 }
 
-func (e *conditionExecution) Execute(ctx expr.Ctx, cb stepChangedFunc,
-	batch *executionbatch, target who) error {
+func (e *conditionExecution) Execute(ctx expr.Ctx, tran *transaction, target who) error {
 	if e.conditionExpr != nil {
 		matches, value, err := e.conditionExpr.Exec(ctx)
 		if err != nil {
@@ -215,7 +210,7 @@ func (e *conditionExecution) Execute(ctx expr.Ctx, cb stepChangedFunc,
 	}
 
 	if e.exec != nil {
-		err := e.exec.Execute(ctx, cb, batch, target)
+		err := e.exec.Execute(ctx, tran, target)
 		if err != nil {
 			return err
 		}
@@ -223,7 +218,7 @@ func (e *conditionExecution) Execute(ctx expr.Ctx, cb stepChangedFunc,
 		return nil
 	}
 
-	cb(batch, changedCtx{e.step, e.nextStep, target, 0})
+	tran.stepChanged(changedCtx{e.step, e.nextStep, target, 0})
 	return nil
 }
 
@@ -231,10 +226,9 @@ type branchExecution struct {
 	branches []*conditionExecution
 }
 
-func (e *branchExecution) Execute(ctx expr.Ctx, cb stepChangedFunc,
-	batch *executionbatch, target who) error {
+func (e *branchExecution) Execute(ctx expr.Ctx, tran *transaction, target who) error {
 	for _, exec := range e.branches {
-		ok, err := exec.executeWithMatches(ctx, cb, batch, target)
+		ok, err := exec.executeWithMatches(ctx, tran, target)
 		if err != nil {
 			return err
 		}
@@ -253,15 +247,14 @@ type parallelExecution struct {
 	exectuors []excution
 }
 
-func (e *parallelExecution) Execute(ctx expr.Ctx, cb stepChangedFunc,
-	batch *executionbatch, target who) error {
+func (e *parallelExecution) Execute(ctx expr.Ctx, tran *transaction, target who) error {
 	for _, exec := range e.exectuors {
-		err := exec.Execute(ctx, cb, batch, target)
+		err := exec.Execute(ctx, tran, target)
 		if err != nil {
 			return err
 		}
 	}
 
-	cb(batch, changedCtx{e.step, e.nextStep, target, 0})
+	tran.stepChanged(changedCtx{e.step, e.nextStep, target, 0})
 	return nil
 }

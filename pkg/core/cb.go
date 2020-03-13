@@ -11,19 +11,15 @@ var (
 func acquireCB() *stepCB {
 	value := cbPool.Get()
 	if value == nil {
-		return &stepCB{}
+		return &stepCB{
+			c: make(chan error),
+		}
 	}
 	return value.(*stepCB)
 }
 
 func releaseCB(value *stepCB) {
-	if value == nil {
-		return
-	}
-
-	if value.c != nil {
-		close(value.c)
-	}
+	value.reset()
 	cbPool.Put(value)
 }
 
@@ -32,6 +28,9 @@ type stepCB struct {
 }
 
 func (cb *stepCB) reset() {
+	if cb.c != nil {
+		close(cb.c)
+	}
 	cb.c = make(chan error)
 }
 
