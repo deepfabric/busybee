@@ -303,7 +303,7 @@ func ge(left interface{}, right engine.Expr, ctx interface{}) (interface{}, erro
 			return nil, err
 		}
 
-		return v1 <= v2, nil
+		return v1 >= v2, nil
 	}
 
 	return nil, fmt.Errorf(">= not support var type %T", left)
