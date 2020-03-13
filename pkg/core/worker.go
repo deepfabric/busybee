@@ -108,10 +108,6 @@ func (w *stateWorker) resetByState() error {
 		}
 
 		if stepState.Step.Execution.Timer != nil {
-			if err := w.maybeTriggerIfMissing(stepState, idx); err != nil {
-				return err
-			}
-
 			i := idx
 			id, err := w.eng.AddCronJob(stepState.Step.Execution.Timer.Cron, func() {
 				w.queue.Put(item{
@@ -472,58 +468,6 @@ func (w *stateWorker) doUpdateWorkflow(workflow metapb.Workflow) error {
 	w.retryDo("exec update workflow", nil, w.execUpdate)
 	logger.Infof("worker %s workflow updated", w.key)
 	return nil
-}
-
-func (w *stateWorker) maybeTriggerIfMissing(step metapb.StepState, idx int) error {
-	last, err := w.readLastTriggerTime(step.Step.Name)
-	if err != nil {
-		return nil
-	}
-
-	if last == 0 {
-		return nil
-	}
-
-	next, err := w.eng.NextTriggerTime(last, step.Step.Execution.Timer.Cron)
-	if err != nil {
-		return err
-	}
-
-	if next < time.Now().Unix() {
-		w.queue.Put(item{
-			action: timerAction,
-			value:  idx,
-		})
-	}
-
-	return nil
-}
-
-func (w *stateWorker) readLastTriggerTime(name string) (int64, error) {
-	last, err := w.eng.Storage().Get(timeStepLastTriggerKey(w.state.WorkflowID,
-		w.state.InstanceID, name, w.buf))
-	if err != nil {
-		return 0, err
-	}
-
-	if len(last) == 0 {
-		return 0, nil
-	}
-
-	if len(last) != 8 {
-		logger.Fatalf("The step last tigeer value must be a int64 value, but %d bytes",
-			len(last))
-	}
-
-	return goetty.Byte2Int64(last), nil
-}
-
-func timeStepLastTriggerKey(wid, instanceID uint64, name string, buf *goetty.ByteBuf) []byte {
-	buf.MarkWrite()
-	buf.Write(hack.StringToSlice(name))
-	buf.WriteUint64(wid)
-	buf.WriteUInt64(instanceID)
-	return buf.WrittenDataAfterMark()
 }
 
 func (w *stateWorker) isDirectStep(name string) bool {

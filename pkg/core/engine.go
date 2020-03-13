@@ -74,8 +74,6 @@ type Engine interface {
 	AddCronJob(string, func()) (cron.EntryID, error)
 	// StopCronJob stop the cron job
 	StopCronJob(cron.EntryID)
-	// NextTriggerTime returns the trigger time with unix timestamp after the last trigger time
-	NextTriggerTime(int64, string) (int64, error)
 }
 
 type createWorkerAction struct {
@@ -106,11 +104,8 @@ func NewEngine(store storage.Storage, notifier notify.Notifier, opts ...Option) 
 		stopInstanceC:          make(chan uint64, 1024),
 		runner:                 task.NewRunner(),
 		cronRunner:             cron.New(cron.WithSeconds()),
-		cronParser: cron.NewParser(
-			cron.Second | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor,
-		),
-		service: crm.NewService(store),
-		loaders: make(map[metapb.BMLoader]crowd.Loader),
+		service:                crm.NewService(store),
+		loaders:                make(map[metapb.BMLoader]crowd.Loader),
 	}
 
 	for _, opt := range opts {
@@ -128,7 +123,6 @@ type engine struct {
 	notifier   notify.Notifier
 	runner     *task.Runner
 	cronRunner *cron.Cron
-	cronParser cron.ScheduleParser
 
 	workers                sync.Map // key -> *worker
 	eventC                 chan storage.Event
@@ -522,16 +516,6 @@ func (eng *engine) AddCronJob(cronExpr string, fn func()) (cron.EntryID, error) 
 
 func (eng *engine) StopCronJob(id cron.EntryID) {
 	eng.cronRunner.Remove(id)
-}
-
-func (eng *engine) NextTriggerTime(last int64, spec string) (int64, error) {
-	t := time.Unix(last, 0)
-	s, err := eng.cronParser.Parse(spec)
-	if err != nil {
-		return 0, err
-	}
-
-	return s.Next(t).Unix(), nil
 }
 
 func (eng *engine) doUpdateWorkflow(value metapb.Workflow) error {

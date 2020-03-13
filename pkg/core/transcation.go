@@ -2,14 +2,12 @@ package core
 
 import (
 	"sync"
-	"time"
 
 	"github.com/RoaringBitmap/roaring"
 	"github.com/deepfabric/busybee/pkg/metric"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/util"
 	bbutil "github.com/deepfabric/busybee/pkg/util"
-	"github.com/fagongzi/goetty"
 )
 
 var (
@@ -91,12 +89,6 @@ func (tran *transaction) doStepTimerEvent(item item) {
 		tran.err = err
 		return
 	}
-
-	// if crash or stopped while not store, the changed will not committed, it will retry later on other node
-	tran.w.retryDo("store last trigger", tran, func(tran *transaction) error {
-		return tran.w.eng.Storage().Set(timeStepLastTriggerKey(tran.w.state.WorkflowID,
-			tran.w.state.InstanceID, step.Step.Name, tran.w.buf), goetty.Int64ToBytes(time.Now().Unix()))
-	})
 }
 
 func (tran *transaction) doStepUserEvents(item item) {
