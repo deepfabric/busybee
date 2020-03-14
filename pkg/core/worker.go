@@ -289,7 +289,15 @@ func (w *stateWorker) run() {
 				case userEventAction:
 					tran.doStepUserEvents(value)
 				case updateCrowdEventAction:
-					tran.doUpdateCrowd(value)
+					err = tran.err
+					w.completeTransaction(tran)
+					if err != nil {
+						value.cb.complete(err)
+					} else {
+						value.cb.complete(w.doUpdateCrowd(value.value.([]byte)))
+					}
+
+					tran.start(w)
 				case updateWorkflowEventAction:
 					err = tran.err
 					w.completeTransaction(tran)
@@ -325,19 +333,15 @@ func (w *stateWorker) completeTransaction(tran *transaction) {
 		return
 	}
 
-	w.totalCrowds.Clear()
-	w.totalCrowds.Or(tran.totalCrowds)
-	for idx := range w.stepCrowds {
-		w.stepCrowds[idx].Clear()
-		w.stepCrowds[idx].Or(tran.stepCrowds[idx])
-	}
-
 	if len(tran.changes) > 0 {
-		w.retryDo("exec notify", tran, w.execNotify)
-	}
+		for idx := range w.stepCrowds {
+			w.stepCrowds[idx].Clear()
+			w.stepCrowds[idx].Or(tran.stepCrowds[idx])
+		}
 
-	if tran.crowdChanged {
+		w.retryDo("exec notify", tran, w.execNotify)
 		w.retryDo("exec update state", tran, w.execUpdate)
+
 		logger.Infof("worker %s state update to version %d",
 			w.key,
 			w.state.Version)
@@ -406,7 +410,6 @@ func (w *stateWorker) doUpdateWorkflow(workflow metapb.Workflow) error {
 	w.entryActions = make(map[string]string)
 	w.leaveActions = make(map[string]string)
 
-	var newStates []metapb.StepState
 	var newCrowds []*roaring.Bitmap
 	for idx, step := range workflow.Steps {
 		exec, err := newExcution(step.Name, step.Execution)
@@ -442,31 +445,44 @@ func (w *stateWorker) doUpdateWorkflow(workflow metapb.Workflow) error {
 			newBM := acquireBM()
 			newBM.Or(bm)
 			newCrowds = append(newCrowds, newBM)
-			newStates = append(newStates, metapb.StepState{
-				Step:       step,
-				TotalCrowd: newBM.GetCardinality(),
-				Loader:     metapb.RawLoader,
-				LoaderMeta: bbutil.MustMarshalBM(newBM),
-			})
 			continue
 		}
 
-		newStates = append(newStates, metapb.StepState{
-			Step:       step,
-			LoaderMeta: emptyBMData.Bytes(),
-		})
-		newCrowds = append(newCrowds, bbutil.AcquireBitmap())
+		newCrowds = append(newCrowds, acquireBM())
 	}
 
 	for _, bm := range w.stepCrowds {
 		releaseBM(bm)
 	}
 	w.stepCrowds = newCrowds
-	w.state.States = newStates
-	w.state.Version++
 
 	w.retryDo("exec update workflow", nil, w.execUpdate)
 	logger.Infof("worker %s workflow updated", w.key)
+	return nil
+}
+
+func (w *stateWorker) doUpdateCrowd(crowd []byte) error {
+	newTotal := acquireBM()
+	defer releaseBM(newTotal)
+	bbutil.MustParseBMTo(crowd, newTotal)
+
+	newAdded := acquireBM()
+	defer releaseBM(newAdded)
+	newAdded.Or(newTotal)
+	newAdded.AndNot(w.totalCrowds)
+
+	w.totalCrowds.Clear()
+	w.totalCrowds.Or(newTotal)
+
+	for idx, sc := range w.stepCrowds {
+		if idx == 0 {
+			sc.Or(newAdded)
+		}
+		sc.And(newTotal)
+	}
+
+	w.retryDo("exec update crowd", nil, w.execUpdate)
+	logger.Infof("worker %s crowd updated", w.key)
 	return nil
 }
 

@@ -28,15 +28,11 @@ func releaseBM(value *roaring.Bitmap) {
 }
 
 type transaction struct {
-	w *stateWorker
-
-	totalCrowds *roaring.Bitmap
-	stepCrowds  []*roaring.Bitmap
-
-	err          error
-	cbs          []*stepCB
-	changes      []changedCtx
-	crowdChanged bool
+	w          *stateWorker
+	err        error
+	stepCrowds []*roaring.Bitmap
+	changes    []changedCtx
+	cbs        []*stepCB
 }
 
 func newTransaction() *transaction {
@@ -45,8 +41,6 @@ func newTransaction() *transaction {
 
 func (tran *transaction) start(w *stateWorker) {
 	tran.w = w
-	tran.totalCrowds = acquireBM()
-	tran.totalCrowds.Or(w.totalCrowds)
 
 	for _, crowd := range w.stepCrowds {
 		v := acquireBM()
@@ -123,38 +117,6 @@ func (tran *transaction) doStepUserEvents(item item) {
 	}
 }
 
-func (tran *transaction) doUpdateCrowd(item item) {
-	if item.cb != nil {
-		tran.cbs = append(tran.cbs, item.cb)
-	}
-
-	if tran.err != nil {
-		return
-	}
-
-	crowd := item.value.([]byte)
-	newTotal := acquireBM()
-	defer releaseBM(newTotal)
-	bbutil.MustParseBMTo(crowd, newTotal)
-
-	newAdded := acquireBM()
-	defer releaseBM(newAdded)
-	newAdded.Or(newTotal)
-	newAdded.AndNot(tran.totalCrowds)
-
-	tran.totalCrowds.Clear()
-	tran.totalCrowds.Or(newTotal)
-
-	for idx, sc := range tran.stepCrowds {
-		if idx == 0 {
-			sc.Or(newAdded)
-		}
-		sc.And(newTotal)
-	}
-
-	tran.crowdChanged = true
-}
-
 // this function will called by every step exectuion, if the target crowd or user
 // removed to other step.
 func (tran *transaction) stepChanged(ctx changedCtx) {
@@ -162,7 +124,7 @@ func (tran *transaction) stepChanged(ctx changedCtx) {
 	// so it's contains other shards crowds.
 	if ctx.who.users != nil {
 		// filter other shard state crowds
-		ctx.who.users.And(tran.totalCrowds)
+		ctx.who.users.And(tran.w.totalCrowds)
 	}
 
 	for idx := range tran.w.state.States {
@@ -249,20 +211,14 @@ func (tran *transaction) addChanged(changed changedCtx) {
 	ctx := changedCtx{changed.from, changed.to, who{0, acquireBM()}, changed.ttl}
 	ctx.add(changed)
 	tran.changes = append(tran.changes, ctx)
-	tran.crowdChanged = true
 }
 
 func (tran *transaction) reset() {
-	if tran.totalCrowds != nil {
-		releaseBM(tran.totalCrowds)
-	}
-
 	if len(tran.changes) > 0 {
 		for idx := range tran.stepCrowds {
 			releaseBM(tran.stepCrowds[idx])
 			tran.stepCrowds[idx] = nil
 		}
-		tran.stepCrowds = tran.stepCrowds[:0]
 	}
 
 	for idx := range tran.changes {
@@ -270,9 +226,8 @@ func (tran *transaction) reset() {
 		tran.changes[idx].who.users = nil
 	}
 
+	tran.stepCrowds = tran.stepCrowds[:0]
 	tran.changes = tran.changes[:0]
 	tran.cbs = tran.cbs[:0]
-
 	tran.err = nil
-	tran.crowdChanged = false
 }
