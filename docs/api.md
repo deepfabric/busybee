@@ -328,8 +328,235 @@ Bitmap序列化的二进制数据
 }
 ```
 
-### 队列管理
+## 队列管理
+### 租户队列列表
+#### URL PATH
+`/v1/queues/{tenantId}`
 
-### Profile管理
+#### HTTP Method
+`GET`
 
-### ID-Mapping管理
+#### URL Params
+| Query String  Name | 说明  |Optional | Default Value |
+| ------------- | ------------- | ------------- | ------------- | 
+| tenantId  | 租户ID  | No |  |
+
+#### Result JSON
+```json
+{
+    "code": 0,
+    "data": [
+        {
+            "id": 1,
+            "inputs": [
+                {
+                    "partition": 1,
+                    "maxOffset": 1000,
+                    "cleanedOffset": 500,
+                    "consumers": [
+                        {
+                            "name": "consumer1",
+                            "completedOffset": 10,
+                            "lastTimestamp": 1000000
+                        },
+                        {
+                            "name": "consumer2",
+                            "completedOffset": 12,
+                            "lastTimestamp": 1000000
+                        }
+                    ]  
+                },
+                {
+                    "partition": 2,
+                    "maxOffset": 1000,
+                    "cleanedOffset": 500,
+                    "consumers": [
+                        {
+                            "name": "consumer1",
+                            "completedOffset": 10,
+                            "lastTimestamp": 1000000
+                        },
+                        {
+                            "name": "consumer2",
+                            "completedOffset": 12,
+                            "lastTimestamp": 1000000
+                        }
+                    ]  
+                }
+            ],
+            "output": {
+                "maxOffset": 1000,
+                "cleanedOffset": 500,
+                "consumers": [
+                    {
+                        "name": "consumer1",
+                        "completedOffset": 10,
+                        "lastTimestamp": 1000000
+                    },
+                    {
+                        "name": "consumer2",
+                        "completedOffset": 12,
+                        "lastTimestamp": 1000000
+                    }
+                ]  
+            }
+        }
+    ]
+}
+```
+
+* 外层结构体
+
+|  字段 | 说明  |
+| ------------- | ------------- | 
+| id | 租户ID |
+| inputs | 租户的input的事件流的队列，input队列分成多个partition，每个partition有独立的offset管理 |
+| output |  租户的output的事件流的队列，output只有一个partition |
+
+
+* inputs数组结构体
+
+|  字段 | 说明  |
+| ------------- | ------------- | 
+| partition | partition ID |
+| maxOffset | 最大的offset，标记着最后一个队列元素的offset |
+| cleanedOffset | 已经清理的offset，maxOffset-cleanedOffset代表着磁盘上还存储的队列的元素的个数 |
+| consumers |  消费者集合 |
+
+* ouput数组结构体
+
+|  字段 | 说明  |
+| ------------- | ------------- | 
+| maxOffset | 最大的offset，标记着最后一个队列元素的offset |
+| cleanedOffset | 已经清理的offset，maxOffset-cleanedOffset代表着磁盘上还存储的队列的元素的个数 |
+| consumers |  消费者集合 |
+
+* consumers数组结构体
+
+|  字段 | 说明  |
+| ------------- | ------------- | 
+| name | 消费者名称，唯一标示一个consumer |
+| completedOffset | 当前消费者已经消费完成的offset |
+| lastTimestamp | 该消费者最后一个拉取消息的时间戳，Unix时间戳，精确到秒 |
+
+
+### 清理队列
+强制清理租户下所有的队列的存储空间，释放磁盘存储空间
+
+#### URL PATH
+`/v1/queues/{tenantId}/clean`
+
+#### HTTP Method
+`DELETE`
+
+#### URL Params
+| Query String  Name | 说明  |Optional | Default Value |
+| ------------- | ------------- | ------------- | ------------- | 
+| tenantId  | 租户ID  | No |  |
+
+#### Result JSON
+```json
+{
+    "code": 0,
+}
+```
+
+### 修改consumer的completedOffset
+修改某一个consumer的completedOffset，让这个consumer跳过消费一些数据，或者重新消费一些数据
+
+#### URL PATH
+`/v1/queues/{tenantId}/offset`
+
+#### HTTP Method
+`PUT`
+
+#### URL Params
+| Query String  Name | 说明  |Optional | Default Value |
+| ------------- | ------------- | ------------- | ------------- | 
+| tenantId  | 租户ID  | No |  |
+
+#### HTTP Body
+```json
+{
+    "consumer": "consumer name",
+    "inputs": [
+        {
+            "partition": 1,
+            "completedOffset": 100
+        }
+    ],
+    "output": 100,
+}
+```
+
+|  字段 | 说明 |
+| ------------- | ------------- | 
+| consumer | 哪一个consumer |
+| inputs | 可以为空数组，代表不修改inputs的offset，内部元素是需要修改的partition的offset，也就是支持批量更新 |
+| output | output的completedOffset |
+
+#### Result JSON
+```json
+{
+    "code": 0,
+}
+```
+
+### 添加队列元素
+向队列中添加一些数组元素
+
+#### URL PATH
+`/v1/queues/{tenantId}/items`
+
+#### HTTP Method
+`PUT`
+
+#### URL Params
+| Query String  Name | 说明  |Optional | Default Value |
+| ------------- | ------------- | ------------- | ------------- | 
+| tenantId  | 租户ID  | No |  |
+
+#### HTTP Body
+```json
+{
+    "inputs": [
+        {
+            "partition": 1,
+            "items": [
+                "元素1内容的base64编码",
+                "元素2内容的base64编码",
+                "元素3内容的base64编码",
+            ]
+        },
+        {
+            "partition": 2,
+            "items": [
+                "元素1内容的base64编码",
+                "元素2内容的base64编码",
+                "元素3内容的base64编码",
+            ]
+        }
+    ],
+    "output": [
+        "元素1内容的base64编码",
+        "元素2内容的base64编码",
+        "元素3内容的base64编码",
+    ]
+}
+```
+
+|  字段 | 说明 |
+| ------------- | ------------- | 
+| consumer | 哪一个consumer |
+| inputs | 可以为空数组，代表不添加inputs的队列item，支持批量更新，items数组中的每个元素是二进制数据的base64编码 |
+| output | 可以为空数组, items数组中的每个元素是二进制数据的base64编码 |
+
+#### Result JSON
+```json
+{
+    "code": 0,
+}
+```
+
+## Profile管理
+## ID-Mapping管理
