@@ -57,6 +57,8 @@ type stateWorker struct {
 	cronIDs          []cron.EntryID
 	consumer         queue.Consumer
 	tenant           string
+	cond             *rpcpb.Condition
+	conditionKey     []byte
 	queueStateKey    []byte
 	queueGetStateKey []byte
 }
@@ -83,6 +85,8 @@ func newStateWorker(key string, state metapb.WorkflowInstanceWorkerState, eng En
 		queue:            task.New(1024),
 		consumer:         consumer,
 		tenant:           string(format.UInt64ToString(state.TenantID)),
+		cond:             &rpcpb.Condition{},
+		conditionKey:     make([]byte, len(queueStateKey)+1, len(queueStateKey)+1),
 		queueStateKey:    queueStateKey,
 		queueGetStateKey: storage.PartitionKVKey(state.TenantID, 0, queueStateKey),
 	}
@@ -349,9 +353,8 @@ func (w *stateWorker) completeTransaction(tran *transaction) {
 			w.stepCrowds[idx].Or(tran.stepCrowds[idx])
 		}
 
-		w.retryDo("exec notify", tran, w.execNotify)
-
 		w.state.Version++
+		w.retryDo("exec notify", tran, w.execNotify)
 		w.retryDo("exec update state", tran, w.execUpdate)
 
 		logger.Infof("worker %s state update to version %d",
@@ -428,8 +431,17 @@ func (w *stateWorker) execNotify(tran *transaction) error {
 		}
 	}
 
-	// TODO: cas to avoid duplicate added
-	return w.eng.Notifier().Notify(w.state.TenantID, w.buf, notifies, w.queueStateKey, protoc.MustMarshal(&w.state))
+	w.buf.MarkWrite()
+	w.buf.WriteUInt64(w.state.Version)
+	condValue := w.buf.WrittenDataAfterMark()
+
+	w.cond.Reset()
+	w.cond.Key = w.conditionKey
+	w.cond.Value = condValue
+	w.cond.Cmp = rpcpb.GT
+	return w.eng.Notifier().Notify(w.state.TenantID, w.buf, notifies, w.cond,
+		w.conditionKey, condValue,
+		w.queueStateKey, protoc.MustMarshal(&w.state))
 }
 
 func (w *stateWorker) execUpdate(batch *transaction) error {

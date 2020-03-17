@@ -47,6 +47,8 @@ type Storage interface {
 	PutToQueue(id uint64, partition uint64, group metapb.Group, data ...[]byte) error
 	// PutToQueueAndKV put data to queue and put a kv
 	PutToQueueWithKV(id uint64, partition uint64, group metapb.Group, items [][]byte, kvs ...[]byte) error
+	// PutToQueueWithKVAndCondition put data to queue and put a kv and a condition
+	PutToQueueWithKVAndCondition(id uint64, partition uint64, group metapb.Group, items [][]byte, cond *rpcpb.Condition, kvs ...[]byte) error
 	// ExecCommand exec command
 	ExecCommand(cmd interface{}) ([]byte, error)
 	// AsyncExecCommand async exec command
@@ -193,10 +195,15 @@ func (h *beeStorage) PutToQueue(id uint64, partition uint64, group metapb.Group,
 }
 
 func (h *beeStorage) PutToQueueWithKV(id uint64, partition uint64, group metapb.Group, items [][]byte, kvs ...[]byte) error {
+	return h.PutToQueueWithKVAndCondition(id, partition, group, items, nil, kvs...)
+}
+
+func (h *beeStorage) PutToQueueWithKVAndCondition(id uint64, partition uint64, group metapb.Group, items [][]byte, cond *rpcpb.Condition, kvs ...[]byte) error {
 	req := rpcpb.AcquireQueueAddRequest()
 	req.Key = PartitionKey(id, partition)
 	req.Items = items
 	req.KVS = kvs
+	req.Condition = cond
 
 	_, err := h.ExecCommandWithGroup(req, group)
 	return err

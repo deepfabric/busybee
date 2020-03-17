@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"bytes"
 	"fmt"
 	"math"
 	"time"
@@ -89,6 +90,10 @@ func (qb *queueBatch) add(req *rpcpb.QueueAddRequest, b *batch) {
 		qb.loaded = true
 	}
 
+	if !qb.matchCondition(req, b) {
+		return
+	}
+
 	for _, item := range req.Items {
 		qb.maxOffset++
 		qb.pairs = append(qb.pairs, itemKey(req.Key, qb.maxOffset, qb.buf), item)
@@ -98,6 +103,37 @@ func (qb *queueBatch) add(req *rpcpb.QueueAddRequest, b *batch) {
 	for i := 0; i < n; i++ {
 		qb.pairs = append(qb.pairs, queueKVKey(req.Key, req.KVS[2*i], qb.buf), req.KVS[2*i+1])
 	}
+}
+
+func (qb *queueBatch) matchCondition(req *rpcpb.QueueAddRequest, b *batch) bool {
+	cond := req.Condition
+	if cond == nil {
+		return true
+	}
+
+	value, err := b.bs.getStore(b.shard).Get(queueKVKey(req.Key, cond.Key, qb.buf))
+	if err != nil {
+		log.Fatalf("load max queue offset failed with %+v", err)
+	}
+
+	switch cond.Cmp {
+	case rpcpb.NotExists:
+		return len(value) == 0
+	case rpcpb.Exists:
+		return len(value) > 0
+	case rpcpb.Equal:
+		return bytes.Compare(cond.Value, value) == 0
+	case rpcpb.GE:
+		return bytes.Compare(cond.Value, value) >= 0
+	case rpcpb.GT:
+		return bytes.Compare(cond.Value, value) > 0
+	case rpcpb.LE:
+		return bytes.Compare(cond.Value, value) <= 0
+	case rpcpb.LT:
+		return bytes.Compare(cond.Value, value) < 0
+	}
+
+	return false
 }
 
 func (qb *queueBatch) exec(s bhstorage.DataStorage, b *batch) error {

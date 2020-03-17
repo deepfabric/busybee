@@ -4,6 +4,7 @@ import (
 	"log"
 
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
+	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/deepfabric/busybee/pkg/storage"
 	"github.com/deepfabric/busybee/pkg/util"
 	"github.com/fagongzi/goetty"
@@ -25,7 +26,7 @@ func NewQueueBasedNotifier(store storage.Storage) Notifier {
 	}
 }
 
-func (n *queueNotifier) Notify(id uint64, buf *goetty.ByteBuf, notifies []metapb.Notify, kvs ...[]byte) error {
+func (n *queueNotifier) Notify(id uint64, buf *goetty.ByteBuf, notifies []metapb.Notify, cond *rpcpb.Condition, kvs ...[]byte) error {
 	var items [][]byte
 	for idx := range notifies {
 		if notifies[idx].TTL > 0 {
@@ -38,7 +39,7 @@ func (n *queueNotifier) Notify(id uint64, buf *goetty.ByteBuf, notifies []metapb
 		items = append(items, protoc.MustMarshal(&notifies[idx]))
 	}
 
-	return n.store.PutToQueueWithKV(id, 0, metapb.TenantOutputGroup, items, kvs...)
+	return n.store.PutToQueueWithKVAndCondition(id, 0, metapb.TenantOutputGroup, items, cond, kvs...)
 }
 
 func (n *queueNotifier) addTTL(buf *goetty.ByteBuf, nt *metapb.Notify) error {

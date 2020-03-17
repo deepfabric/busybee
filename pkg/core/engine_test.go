@@ -1445,25 +1445,27 @@ func newErrorNotify(max int, delegate notify.Notifier) notify.Notifier {
 	}
 }
 
-func (nt *errorNotify) Notify(id uint64, buf *goetty.ByteBuf, notifies []metapb.Notify, kvs ...[]byte) error {
+func (nt *errorNotify) Notify(id uint64, buf *goetty.ByteBuf, notifies []metapb.Notify, cond *rpcpb.Condition, kvs ...[]byte) error {
+	err := nt.delegate.Notify(id, buf, notifies, cond, kvs...)
+
 	if nt.times >= nt.max {
-		return nt.delegate.Notify(id, buf, notifies, kvs...)
+		return err
 	}
 
 	nt.times++
 	return fmt.Errorf("error")
 }
 
-func TestStartInstanceWithNotifyError(t *testing.T) {
+func TestNotifyWithErrorRetry(t *testing.T) {
 	store, deferFunc := storage.NewTestStorage(t, false)
 	defer deferFunc()
 
 	ng, err := NewEngine(store, newErrorNotify(1, notify.NewQueueBasedNotifier(store)))
-	assert.NoError(t, err, "TestStartInstance failed")
-	assert.NoError(t, ng.Start(), "TestStartInstance failed")
+	assert.NoError(t, err, "TestNotifyWithErrorRetry failed")
+	assert.NoError(t, ng.Start(), "TestNotifyWithErrorRetry failed")
 
 	err = ng.TenantInit(10001, 1)
-	assert.NoError(t, err, "TestStartInstance failed")
+	assert.NoError(t, err, "TestNotifyWithErrorRetry failed")
 	time.Sleep(time.Second)
 
 	bm := roaring.BitmapOf(1, 2, 3, 4)
@@ -1481,26 +1483,19 @@ func TestStartInstanceWithNotifyError(t *testing.T) {
 							Condition: metapb.Expr{
 								Value: []byte("{num: event.uid} == 1"),
 							},
-							NextStep: "step_end_1",
+							NextStep: "step_end",
 						},
 						metapb.ConditionExecution{
 							Condition: metapb.Expr{
 								Value: []byte("1 == 1"),
 							},
-							NextStep: "step_end_else",
+							NextStep: "step_end",
 						},
 					},
 				},
 			},
 			metapb.Step{
-				Name: "step_end_1",
-				Execution: metapb.Execution{
-					Type:   metapb.Direct,
-					Direct: &metapb.DirectExecution{},
-				},
-			},
-			metapb.Step{
-				Name: "step_end_else",
+				Name: "step_end",
 				Execution: metapb.Execution{
 					Type:   metapb.Direct,
 					Direct: &metapb.DirectExecution{},
@@ -1508,7 +1503,7 @@ func TestStartInstanceWithNotifyError(t *testing.T) {
 			},
 		},
 	}, metapb.RawLoader, util.MustMarshalBM(bm), 3)
-	assert.NoError(t, err, "TestStartInstance failed")
+	assert.NoError(t, err, "TestNotifyWithErrorRetry failed")
 
 	time.Sleep(time.Second)
 	c := 0
@@ -1516,7 +1511,7 @@ func TestStartInstanceWithNotifyError(t *testing.T) {
 		c++
 		return true
 	})
-	assert.Equal(t, 3, c, "TestStartInstance failed")
+	assert.Equal(t, 3, c, "TestNotifyWithErrorRetry failed")
 
 	err = ng.Storage().PutToQueue(10001, 0, metapb.TenantInputGroup, protoc.MustMarshal(&metapb.Event{
 		Type: metapb.UserType,
@@ -1531,37 +1526,21 @@ func TestStartInstanceWithNotifyError(t *testing.T) {
 			},
 		},
 	}))
-	assert.NoError(t, err, "TestStartInstance failed")
+	assert.NoError(t, err, "TestNotifyWithErrorRetry failed")
 
 	time.Sleep(time.Second * 8)
 
 	fetch := rpcpb.AcquireQueueFetchRequest()
 	fetch.Key = storage.PartitionKey(10001, 0)
 	fetch.CompletedOffset = 0
-	fetch.Count = 1
+	fetch.Count = 10
 	fetch.Consumer = []byte("c")
 	data, err := ng.Storage().ExecCommandWithGroup(fetch, metapb.TenantOutputGroup)
-	assert.NoError(t, err, "TestStartInstance failed")
+	assert.NoError(t, err, "TestNotifyWithErrorRetry failed")
 
 	resp := rpcpb.AcquireBytesSliceResponse()
 	protoc.MustUnmarshal(resp, data)
-	assert.Equal(t, 1, len(resp.Values), "TestStartInstance failed")
-
-	states, err := ng.InstanceCountState(10000)
-	assert.NoError(t, err, "TestStartInstance failed")
-	m := make(map[string]uint64)
-	for _, state := range states.States {
-		m[state.Step] = state.Count
-	}
-	assert.Equal(t, uint64(3), m["step_start"], "TestStartInstance failed")
-	assert.Equal(t, uint64(1), m["step_end_1"], "TestStartInstance failed")
-	assert.Equal(t, uint64(0), m["step_end_else"], "TestStartInstance failed")
-
-	state, err := ng.InstanceStepState(10000, "step_start")
-	assert.NoError(t, err, "TestStartInstance failed")
-	bm, err = ng.(*engine).loadBM(state.Loader, state.LoaderMeta)
-	assert.NoError(t, err, "TestStartInstance failed")
-	assert.Equal(t, uint64(3), bm.GetCardinality(), "TestStartInstance failed")
+	assert.Equal(t, 1, len(resp.Values), "TestNotifyWithErrorRetry failed")
 }
 
 func waitTestWorkflow(ng Engine, wid uint64, state metapb.WorkflowInstanceState) error {

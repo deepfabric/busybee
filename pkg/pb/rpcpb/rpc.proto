@@ -235,9 +235,28 @@ message InstanceCrowdStateRequest {
 
 // QueueAddRequest add items into a queue
 message QueueAddRequest {
-    bytes          key   = 1;
-    repeated bytes items = 2;
-    repeated bytes kvs   = 3 [(gogoproto.customname) = "KVS"];
+    bytes          key       = 1;
+    repeated bytes items     = 2;
+    repeated bytes kvs       = 3 [(gogoproto.customname) = "KVS"];
+    Condition      condition = 4;
+}
+
+// Cmp cmp operation
+enum Cmp {
+    Exists    = 0;
+    NotExists = 1;
+    Equal     = 2;
+    GE        = 3;
+    GT        = 4;
+    LE        = 5;
+    LT        = 6;
+}
+
+// Condition condition
+message Condition {
+    bytes key   = 1;
+    Cmp   cmp   = 2;
+    bytes value = 3;
 }
 
 // QueueFetchResponse add items into a queue
