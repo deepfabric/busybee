@@ -37,12 +37,16 @@ type Storage interface {
 	SetWithTTL([]byte, []byte, int64) error
 	// Get returns the value of key
 	Get([]byte) ([]byte, error)
+	// GetWithGroup returns the value of key
+	GetWithGroup([]byte, metapb.Group) ([]byte, error)
 	// Delete remove the key from the store
 	Delete([]byte) error
 	// Scan scan [start,end) data
 	Scan([]byte, []byte, uint64) ([][]byte, [][]byte, error)
 	// PutToQueue put data to queue
 	PutToQueue(id uint64, partition uint64, group metapb.Group, data ...[]byte) error
+	// PutToQueueAndKV put data to queue and put a kv
+	PutToQueueWithKV(id uint64, partition uint64, group metapb.Group, items [][]byte, kvs ...[]byte) error
 	// ExecCommand exec command
 	ExecCommand(cmd interface{}) ([]byte, error)
 	// AsyncExecCommand async exec command
@@ -140,9 +144,14 @@ func (h *beeStorage) SetWithTTL(key, value []byte, ttl int64) error {
 }
 
 func (h *beeStorage) Get(key []byte) ([]byte, error) {
+	return h.GetWithGroup(key, metapb.DefaultGroup)
+}
+
+// GetWithGroup returns the value of key
+func (h *beeStorage) GetWithGroup(key []byte, group metapb.Group) ([]byte, error) {
 	req := rpcpb.AcquireGetRequest()
 	req.Key = key
-	value, err := h.ExecCommand(req)
+	value, err := h.ExecCommandWithGroup(req, group)
 	if err != nil {
 		return nil, err
 	}
@@ -179,10 +188,15 @@ func (h *beeStorage) Scan(start []byte, end []byte, limit uint64) ([][]byte, [][
 	return keys, items, nil
 }
 
-func (h *beeStorage) PutToQueue(id uint64, partition uint64, group metapb.Group, data ...[]byte) error {
+func (h *beeStorage) PutToQueue(id uint64, partition uint64, group metapb.Group, items ...[]byte) error {
+	return h.PutToQueueWithKV(id, partition, group, items)
+}
+
+func (h *beeStorage) PutToQueueWithKV(id uint64, partition uint64, group metapb.Group, items [][]byte, kvs ...[]byte) error {
 	req := rpcpb.AcquireQueueAddRequest()
 	req.Key = PartitionKey(id, partition)
-	req.Items = data
+	req.Items = items
+	req.KVS = kvs
 
 	_, err := h.ExecCommandWithGroup(req, group)
 	return err

@@ -28,9 +28,9 @@ func TestNotify(t *testing.T) {
 	time.Sleep(time.Second * 2)
 
 	n := NewQueueBasedNotifier(s)
-	assert.NoError(t, n.Notify(tenantID, buf, metapb.Notify{
+	assert.NoError(t, n.Notify(tenantID, buf, []metapb.Notify{metapb.Notify{
 		UserID: 1,
-	}), "TestNotify failed")
+	}}), "TestNotify failed")
 
 	req := rpcpb.AcquireQueueFetchRequest()
 	req.Key = storage.PartitionKey(tenantID, 0)

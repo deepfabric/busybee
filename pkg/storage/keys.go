@@ -23,6 +23,7 @@ const (
 	queueOffsetField    byte = 0
 	queueItemField      byte = 1
 	queueCommittedField byte = 2
+	queueKVField        byte = 3
 )
 
 // TempKey returns the temp key
@@ -49,6 +50,17 @@ func PartitionKey(id, partition uint64) []byte {
 	key := make([]byte, 16, 16)
 	goetty.Uint64ToBytesTo(id, key)
 	goetty.Uint64ToBytesTo(partition, key[8:])
+	return key
+}
+
+// PartitionKVKey returns partition kv key
+func PartitionKVKey(id, partition uint64, src []byte) []byte {
+	prefixKey := PartitionKey(id, partition)
+	n := len(prefixKey) + len(src) + 1
+	key := make([]byte, n, n)
+	copy(key, prefixKey)
+	key[len(prefixKey)] = queueKVField
+	copy(key[len(prefixKey)+1:], src)
 	return key
 }
 
@@ -155,12 +167,19 @@ func itemKey(src []byte, offset uint64, buf *goetty.ByteBuf) []byte {
 	return buf.WrittenDataAfterMark()
 }
 
-// committedOffsetKey store the commttied offset per consumer
 func committedOffsetKey(src []byte, consumer []byte, buf *goetty.ByteBuf) []byte {
 	buf.MarkWrite()
 	buf.Write(src)
 	buf.WriteByte(queueCommittedField)
 	buf.Write(consumer)
+	return buf.WrittenDataAfterMark()
+}
+
+func queueKVKey(src []byte, key []byte, buf *goetty.ByteBuf) []byte {
+	buf.MarkWrite()
+	buf.Write(src)
+	buf.WriteByte(queueKVField)
+	buf.Write(key)
 	return buf.WrittenDataAfterMark()
 }
 

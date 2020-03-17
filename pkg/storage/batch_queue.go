@@ -2,7 +2,6 @@ package storage
 
 import (
 	"fmt"
-	"log"
 	"math"
 	"time"
 
@@ -12,6 +11,7 @@ import (
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/fagongzi/goetty"
+	"github.com/fagongzi/log"
 	"github.com/fagongzi/util/format"
 	"github.com/fagongzi/util/protoc"
 )
@@ -92,6 +92,11 @@ func (qb *queueBatch) add(req *rpcpb.QueueAddRequest, b *batch) {
 	for _, item := range req.Items {
 		qb.maxOffset++
 		qb.pairs = append(qb.pairs, itemKey(req.Key, qb.maxOffset, qb.buf), item)
+	}
+
+	n := len(req.KVS) / 2
+	for i := 0; i < n; i++ {
+		qb.pairs = append(qb.pairs, queueKVKey(req.Key, req.KVS[2*i], qb.buf), req.KVS[2*i+1])
 	}
 }
 

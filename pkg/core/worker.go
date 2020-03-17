@@ -42,21 +42,23 @@ type item struct {
 }
 
 type stateWorker struct {
-	stopped      uint32
-	key          string
-	eng          Engine
-	buf          *goetty.ByteBuf
-	state        metapb.WorkflowInstanceWorkerState
-	totalCrowds  *roaring.Bitmap
-	stepCrowds   []*roaring.Bitmap
-	directSteps  map[string]string
-	steps        map[string]excution
-	entryActions map[string]string
-	leaveActions map[string]string
-	queue        *task.Queue
-	cronIDs      []cron.EntryID
-	consumer     queue.Consumer
-	tenant       string
+	stopped          uint32
+	key              string
+	eng              Engine
+	buf              *goetty.ByteBuf
+	state            metapb.WorkflowInstanceWorkerState
+	totalCrowds      *roaring.Bitmap
+	stepCrowds       []*roaring.Bitmap
+	directSteps      map[string]string
+	steps            map[string]excution
+	entryActions     map[string]string
+	leaveActions     map[string]string
+	queue            *task.Queue
+	cronIDs          []cron.EntryID
+	consumer         queue.Consumer
+	tenant           string
+	queueStateKey    []byte
+	queueGetStateKey []byte
 }
 
 func newStateWorker(key string, state metapb.WorkflowInstanceWorkerState, eng Engine) (*stateWorker, error) {
@@ -68,15 +70,21 @@ func newStateWorker(key string, state metapb.WorkflowInstanceWorkerState, eng En
 		return nil, err
 	}
 
+	queueStateKey := make([]byte, 12, 12)
+	goetty.Uint64ToBytesTo(state.InstanceID, queueStateKey)
+	goetty.Uint32ToBytesTo(state.Index, queueStateKey[8:])
+
 	w := &stateWorker{
-		key:         key,
-		state:       state,
-		eng:         eng,
-		buf:         goetty.NewByteBuf(32),
-		totalCrowds: acquireBM(),
-		queue:       task.New(1024),
-		consumer:    consumer,
-		tenant:      string(format.UInt64ToString(state.TenantID)),
+		key:              key,
+		state:            state,
+		eng:              eng,
+		buf:              goetty.NewByteBuf(32),
+		totalCrowds:      acquireBM(),
+		queue:            task.New(1024),
+		consumer:         consumer,
+		tenant:           string(format.UInt64ToString(state.TenantID)),
+		queueStateKey:    queueStateKey,
+		queueGetStateKey: storage.PartitionKVKey(state.TenantID, 0, queueStateKey),
 	}
 
 	err = w.resetByState()
@@ -251,6 +259,8 @@ func (w *stateWorker) doEvent(action int, data interface{}) error {
 
 func (w *stateWorker) run() {
 	go func() {
+		w.checkLastTranscation()
+
 		items := make([]interface{}, workerBatch, workerBatch)
 		tran := newTransaction()
 
@@ -340,6 +350,8 @@ func (w *stateWorker) completeTransaction(tran *transaction) {
 		}
 
 		w.retryDo("exec notify", tran, w.execNotify)
+
+		w.state.Version++
 		w.retryDo("exec update state", tran, w.execUpdate)
 
 		logger.Infof("worker %s state update to version %d",
@@ -352,9 +364,48 @@ func (w *stateWorker) completeTransaction(tran *transaction) {
 	}
 }
 
-func (w *stateWorker) execNotify(batch *transaction) error {
-	notifies := make([]metapb.Notify, 0, len(batch.changes))
-	for _, changed := range batch.changes {
+func (w *stateWorker) checkLastTranscation() {
+	// Every transcation will wirte a newest state to the store if crowd changed,
+	// check the last version and the current, and do:
+	// 1. last verison <= current version, transaction completed, remove transaction
+	// 2. last verison > current version, last notify changed already added, but state was not added
+	for {
+		value, err := w.eng.Storage().GetWithGroup(w.queueGetStateKey, metapb.TenantOutputGroup)
+		if err != nil {
+			logger.Errorf("worker %s load last transaction failed with %+v, retry later",
+				w.key,
+				err)
+			time.Sleep(time.Second * 1)
+			continue
+		}
+
+		if len(value) == 0 {
+			logger.Infof("worker %s has no last transcation",
+				w.key)
+			break
+		}
+
+		last := metapb.WorkflowInstanceWorkerState{}
+		protoc.MustUnmarshal(&last, value)
+		if last.Version <= w.state.Version {
+			break
+		}
+
+		w.state = last
+		err = w.resetByState()
+		if err != nil {
+			logger.Fatalf("worker %s reset state failed with %+v",
+				w.key, err)
+		}
+
+		w.retryDo("update state by last trnasaction", nil, w.execUpdate)
+		break
+	}
+}
+
+func (w *stateWorker) execNotify(tran *transaction) error {
+	notifies := make([]metapb.Notify, 0, len(tran.changes))
+	for _, changed := range tran.changes {
 		nt := metapb.Notify{
 			TenantID:   w.state.TenantID,
 			WorkflowID: w.state.WorkflowID,
@@ -377,11 +428,11 @@ func (w *stateWorker) execNotify(batch *transaction) error {
 		}
 	}
 
-	return w.eng.Notifier().Notify(w.state.TenantID, w.buf, notifies...)
+	// TODO: cas to avoid duplicate added
+	return w.eng.Notifier().Notify(w.state.TenantID, w.buf, notifies, w.queueStateKey, protoc.MustMarshal(&w.state))
 }
 
 func (w *stateWorker) execUpdate(batch *transaction) error {
-	w.state.Version++
 	for idx := range w.state.States {
 		w.state.States[idx].Loader = metapb.RawLoader
 		w.state.States[idx].LoaderMeta = bbutil.MustMarshalBM(w.stepCrowds[idx])
@@ -456,6 +507,7 @@ func (w *stateWorker) doUpdateWorkflow(workflow metapb.Workflow) error {
 	}
 	w.stepCrowds = newCrowds
 
+	w.state.Version++
 	w.retryDo("exec update workflow", nil, w.execUpdate)
 	logger.Infof("worker %s workflow updated", w.key)
 	return nil
@@ -481,6 +533,7 @@ func (w *stateWorker) doUpdateCrowd(crowd []byte) error {
 		sc.And(newTotal)
 	}
 
+	w.state.Version++
 	w.retryDo("exec update crowd", nil, w.execUpdate)
 	logger.Infof("worker %s crowd updated", w.key)
 	return nil

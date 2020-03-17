@@ -479,3 +479,58 @@ func TestPutToQueue(t *testing.T) {
 	protoc.MustUnmarshal(resp, data)
 	assert.Equal(t, 0, len(resp.Values), "TestPutToQueue failed")
 }
+
+func TestPutToQueueWithKV(t *testing.T) {
+	store, deferFunc := NewTestStorage(t, true)
+	defer deferFunc()
+
+	err := store.RaftStore().AddShards(bhmetapb.Shard{
+		Start:        goetty.Uint64ToBytes(10),
+		End:          goetty.Uint64ToBytes(11),
+		Group:        uint64(metapb.TenantOutputGroup),
+		DisableSplit: true,
+	})
+	assert.NoError(t, err, "TestPutToQueueWithKV failed")
+
+	time.Sleep(time.Second * 1)
+
+	key := []byte("key1")
+	value := []byte("value")
+	err = store.PutToQueueWithKV(10, 0, metapb.TenantOutputGroup, [][]byte{
+		protoc.MustMarshal(&metapb.Event{
+			Type: metapb.UserType,
+			User: &metapb.UserEvent{
+				TenantID: 10,
+				UserID:   1,
+				Data: []metapb.KV{
+					metapb.KV{
+						Key:   []byte("uid"),
+						Value: []byte("1"),
+					},
+				},
+			},
+		}),
+	}, key, value)
+	assert.NoError(t, err, "TestPutToQueueWithKV failed")
+
+	req := rpcpb.AcquireQueueFetchRequest()
+	req.Key = PartitionKey(10, 0)
+	req.Count = 3
+	req.Consumer = []byte("c")
+	data, err := store.ExecCommandWithGroup(req, metapb.TenantOutputGroup)
+	assert.NoError(t, err, "TestPutToQueueWithKV failed")
+
+	resp := rpcpb.AcquireBytesSliceResponse()
+	protoc.MustUnmarshal(resp, data)
+	assert.Equal(t, 1, len(resp.Values), "TestPutToQueueWithKV failed")
+	evt := &metapb.Event{}
+	protoc.MustUnmarshal(evt, resp.Values[0])
+	assert.Equal(t, metapb.UserType, evt.Type, "TestPutToQueueWithKV failed")
+	assert.Equal(t, 1, len(evt.User.Data), "TestPutToQueueWithKV failed")
+	assert.Equal(t, "1", string(evt.User.Data[0].Value), "TestPutToQueueWithKV failed")
+
+	v, err := store.GetWithGroup(PartitionKVKey(10, 0, key), metapb.TenantOutputGroup)
+	assert.NoError(t, err, "TestPutToQueueWithKV failed")
+	assert.NotEmpty(t, v, "TestPutToQueueWithKV failed")
+	assert.Equal(t, string(value), string(v), "TestPutToQueueWithKV failed")
+}

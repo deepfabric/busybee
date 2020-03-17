@@ -12,5 +12,5 @@ var (
 
 // Notifier service notify
 type Notifier interface {
-	Notify(uint64, *goetty.ByteBuf, ...metapb.Notify) error
+	Notify(uint64, *goetty.ByteBuf, []metapb.Notify, ...[]byte) error
 }

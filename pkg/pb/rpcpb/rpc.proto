@@ -107,19 +107,19 @@ message Response {
 
 // SetRequest set a key value pair
 message SetRequest {
-    bytes  key   = 1;
-    bytes  value = 2;
-    int64  ttl   = 3 [(gogoproto.customname) = "TTL"];
+    bytes  key         = 1;
+    bytes  value       = 2;
+    int64  ttl         = 3 [(gogoproto.customname) = "TTL"];
 }
 
 // GetRequest get value by key
 message GetRequest {
-    bytes key  = 1;
+    bytes        key   = 1;
 }
 
 // DeleteRequest remove a key value pair
 message DeleteRequest {
-    bytes key = 1;
+    bytes key          = 1;
 }
 
 // BMCreateRequest create a bitmap
@@ -237,6 +237,7 @@ message InstanceCrowdStateRequest {
 message QueueAddRequest {
     bytes          key   = 1;
     repeated bytes items = 2;
+    repeated bytes kvs   = 3 [(gogoproto.customname) = "KVS"];
 }
 
 // QueueFetchResponse add items into a queue

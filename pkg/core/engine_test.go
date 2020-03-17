@@ -1196,6 +1196,242 @@ func TestTimerWithUseStepCrowdToDrive(t *testing.T) {
 	assert.Equal(t, uint64(2), m["step_end"], "TestTimerWithUseStepCrowdToDrive failed")
 }
 
+func TestLastTransactionNotCompleted(t *testing.T) {
+	store, deferFunc := storage.NewTestStorage(t, false)
+	defer deferFunc()
+
+	tid := uint64(10001)
+	wid := uint64(10000)
+
+	ng, err := NewEngine(store, notify.NewQueueBasedNotifier(store))
+	assert.NoError(t, err, "TestLastTransaction failed")
+	assert.NoError(t, ng.Start(), "TestLastTransaction failed")
+
+	err = ng.TenantInit(tid, 1)
+	assert.NoError(t, err, "TestLastTransaction failed")
+	time.Sleep(time.Second)
+
+	bm := roaring.BitmapOf(1)
+	instanceID, err := ng.StartInstance(metapb.Workflow{
+		ID:       wid,
+		TenantID: tid,
+		Name:     "test_wf",
+		Steps: []metapb.Step{
+			metapb.Step{
+				Name: "step_start",
+				Execution: metapb.Execution{
+					Type: metapb.Branch,
+					Branches: []metapb.ConditionExecution{
+						metapb.ConditionExecution{
+							Condition: metapb.Expr{
+								Value: []byte("{num: event.uid} == 1"),
+							},
+							NextStep: "step_end",
+						},
+						metapb.ConditionExecution{
+							Condition: metapb.Expr{
+								Value: []byte("1 == 1"),
+							},
+							NextStep: "step_end",
+						},
+					},
+				},
+			},
+			metapb.Step{
+				Name: "step_end",
+				Execution: metapb.Execution{
+					Type:   metapb.Direct,
+					Direct: &metapb.DirectExecution{},
+				},
+			},
+		},
+	}, metapb.RawLoader, util.MustMarshalBM(bm), 1)
+	assert.NoError(t, err, "TestLastTransaction failed")
+
+	key := make([]byte, 12, 12)
+	goetty.Uint64ToBytesTo(instanceID, key)
+	goetty.Uint32ToBytesTo(0, key[8:])
+	_, err = store.ExecCommandWithGroup(&rpcpb.SetRequest{
+		Key: storage.PartitionKVKey(tid, 0, key),
+		Value: protoc.MustMarshal(&metapb.WorkflowInstanceWorkerState{
+			Version:    10,
+			TenantID:   tid,
+			WorkflowID: wid,
+			InstanceID: instanceID,
+			Index:      0,
+			States: []metapb.StepState{
+				metapb.StepState{
+					Step: metapb.Step{
+						Name: "step_start",
+						Execution: metapb.Execution{
+							Type: metapb.Branch,
+							Branches: []metapb.ConditionExecution{
+								metapb.ConditionExecution{
+									Condition: metapb.Expr{
+										Value: []byte("{num: event.uid} == 1"),
+									},
+									NextStep: "step_end",
+								},
+								metapb.ConditionExecution{
+									Condition: metapb.Expr{
+										Value: []byte("1 == 1"),
+									},
+									NextStep: "step_end",
+								},
+							},
+						},
+					},
+					TotalCrowd: 0,
+					Loader:     metapb.RawLoader,
+					LoaderMeta: emptyBMData.Bytes(),
+				},
+				metapb.StepState{
+					Step: metapb.Step{
+						Name: "step_end",
+						Execution: metapb.Execution{
+							Type:   metapb.Direct,
+							Direct: &metapb.DirectExecution{},
+						},
+					},
+					TotalCrowd: 1,
+					Loader:     metapb.RawLoader,
+					LoaderMeta: util.MustMarshalBM(roaring.BitmapOf(1)),
+				},
+			},
+		}),
+	}, metapb.TenantOutputGroup)
+	assert.NoError(t, err, "TestLastTransaction failed")
+
+	assert.NoError(t, waitTestWorkflow(ng, wid, metapb.Running), "TestLastTransaction failed")
+
+	states, err := ng.InstanceCountState(wid)
+	assert.NoError(t, err, "TestLastTransaction failed")
+	m := make(map[string]uint64)
+	for _, state := range states.States {
+		m[state.Step] = state.Count
+	}
+	assert.Equal(t, uint64(0), m["step_start"], "TestLastTransaction failed")
+	assert.Equal(t, uint64(1), m["step_end"], "TestLastTransaction failed")
+}
+
+func TestLastTransactionCompleted(t *testing.T) {
+	store, deferFunc := storage.NewTestStorage(t, false)
+	defer deferFunc()
+
+	tid := uint64(10001)
+	wid := uint64(10000)
+
+	ng, err := NewEngine(store, notify.NewQueueBasedNotifier(store))
+	assert.NoError(t, err, "TestLastTransactionCompleted failed")
+	assert.NoError(t, ng.Start(), "TestLastTransactionCompleted failed")
+
+	err = ng.TenantInit(tid, 1)
+	assert.NoError(t, err, "TestLastTransactionCompleted failed")
+	time.Sleep(time.Second)
+
+	bm := roaring.BitmapOf(1)
+	instanceID, err := ng.StartInstance(metapb.Workflow{
+		ID:       wid,
+		TenantID: tid,
+		Name:     "test_wf",
+		Steps: []metapb.Step{
+			metapb.Step{
+				Name: "step_start",
+				Execution: metapb.Execution{
+					Type: metapb.Branch,
+					Branches: []metapb.ConditionExecution{
+						metapb.ConditionExecution{
+							Condition: metapb.Expr{
+								Value: []byte("{num: event.uid} == 1"),
+							},
+							NextStep: "step_end",
+						},
+						metapb.ConditionExecution{
+							Condition: metapb.Expr{
+								Value: []byte("1 == 1"),
+							},
+							NextStep: "step_end",
+						},
+					},
+				},
+			},
+			metapb.Step{
+				Name: "step_end",
+				Execution: metapb.Execution{
+					Type:   metapb.Direct,
+					Direct: &metapb.DirectExecution{},
+				},
+			},
+		},
+	}, metapb.RawLoader, util.MustMarshalBM(bm), 1)
+	assert.NoError(t, err, "TestLastTransactionCompleted failed")
+
+	key := make([]byte, 12, 12)
+	goetty.Uint64ToBytesTo(instanceID, key)
+	goetty.Uint32ToBytesTo(0, key[8:])
+	_, err = store.ExecCommandWithGroup(&rpcpb.SetRequest{
+		Key: storage.PartitionKVKey(tid, 0, key),
+		Value: protoc.MustMarshal(&metapb.WorkflowInstanceWorkerState{
+			Version:    0,
+			TenantID:   tid,
+			WorkflowID: wid,
+			InstanceID: instanceID,
+			Index:      0,
+			States: []metapb.StepState{
+				metapb.StepState{
+					Step: metapb.Step{
+						Name: "step_start",
+						Execution: metapb.Execution{
+							Type: metapb.Branch,
+							Branches: []metapb.ConditionExecution{
+								metapb.ConditionExecution{
+									Condition: metapb.Expr{
+										Value: []byte("{num: event.uid} == 1"),
+									},
+									NextStep: "step_end",
+								},
+								metapb.ConditionExecution{
+									Condition: metapb.Expr{
+										Value: []byte("1 == 1"),
+									},
+									NextStep: "step_end",
+								},
+							},
+						},
+					},
+					TotalCrowd: 0,
+					Loader:     metapb.RawLoader,
+					LoaderMeta: emptyBMData.Bytes(),
+				},
+				metapb.StepState{
+					Step: metapb.Step{
+						Name: "step_end",
+						Execution: metapb.Execution{
+							Type:   metapb.Direct,
+							Direct: &metapb.DirectExecution{},
+						},
+					},
+					TotalCrowd: 1,
+					Loader:     metapb.RawLoader,
+					LoaderMeta: util.MustMarshalBM(roaring.BitmapOf(1)),
+				},
+			},
+		}),
+	}, metapb.TenantOutputGroup)
+	assert.NoError(t, err, "TestLastTransactionCompleted failed")
+
+	assert.NoError(t, waitTestWorkflow(ng, wid, metapb.Running), "TestLastTransactionCompleted failed")
+
+	states, err := ng.InstanceCountState(wid)
+	assert.NoError(t, err, "TestLastTransactionCompleted failed")
+	m := make(map[string]uint64)
+	for _, state := range states.States {
+		m[state.Step] = state.Count
+	}
+	assert.Equal(t, uint64(1), m["step_start"], "TestLastTransactionCompleted failed")
+	assert.Equal(t, uint64(0), m["step_end"], "TestLastTransactionCompleted failed")
+}
+
 type errorNotify struct {
 	times    int
 	max      int
@@ -1209,9 +1445,9 @@ func newErrorNotify(max int, delegate notify.Notifier) notify.Notifier {
 	}
 }
 
-func (nt *errorNotify) Notify(id uint64, buf *goetty.ByteBuf, notifies ...metapb.Notify) error {
+func (nt *errorNotify) Notify(id uint64, buf *goetty.ByteBuf, notifies []metapb.Notify, kvs ...[]byte) error {
 	if nt.times >= nt.max {
-		return nt.delegate.Notify(id, buf, notifies...)
+		return nt.delegate.Notify(id, buf, notifies, kvs...)
 	}
 
 	nt.times++

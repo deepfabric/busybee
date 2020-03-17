@@ -25,7 +25,7 @@ func NewQueueBasedNotifier(store storage.Storage) Notifier {
 	}
 }
 
-func (n *queueNotifier) Notify(id uint64, buf *goetty.ByteBuf, notifies ...metapb.Notify) error {
+func (n *queueNotifier) Notify(id uint64, buf *goetty.ByteBuf, notifies []metapb.Notify, kvs ...[]byte) error {
 	var items [][]byte
 	for idx := range notifies {
 		if notifies[idx].TTL > 0 {
@@ -38,7 +38,7 @@ func (n *queueNotifier) Notify(id uint64, buf *goetty.ByteBuf, notifies ...metap
 		items = append(items, protoc.MustMarshal(&notifies[idx]))
 	}
 
-	return n.store.PutToQueue(id, 0, metapb.TenantOutputGroup, items...)
+	return n.store.PutToQueueWithKV(id, 0, metapb.TenantOutputGroup, items, kvs...)
 }
 
 func (n *queueNotifier) addTTL(buf *goetty.ByteBuf, nt *metapb.Notify) error {
