@@ -474,6 +474,7 @@ func (w *stateWorker) doUpdateWorkflow(workflow metapb.Workflow) error {
 	w.leaveActions = make(map[string]string)
 
 	var newCrowds []*roaring.Bitmap
+	var newStates []metapb.StepState
 	for idx, step := range workflow.Steps {
 		exec, err := newExcution(step.Name, step.Execution)
 		if err != nil {
@@ -512,13 +513,17 @@ func (w *stateWorker) doUpdateWorkflow(workflow metapb.Workflow) error {
 		}
 
 		newCrowds = append(newCrowds, acquireBM())
+		newStates = append(newStates, metapb.StepState{
+			Step: step,
+		})
 	}
 
 	for _, bm := range w.stepCrowds {
 		releaseBM(bm)
 	}
-	w.stepCrowds = newCrowds
 
+	w.stepCrowds = newCrowds
+	w.state.States = newStates
 	w.state.Version++
 	w.retryDo("exec update workflow", nil, w.execUpdate)
 	logger.Infof("worker %s workflow updated", w.key)

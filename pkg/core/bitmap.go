@@ -28,6 +28,10 @@ func (eng *engine) loadBM(loader metapb.BMLoader, meta []byte) (*roaring.Bitmap,
 }
 
 func (eng *engine) putBM(bm *roaring.Bitmap, key []byte, ttl uint32) (metapb.BMLoader, []byte, error) {
+	if bm == nil {
+		return metapb.RawLoader, emptyBMData.Bytes(), nil
+	}
+
 	data := util.MustMarshalBM(bm)
 	if uint64(len(data)) <= eng.opts.shardBitmapBytes {
 		return metapb.RawLoader, data, nil
