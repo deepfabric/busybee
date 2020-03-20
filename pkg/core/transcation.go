@@ -84,20 +84,6 @@ func (tran *transaction) doStepTimerEvent(item item) {
 		tran.err = err
 		return
 	}
-
-	if cond, ok := tran.w.restartConditions[idx]; ok {
-		restart, _, err := cond.Exec(ctx)
-		if err != nil {
-			metric.IncWorkflowWorkerFailed()
-			logger.Errorf("worker %s trigger timer failed with %+v",
-				tran.w.key,
-				err)
-			tran.err = err
-			return
-		}
-
-		tran.restart = restart
-	}
 }
 
 func (tran *transaction) doStepUserEvents(item item) {
