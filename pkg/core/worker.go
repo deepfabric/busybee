@@ -170,7 +170,7 @@ func (w *stateWorker) onEvent(maxOffset uint64, items ...[]byte) (uint64, error)
 		len(items))
 
 	offset := maxOffset - uint64(len(items)) + 1
-	completed := uint64(0)
+	completed := offset - 1
 
 	var event metapb.Event
 	var events []metapb.UserEvent
@@ -505,14 +505,12 @@ func (w *stateWorker) doUpdateWorkflow(workflow metapb.Workflow) error {
 			w.directSteps[step.Name] = step.Execution.Direct.NextStep
 		}
 
+		newBM := acquireBM()
 		if bm, ok := oldCrowds[step.Name]; ok {
-			newBM := acquireBM()
 			newBM.Or(bm)
-			newCrowds = append(newCrowds, newBM)
-			continue
 		}
 
-		newCrowds = append(newCrowds, acquireBM())
+		newCrowds = append(newCrowds, newBM)
 		newStates = append(newStates, metapb.StepState{
 			Step: step,
 		})

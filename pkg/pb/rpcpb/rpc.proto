@@ -265,7 +265,6 @@ message QueueFetchRequest {
     bytes  consumer        = 2;
     uint64 completedOffset = 3;
     uint64 count           = 4;
-    uint64 concurrency     = 5;
 }
 
 // TenantInitRequest init tenant

@@ -95,7 +95,6 @@ func (c *consumer) startPartition(ctx context.Context, idx, batch, concurrency u
 				req.CompletedOffset = offset
 				req.Consumer = c.consumer
 				req.Count = batch
-				req.Concurrency = concurrency
 
 				value, err := c.store.ExecCommandWithGroup(req, c.group)
 				if err != nil {
