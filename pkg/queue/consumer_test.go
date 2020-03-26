@@ -29,7 +29,13 @@ func TestConsumer(t *testing.T) {
 
 	time.Sleep(time.Second * 1)
 
-	err = store.Set(storage.QueueMetadataKey(tid, metapb.TenantInputGroup), goetty.Uint64ToBytes(3))
+	err = store.Set(storage.TenantMetadataKey(tid), protoc.MustMarshal(&metapb.Tenant{
+		ID: tid,
+		Input: metapb.TenantQueue{
+			Partitions:      3,
+			ConsumerTimeout: 60,
+		},
+	}))
 	assert.NoError(t, err, "TestConsomer failed")
 
 	err = store.PutToQueue(tid, 0, metapb.TenantInputGroup, protoc.MustMarshal(&metapb.Event{
@@ -71,7 +77,7 @@ func TestConsumer(t *testing.T) {
 	}))
 	assert.NoError(t, err, "TestConsumer failed")
 
-	c, err := NewConsumer(tid, metapb.TenantInputGroup, store, []byte("c"))
+	c, err := NewConsumer(tid, store, []byte("c"))
 	assert.NoError(t, err, "TestConsumer failed")
 
 	var lock sync.Mutex

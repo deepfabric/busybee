@@ -6,6 +6,7 @@ import (
 	"github.com/deepfabric/beehive/pb"
 	bhmetapb "github.com/deepfabric/beehive/pb/metapb"
 	"github.com/deepfabric/beehive/pb/raftcmdpb"
+	"github.com/deepfabric/beehive/raftstore"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/deepfabric/busybee/pkg/util"
 	"github.com/fagongzi/goetty"
@@ -14,10 +15,10 @@ import (
 	"github.com/fagongzi/util/protoc"
 )
 
-func (h *beeStorage) allocID(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *goetty.ByteBuf) (uint64, int64, *raftcmdpb.Response) {
+func (h *beeStorage) allocID(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs map[string]interface{}) (uint64, int64, *raftcmdpb.Response) {
 	resp := pb.AcquireResponse()
-	customReq := rpcpb.AllocIDRequest{}
-	protoc.MustUnmarshal(&customReq, req.Cmd)
+	customReq := getAllocIDRequest(attrs)
+	protoc.MustUnmarshal(customReq, req.Cmd)
 
 	value, err := h.getValue(shard.ID, req.Key)
 	if err != nil {
@@ -40,20 +41,19 @@ func (h *beeStorage) allocID(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *
 		log.Fatalf("alloc id %+v failed with %+v", req.Key, err)
 	}
 
-	customResp := rpcpb.AcquireUint32RangeResponse()
+	customResp := getUint32RangeResponse(attrs)
 	customResp.From = start
 	customResp.To = end
 	resp.Value = protoc.MustMarshal(customResp)
-	rpcpb.ReleaseUint32RangeResponse(customResp)
 
 	written := uint64(len(req.Key)) + 4
 	return written, int64(written), resp
 }
 
-func (h *beeStorage) resetID(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *goetty.ByteBuf) (uint64, int64, *raftcmdpb.Response) {
+func (h *beeStorage) resetID(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs map[string]interface{}) (uint64, int64, *raftcmdpb.Response) {
 	resp := pb.AcquireResponse()
-	customReq := rpcpb.ResetIDRequest{}
-	protoc.MustUnmarshal(&customReq, req.Cmd)
+	customReq := getResetIDRequest(attrs)
+	protoc.MustUnmarshal(customReq, req.Cmd)
 
 	value := 0 + customReq.StartWith
 	err := h.getStore(shard.ID).Set(req.Key, format.Uint32ToBytes(uint32(value)))
@@ -67,28 +67,28 @@ func (h *beeStorage) resetID(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *
 	return written, int64(written), resp
 }
 
-func (h *beeStorage) get(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *goetty.ByteBuf) *raftcmdpb.Response {
+func (h *beeStorage) get(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs map[string]interface{}) *raftcmdpb.Response {
 	resp := pb.AcquireResponse()
-	customReq := rpcpb.GetRequest{}
-	protoc.MustUnmarshal(&customReq, req.Cmd)
+	customReq := getGetRequest(attrs)
+	protoc.MustUnmarshal(customReq, req.Cmd)
 
 	value, err := h.getValue(shard.ID, req.Key)
 	if err != nil {
 		log.Fatalf("get %+v failed with %+v", req.Key, err)
 	}
 
-	customResp := rpcpb.AcquireBytesResponse()
+	customResp := getBytesResponse(attrs)
 	customResp.Value = value
 	resp.Value = protoc.MustMarshal(customResp)
-	rpcpb.ReleaseBytesResponse(customResp)
 	return resp
 }
 
-func (h *beeStorage) scan(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *goetty.ByteBuf) *raftcmdpb.Response {
+func (h *beeStorage) scan(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs map[string]interface{}) *raftcmdpb.Response {
 	resp := &raftcmdpb.Response{}
-	customReq := rpcpb.ScanRequest{}
-	protoc.MustUnmarshal(&customReq, req.Cmd)
+	customReq := getScanRequest(attrs)
+	protoc.MustUnmarshal(customReq, req.Cmd)
 
+	buf := attrs[raftstore.AttrBuf].(*goetty.ByteBuf)
 	buf.MarkWrite()
 	buf.Write(req.Key[0:9])
 	buf.Write(customReq.End)
@@ -105,7 +105,7 @@ func (h *beeStorage) scan(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *goe
 		}
 	}
 
-	customResp := rpcpb.BytesSliceResponse{}
+	customResp := getBytesSliceResponse(attrs)
 	err := h.getStore(shard.ID).Scan(req.Key, end, func(key, value []byte) (bool, error) {
 		buf.MarkWrite()
 		buf.Write(key[9:])
@@ -124,14 +124,14 @@ func (h *beeStorage) scan(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *goe
 		log.Fatalf("scan %+v failed with %+v", req.Key, err)
 	}
 
-	resp.Value = protoc.MustMarshal(&customResp)
+	resp.Value = protoc.MustMarshal(customResp)
 	return resp
 }
 
-func (h *beeStorage) bmcontains(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *goetty.ByteBuf) *raftcmdpb.Response {
+func (h *beeStorage) bmcontains(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs map[string]interface{}) *raftcmdpb.Response {
 	resp := pb.AcquireResponse()
-	customReq := rpcpb.BMContainsRequest{}
-	protoc.MustUnmarshal(&customReq, req.Cmd)
+	customReq := getBMContainsRequest(attrs)
+	protoc.MustUnmarshal(customReq, req.Cmd)
 
 	value, err := h.getValue(shard.ID, req.Key)
 	if err != nil {
@@ -141,22 +141,22 @@ func (h *beeStorage) bmcontains(shard bhmetapb.Shard, req *raftcmdpb.Request, bu
 	contains := false
 	if len(value) > 0 {
 		bm := util.MustParseBM(value)
-		bm2 := util.AcquireBitmap()
+		bm2 := getTempBM(attrs)
 		bm2.AddMany(customReq.Value)
-		contains = util.BMAnd(bm, bm2).GetCardinality() == uint64(len(customReq.Value))
+		bm.And(bm2)
+		contains = bm.GetCardinality() == uint64(len(customReq.Value))
 	}
 
-	customResp := rpcpb.AcquireBoolResponse()
+	customResp := getBoolResponse(attrs)
 	customResp.Value = contains
 	resp.Value = protoc.MustMarshal(customResp)
-	rpcpb.ReleaseBoolResponse(customResp)
 	return resp
 }
 
-func (h *beeStorage) bmcount(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *goetty.ByteBuf) *raftcmdpb.Response {
+func (h *beeStorage) bmcount(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs map[string]interface{}) *raftcmdpb.Response {
 	resp := pb.AcquireResponse()
-	customReq := rpcpb.BMCountRequest{}
-	protoc.MustUnmarshal(&customReq, req.Cmd)
+	customReq := getBMCountRequest(attrs)
+	protoc.MustUnmarshal(customReq, req.Cmd)
 
 	value, err := h.getValue(shard.ID, req.Key)
 	if err != nil {
@@ -168,17 +168,16 @@ func (h *beeStorage) bmcount(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *
 		count = util.MustParseBM(value).GetCardinality()
 	}
 
-	customResp := rpcpb.AcquireUint64Response()
+	customResp := getUint64Response(attrs)
 	customResp.Value = count
 	resp.Value = protoc.MustMarshal(customResp)
-	rpcpb.ReleaseUint64Response(customResp)
 	return resp
 }
 
-func (h *beeStorage) bmrange(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *goetty.ByteBuf) *raftcmdpb.Response {
+func (h *beeStorage) bmrange(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs map[string]interface{}) *raftcmdpb.Response {
 	resp := pb.AcquireResponse()
-	customReq := rpcpb.BMRangeRequest{}
-	protoc.MustUnmarshal(&customReq, req.Cmd)
+	customReq := getBMRangeRequest(attrs)
+	protoc.MustUnmarshal(customReq, req.Cmd)
 
 	value, err := h.getValue(shard.ID, req.Key)
 	if err != nil {
@@ -207,17 +206,16 @@ func (h *beeStorage) bmrange(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *
 		}
 	}
 
-	customResp := rpcpb.AcquireUint32SliceResponse()
+	customResp := getUint32SliceResponse(attrs)
 	customResp.Values = values
 	resp.Value = protoc.MustMarshal(customResp)
-	rpcpb.ReleaseUint32SliceResponse(customResp)
 	return resp
 }
 
-func (h *beeStorage) updateMapping(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *goetty.ByteBuf) (uint64, int64, *raftcmdpb.Response) {
+func (h *beeStorage) updateMapping(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs map[string]interface{}) (uint64, int64, *raftcmdpb.Response) {
 	resp := pb.AcquireResponse()
-	customReq := rpcpb.UpdateMappingRequest{}
-	protoc.MustUnmarshal(&customReq, req.Cmd)
+	customReq := getUpdateMappingRequest(attrs)
+	protoc.MustUnmarshal(customReq, req.Cmd)
 
 	set := customReq.Set
 	data, err := h.getValue(shard.ID, req.Key)

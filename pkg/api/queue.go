@@ -9,7 +9,6 @@ import (
 	"github.com/deepfabric/busybee/pkg/core"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/storage"
-	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/log"
 	"github.com/fagongzi/util/protoc"
 	"github.com/fagongzi/util/task"
@@ -26,7 +25,7 @@ type tenantQueue struct {
 	cb      func(arg interface{}, value []byte, err error)
 
 	runner         *task.Runner
-	partitons      uint64
+	partitons      uint32
 	partitonQueues []*task.Queue
 	created        uint32
 }
@@ -52,12 +51,12 @@ func (q *tenantQueue) waitCreated() {
 
 func (q *tenantQueue) add(ctx ctx) {
 	q.waitCreated()
-	q.partitonQueues[int(uint64(ctx.req.AddEvent.Event.UserID)%q.partitons)].Put(ctx)
+	q.partitonQueues[ctx.req.AddEvent.Event.UserID%q.partitons].Put(ctx)
 }
 
 func (q *tenantQueue) start() error {
 	if atomic.CompareAndSwapUint32(&q.running, 0, 1) {
-		value, err := q.eng.Storage().Get(storage.QueueMetadataKey(q.id, metapb.TenantInputGroup))
+		value, err := q.eng.Storage().Get(storage.TenantMetadataKey(q.id))
 		if err != nil {
 			return err
 		}
@@ -66,8 +65,11 @@ func (q *tenantQueue) start() error {
 			return fmt.Errorf("tenant %d not init", q.id)
 		}
 
-		q.partitons = goetty.Byte2UInt64(value)
-		for i := uint64(0); i < q.partitons; i++ {
+		meta := &metapb.Tenant{}
+		protoc.MustUnmarshal(meta, value)
+
+		q.partitons = meta.Input.Partitions
+		for i := uint32(0); i < q.partitons; i++ {
 			queue := task.New(1024)
 			q.partitonQueues = append(q.partitonQueues, queue)
 			q.startPartition(i, queue)
@@ -87,7 +89,7 @@ func (q *tenantQueue) stop() {
 	}
 }
 
-func (q *tenantQueue) startPartition(partition uint64, pq *task.Queue) {
+func (q *tenantQueue) startPartition(partition uint32, pq *task.Queue) {
 	q.runner.RunCancelableTask(func(c context.Context) {
 		items := make([]interface{}, 16, 16)
 		var events [][]byte

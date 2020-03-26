@@ -38,6 +38,8 @@ var (
 	removeInstanceStateShardPool sync.Pool
 	queueAddPool                 sync.Pool
 	queueFetchPool               sync.Pool
+	queueConcurrencyFetchPool    sync.Pool
+	queueJoinPool                sync.Pool
 	tenantInitPool               sync.Pool
 	updateMappingPool            sync.Pool
 	scanMappingPool              sync.Pool
@@ -428,6 +430,36 @@ func AcquireQueueFetchRequest() *QueueFetchRequest {
 func ReleaseQueueFetchRequest(value *QueueFetchRequest) {
 	value.Reset()
 	queueFetchPool.Put(value)
+}
+
+// AcquireQueueConcurrencyFetchRequest returns value from pool
+func AcquireQueueConcurrencyFetchRequest() *QueueConcurrencyFetchRequest {
+	value := queueConcurrencyFetchPool.Get()
+	if value == nil {
+		return &QueueConcurrencyFetchRequest{}
+	}
+	return value.(*QueueConcurrencyFetchRequest)
+}
+
+// ReleaseQueueConcurrencyFetchRequest returns the value to pool
+func ReleaseQueueConcurrencyFetchRequest(value *QueueConcurrencyFetchRequest) {
+	value.Reset()
+	queueConcurrencyFetchPool.Put(value)
+}
+
+// AcquireQueueJoinGroupRequest returns value from pool
+func AcquireQueueJoinGroupRequest() *QueueJoinGroupRequest {
+	value := queueJoinPool.Get()
+	if value == nil {
+		return &QueueJoinGroupRequest{}
+	}
+	return value.(*QueueJoinGroupRequest)
+}
+
+// ReleaseQueueJoinGroupRequest returns the value to pool
+func ReleaseQueueJoinGroupRequest(value *QueueJoinGroupRequest) {
+	value.Reset()
+	queueJoinPool.Put(value)
 }
 
 // AcquireUpdateMappingRequest returns value from pool

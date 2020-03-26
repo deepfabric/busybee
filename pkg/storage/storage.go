@@ -44,11 +44,11 @@ type Storage interface {
 	// Scan scan [start,end) data
 	Scan([]byte, []byte, uint64) ([][]byte, [][]byte, error)
 	// PutToQueue put data to queue
-	PutToQueue(id uint64, partition uint64, group metapb.Group, data ...[]byte) error
+	PutToQueue(id uint64, partition uint32, group metapb.Group, data ...[]byte) error
 	// PutToQueueAndKV put data to queue and put a kv
-	PutToQueueWithKV(id uint64, partition uint64, group metapb.Group, items [][]byte, kvs ...[]byte) error
+	PutToQueueWithKV(id uint64, partition uint32, group metapb.Group, items [][]byte, kvs ...[]byte) error
 	// PutToQueueWithKVAndCondition put data to queue and put a kv and a condition
-	PutToQueueWithKVAndCondition(id uint64, partition uint64, group metapb.Group, items [][]byte, cond *rpcpb.Condition, kvs ...[]byte) error
+	PutToQueueWithKVAndCondition(id uint64, partition uint32, group metapb.Group, items [][]byte, cond *rpcpb.Condition, kvs ...[]byte) error
 	// ExecCommand exec command
 	ExecCommand(cmd interface{}) ([]byte, error)
 	// AsyncExecCommand async exec command
@@ -87,7 +87,8 @@ func NewStorage(dataPath string,
 		metadataStorages,
 		dataStorages,
 		raftstore.WithShardStateAware(h),
-		raftstore.WithWriteBatchFunc(h.WriteBatch))
+		raftstore.WithWriteBatchFunc(h.WriteBatch),
+		raftstore.WithShardAddHandleFun(h.addShardCallback))
 	if err != nil {
 		return nil, err
 	}
@@ -190,15 +191,15 @@ func (h *beeStorage) Scan(start []byte, end []byte, limit uint64) ([][]byte, [][
 	return keys, items, nil
 }
 
-func (h *beeStorage) PutToQueue(id uint64, partition uint64, group metapb.Group, items ...[]byte) error {
+func (h *beeStorage) PutToQueue(id uint64, partition uint32, group metapb.Group, items ...[]byte) error {
 	return h.PutToQueueWithKV(id, partition, group, items)
 }
 
-func (h *beeStorage) PutToQueueWithKV(id uint64, partition uint64, group metapb.Group, items [][]byte, kvs ...[]byte) error {
+func (h *beeStorage) PutToQueueWithKV(id uint64, partition uint32, group metapb.Group, items [][]byte, kvs ...[]byte) error {
 	return h.PutToQueueWithKVAndCondition(id, partition, group, items, nil, kvs...)
 }
 
-func (h *beeStorage) PutToQueueWithKVAndCondition(id uint64, partition uint64, group metapb.Group, items [][]byte, cond *rpcpb.Condition, kvs ...[]byte) error {
+func (h *beeStorage) PutToQueueWithKVAndCondition(id uint64, partition uint32, group metapb.Group, items [][]byte, cond *rpcpb.Condition, kvs ...[]byte) error {
 	req := rpcpb.AcquireQueueAddRequest()
 	req.Key = PartitionKey(id, partition)
 	req.Items = items

@@ -31,40 +31,40 @@ func (rb *bitmapBatch) support() []rpcpb.Type {
 	return []rpcpb.Type{rpcpb.BMCreate, rpcpb.BMAdd, rpcpb.BMRemove, rpcpb.BMClear}
 }
 
-func (rb *bitmapBatch) addReq(req *raftcmdpb.Request, resp *raftcmdpb.Response, b *batch, buf *goetty.ByteBuf) {
+func (rb *bitmapBatch) addReq(req *raftcmdpb.Request, resp *raftcmdpb.Response, b *batch, attrs map[string]interface{}) {
 	switch rpcpb.Type(req.CustemType) {
 	case rpcpb.BMCreate:
-		msg := rpcpb.AcquireBMCreateRequest()
+		msg := getBMCreateRequest(attrs)
 		protoc.MustUnmarshal(msg, req.Cmd)
+
 		msg.Key = req.Key
 		rb.add(req.Key, msg.Value...)
 
 		resp.Value = rpcpb.EmptyRespBytes
-		rpcpb.ReleaseBMCreateRequest(msg)
 	case rpcpb.BMAdd:
-		msg := rpcpb.AcquireBMAddRequest()
+		msg := getBMAddRequest(attrs)
 		protoc.MustUnmarshal(msg, req.Cmd)
+
 		msg.Key = req.Key
 		rb.add(msg.Key, msg.Value...)
 
 		resp.Value = rpcpb.EmptyRespBytes
-		rpcpb.ReleaseBMAddRequest(msg)
 	case rpcpb.BMRemove:
-		msg := rpcpb.AcquireBMRemoveRequest()
+		msg := getBMRemoveRequest(attrs)
 		protoc.MustUnmarshal(msg, req.Cmd)
+
 		msg.Key = req.Key
 		rb.remove(msg.Key, msg.Value...)
 
 		resp.Value = rpcpb.EmptyRespBytes
-		rpcpb.ReleaseBMRemoveRequest(msg)
 	case rpcpb.BMClear:
-		msg := rpcpb.AcquireBMClearRequest()
+		msg := getBMClearRequest(attrs)
 		protoc.MustUnmarshal(msg, req.Cmd)
+
 		msg.Key = req.Key
 		rb.clear(msg.Key)
 
 		resp.Value = rpcpb.EmptyRespBytes
-		rpcpb.ReleaseBMClearRequest(msg)
 	default:
 		log.Fatalf("BUG: not supoprt rpctype: %d", rpcpb.Type(req.CustemType))
 	}

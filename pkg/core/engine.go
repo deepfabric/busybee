@@ -63,7 +63,7 @@ type Engine interface {
 	// InstanceStepState returns instance step state
 	InstanceStepState(id uint64, name string) (metapb.StepState, error)
 	// TenantInit init tenant, and create the tenant input and output queue
-	TenantInit(id, partitions uint64) error
+	TenantInit(metapb.Tenant) error
 	// Notifier returns notifier
 	Notifier() notify.Notifier
 	// Storage returns storage
@@ -194,31 +194,45 @@ func (eng *engine) Stop() error {
 	return eng.runner.Stop()
 }
 
-func (eng *engine) TenantInit(id, partitions uint64) error {
-	err := eng.store.Set(storage.QueueMetadataKey(id, metapb.TenantInputGroup),
-		goetty.Uint64ToBytes(partitions))
+func (eng *engine) TenantInit(metadata metapb.Tenant) error {
+	return eng.tenantInitWithReplicas(metadata, 0)
+}
+
+func (eng *engine) tenantInitWithReplicas(metadata metapb.Tenant, replicas uint32) error {
+	err := eng.store.Set(storage.TenantMetadataKey(metadata.ID), protoc.MustMarshal(&metadata))
 	if err != nil {
 		return err
 	}
 
-	err = eng.store.Set(storage.QueueMetadataKey(id, metapb.TenantOutputGroup),
-		goetty.Uint64ToBytes(1))
-	if err != nil {
-		return err
-	}
+	buf := goetty.NewByteBuf(32)
+	defer buf.Release()
 
 	var shards []hbmetapb.Shard
-	for i := uint64(0); i < partitions; i++ {
+	for i := uint32(0); i < metadata.Input.Partitions; i++ {
 		shards = append(shards, hbmetapb.Shard{
 			Group: uint64(metapb.TenantInputGroup),
-			Start: storage.PartitionKey(id, i),
-			End:   storage.PartitionKey(id, i+1),
+			Start: storage.PartitionKey(metadata.ID, i),
+			End:   storage.PartitionKey(metadata.ID, i+1),
 		})
 	}
 	shards = append(shards, hbmetapb.Shard{
 		Group: uint64(metapb.TenantOutputGroup),
-		Start: storage.PartitionKey(id, 0),
-		End:   storage.PartitionKey(id, 1),
+		Start: storage.PartitionKey(metadata.ID, 0),
+		End:   storage.PartitionKey(metadata.ID+1, 0),
+		Data: protoc.MustMarshal(&metapb.CallbackAction{
+			SetKV: &metapb.SetKVAction{
+				KV: metapb.KV{
+					Key: storage.ConcurrencyQueueMetaKey(metadata.ID, buf),
+					Value: protoc.MustMarshal(&metapb.QueueState{
+						Partitions: metadata.Output.Partitions,
+						Timeout:    metadata.Output.ConsumerTimeout,
+						States:     make([]metapb.Partiton, metadata.Output.Partitions, metadata.Output.Partitions),
+					}),
+				},
+				Group: metapb.TenantOutputGroup,
+			},
+		}),
+		LeastReplicas: replicas,
 	})
 
 	return eng.store.RaftStore().AddShards(shards...)
@@ -229,7 +243,7 @@ func (eng *engine) StartInstance(workflow metapb.Workflow, loader metapb.BMLoade
 		return 0, err
 	}
 
-	value, err := eng.store.Get(storage.QueueMetadataKey(workflow.TenantID, metapb.TenantInputGroup))
+	value, err := eng.store.Get(storage.TenantMetadataKey(workflow.TenantID))
 	if err != nil {
 		metric.IncStorageFailed()
 		return 0, err

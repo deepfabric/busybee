@@ -8,15 +8,14 @@ import (
 	"github.com/deepfabric/beehive/pb/raftcmdpb"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
-	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/log"
 	"github.com/fagongzi/util/protoc"
 )
 
-func (h *beeStorage) startingWorkflowInstance(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *goetty.ByteBuf) (uint64, int64, *raftcmdpb.Response) {
+func (h *beeStorage) startingWorkflowInstance(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs map[string]interface{}) (uint64, int64, *raftcmdpb.Response) {
 	resp := pb.AcquireResponse()
-	cmd := rpcpb.StartingInstanceRequest{}
-	protoc.MustUnmarshal(&cmd, req.Cmd)
+	cmd := getStartingInstanceRequest(attrs)
+	protoc.MustUnmarshal(cmd, req.Cmd)
 
 	resp.Value = rpcpb.EmptyRespBytes
 
@@ -25,7 +24,7 @@ func (h *beeStorage) startingWorkflowInstance(shard bhmetapb.Shard, req *raftcmd
 		log.Fatalf("save workflow instance %+v failed with %+v", cmd, err)
 	}
 	if len(value) > 0 {
-		old := &metapb.WorkflowInstance{}
+		old := getTempWorkflowInstance(attrs)
 		protoc.MustUnmarshal(old, value)
 
 		if old.State != metapb.Stopped {
@@ -52,10 +51,10 @@ func (h *beeStorage) startingWorkflowInstance(shard bhmetapb.Shard, req *raftcmd
 	return writtenBytes, changedBytes, resp
 }
 
-func (h *beeStorage) updateWorkflowDefinition(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *goetty.ByteBuf) (uint64, int64, *raftcmdpb.Response) {
+func (h *beeStorage) updateWorkflowDefinition(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs map[string]interface{}) (uint64, int64, *raftcmdpb.Response) {
 	resp := pb.AcquireResponse()
-	cmd := rpcpb.UpdateWorkflowRequest{}
-	protoc.MustUnmarshal(&cmd, req.Cmd)
+	cmd := getUpdateWorkflowRequest(attrs)
+	protoc.MustUnmarshal(cmd, req.Cmd)
 
 	resp.Value = rpcpb.EmptyRespBytes
 
@@ -67,7 +66,7 @@ func (h *beeStorage) updateWorkflowDefinition(shard bhmetapb.Shard, req *raftcmd
 		return 0, 0, resp
 	}
 
-	old := &metapb.WorkflowInstance{}
+	old := getTempWorkflowInstance(attrs)
 	protoc.MustUnmarshal(old, value)
 
 	if old.State != metapb.Running {
@@ -85,10 +84,10 @@ func (h *beeStorage) updateWorkflowDefinition(shard bhmetapb.Shard, req *raftcmd
 	return uint64(len(req.Key) + len(value)), 0, resp
 }
 
-func (h *beeStorage) workflowInstanceStarted(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *goetty.ByteBuf) (uint64, int64, *raftcmdpb.Response) {
+func (h *beeStorage) workflowInstanceStarted(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs map[string]interface{}) (uint64, int64, *raftcmdpb.Response) {
 	resp := pb.AcquireResponse()
-	cmd := rpcpb.StartedInstanceRequest{}
-	protoc.MustUnmarshal(&cmd, req.Cmd)
+	cmd := getStartedInstanceRequest(attrs)
+	protoc.MustUnmarshal(cmd, req.Cmd)
 
 	resp.Value = rpcpb.EmptyRespBytes
 
@@ -102,7 +101,7 @@ func (h *beeStorage) workflowInstanceStarted(shard bhmetapb.Shard, req *raftcmdp
 			cmd.WorkflowID)
 	}
 
-	old := &metapb.WorkflowInstance{}
+	old := getTempWorkflowInstance(attrs)
 	protoc.MustUnmarshal(old, value)
 	if old.State != metapb.Starting {
 		return 0, 0, resp
@@ -126,10 +125,10 @@ func (h *beeStorage) workflowInstanceStarted(shard bhmetapb.Shard, req *raftcmdp
 	return uint64(len(req.Key) + len(value)), 0, resp
 }
 
-func (h *beeStorage) stopWorkflowInstance(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *goetty.ByteBuf) (uint64, int64, *raftcmdpb.Response) {
+func (h *beeStorage) stopWorkflowInstance(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs map[string]interface{}) (uint64, int64, *raftcmdpb.Response) {
 	resp := pb.AcquireResponse()
-	cmd := rpcpb.StopInstanceRequest{}
-	protoc.MustUnmarshal(&cmd, req.Cmd)
+	cmd := getStopInstanceRequest(attrs)
+	protoc.MustUnmarshal(cmd, req.Cmd)
 
 	resp.Value = rpcpb.EmptyRespBytes
 
@@ -142,7 +141,7 @@ func (h *beeStorage) stopWorkflowInstance(shard bhmetapb.Shard, req *raftcmdpb.R
 		log.Fatalf("missing workflow instance %d", cmd.WorkflowID)
 	}
 
-	old := &metapb.WorkflowInstance{}
+	old := getTempWorkflowInstance(attrs)
 	protoc.MustUnmarshal(old, value)
 	if old.State != metapb.Running {
 		return 0, 0, resp
@@ -165,10 +164,10 @@ func (h *beeStorage) stopWorkflowInstance(shard bhmetapb.Shard, req *raftcmdpb.R
 	return uint64(len(req.Key) + len(value)), 0, resp
 }
 
-func (h *beeStorage) workflowInstanceStopped(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *goetty.ByteBuf) (uint64, int64, *raftcmdpb.Response) {
+func (h *beeStorage) workflowInstanceStopped(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs map[string]interface{}) (uint64, int64, *raftcmdpb.Response) {
 	resp := pb.AcquireResponse()
-	cmd := rpcpb.StoppedInstanceRequest{}
-	protoc.MustUnmarshal(&cmd, req.Cmd)
+	cmd := getStoppedInstanceRequest(attrs)
+	protoc.MustUnmarshal(cmd, req.Cmd)
 
 	resp.Value = rpcpb.EmptyRespBytes
 
@@ -181,7 +180,7 @@ func (h *beeStorage) workflowInstanceStopped(shard bhmetapb.Shard, req *raftcmdp
 		log.Fatalf("missing workflow instance %d", cmd.WorkflowID)
 	}
 
-	old := &metapb.WorkflowInstance{}
+	old := getTempWorkflowInstance(attrs)
 	protoc.MustUnmarshal(old, value)
 	if old.State != metapb.Stopping {
 		return 0, 0, resp
@@ -205,10 +204,10 @@ func (h *beeStorage) workflowInstanceStopped(shard bhmetapb.Shard, req *raftcmdp
 	return uint64(len(req.Key) + len(value)), 0, resp
 }
 
-func (h *beeStorage) createInstanceWorker(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *goetty.ByteBuf) (uint64, int64, *raftcmdpb.Response) {
+func (h *beeStorage) createInstanceWorker(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs map[string]interface{}) (uint64, int64, *raftcmdpb.Response) {
 	resp := pb.AcquireResponse()
-	cmd := rpcpb.CreateInstanceStateShardRequest{}
-	protoc.MustUnmarshal(&cmd, req.Cmd)
+	cmd := getCreateInstanceStateShardRequest(attrs)
+	protoc.MustUnmarshal(cmd, req.Cmd)
 
 	resp.Value = rpcpb.EmptyRespBytes
 
@@ -236,10 +235,10 @@ func (h *beeStorage) createInstanceWorker(shard bhmetapb.Shard, req *raftcmdpb.R
 	return writtenBytes, changedBytes, resp
 }
 
-func (h *beeStorage) updateInstanceWorkerState(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *goetty.ByteBuf) (uint64, int64, *raftcmdpb.Response) {
+func (h *beeStorage) updateInstanceWorkerState(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs map[string]interface{}) (uint64, int64, *raftcmdpb.Response) {
 	resp := pb.AcquireResponse()
-	cmd := rpcpb.UpdateInstanceStateShardRequest{}
-	protoc.MustUnmarshal(&cmd, req.Cmd)
+	cmd := getUpdateInstanceStateShardRequest(attrs)
+	protoc.MustUnmarshal(cmd, req.Cmd)
 
 	resp.Value = rpcpb.EmptyRespBytes
 
@@ -261,10 +260,10 @@ func (h *beeStorage) updateInstanceWorkerState(shard bhmetapb.Shard, req *raftcm
 	return writtenBytes, changedBytes, resp
 }
 
-func (h *beeStorage) removeInstanceWorker(shard bhmetapb.Shard, req *raftcmdpb.Request, buf *goetty.ByteBuf) (uint64, int64, *raftcmdpb.Response) {
+func (h *beeStorage) removeInstanceWorker(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs map[string]interface{}) (uint64, int64, *raftcmdpb.Response) {
 	resp := pb.AcquireResponse()
-	cmd := rpcpb.RemoveInstanceStateShardRequest{}
-	protoc.MustUnmarshal(&cmd, req.Cmd)
+	cmd := getRemoveInstanceStateShardRequest(attrs)
+	protoc.MustUnmarshal(cmd, req.Cmd)
 
 	resp.Value = rpcpb.EmptyRespBytes
 

@@ -5,6 +5,7 @@ import (
 
 	bhmetapb "github.com/deepfabric/beehive/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
+	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/fagongzi/log"
 	"github.com/fagongzi/util/protoc"
 )
@@ -17,6 +18,25 @@ const (
 type shardCycle struct {
 	shard  bhmetapb.Shard
 	action int
+}
+
+func (h *beeStorage) addShardCallback(shard bhmetapb.Shard) error {
+	if len(shard.Data) == 0 {
+		return nil
+	}
+
+	action := &metapb.CallbackAction{}
+	protoc.MustUnmarshal(action, shard.Data)
+
+	if action.SetKV != nil {
+		req := rpcpb.AcquireSetRequest()
+		req.Key = action.SetKV.KV.Key
+		req.Value = action.SetKV.KV.Value
+		_, err := h.ExecCommandWithGroup(req, action.SetKV.Group)
+		return err
+	}
+
+	return nil
 }
 
 func (h *beeStorage) Created(shard bhmetapb.Shard) {

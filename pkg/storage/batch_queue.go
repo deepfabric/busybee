@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	countToClean     = uint64(4096)
+	countToClean     = uint64(1)
 	maxConsumerAlive = int64(7 * 24 * 60 * 60) // 7 day
 )
 
@@ -48,22 +48,19 @@ func (qb *queueBatch) support() []rpcpb.Type {
 	return []rpcpb.Type{rpcpb.QueueAdd}
 }
 
-func (qb *queueBatch) addReq(req *raftcmdpb.Request, resp *raftcmdpb.Response, b *batch, buf *goetty.ByteBuf) {
+func (qb *queueBatch) addReq(req *raftcmdpb.Request, resp *raftcmdpb.Response, b *batch, attrs map[string]interface{}) {
 	switch rpcpb.Type(req.CustemType) {
 	case rpcpb.QueueAdd:
-		msg := rpcpb.AcquireQueueAddRequest()
+		msg := getQueueAddRequest(attrs)
 		protoc.MustUnmarshal(msg, req.Cmd)
 		msg.Key = req.Key
 
 		qb.group = metapb.Group(req.Group)
 		qb.add(msg, b)
 
-		value := rpcpb.AcquireUint64Response()
+		value := getUint64Response(attrs)
 		value.Value = qb.maxOffset
 		resp.Value = protoc.MustMarshal(value)
-
-		rpcpb.ReleaseQueueAddRequest(msg)
-		rpcpb.ReleaseUint64Response(value)
 	default:
 		log.Fatalf("BUG: not supoprt rpctype: %d", rpcpb.Type(req.CustemType))
 	}

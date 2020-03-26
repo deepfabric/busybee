@@ -37,8 +37,11 @@ enum Type {
     InstanceCountState       = 211;
     InstanceCrowdState       = 212;
 
-    QueueAdd      = 300;
-    QueueFetch    = 301;
+    QueueAdd              = 300;
+    QueueFetch            = 301;
+    QueueJoin             = 302;
+    QueueConcurrencyFetch = 303;
+    
 
     TenantInit    = 400;
     UpdateMapping = 401;
@@ -56,53 +59,56 @@ enum Type {
 
 // Request the busybee request
 message Request {
-    uint64                     id              = 1  [(gogoproto.customname) = "ID"];
-    Type                       type            = 2;
-    SetRequest                 set             = 3  [(gogoproto.nullable) = false];
-    GetRequest                 get             = 4  [(gogoproto.nullable) = false];
-    DeleteRequest              delete          = 5  [(gogoproto.nullable) = false];
-    ScanRequest                scan            = 6  [(gogoproto.nullable) = false];
-    BMCreateRequest            bmCreate        = 7  [(gogoproto.nullable) = false];
-    BMAddRequest               bmAdd           = 8  [(gogoproto.nullable) = false];
-    BMRemoveRequest            bmRemove        = 9  [(gogoproto.nullable) = false];
-    BMClearRequest             bmClear         = 10  [(gogoproto.nullable) = false];
-    BMRangeRequest             bmRange         = 11 [(gogoproto.nullable) = false];
-    BMCountRequest             bmCount         = 12 [(gogoproto.nullable) = false];
-    BMContainsRequest          bmContains      = 13 [(gogoproto.nullable) = false];
-    TenantInitRequest          tenantInit      = 14 [(gogoproto.nullable) = false];
-    StartingInstanceRequest    startInstance   = 15 [(gogoproto.nullable) = false];
-    LastInstanceRequest        lastInstance    = 16 [(gogoproto.nullable) = false];
-    HistoryInstanceRequest     historyInstance = 17 [(gogoproto.nullable) = false];
-    UpdateCrowdRequest         updateCrowd     = 18 [(gogoproto.nullable) = false];
-    UpdateWorkflowRequest      updateWorkflow  = 19 [(gogoproto.nullable) = false];
-    StopInstanceRequest        stopInstance    = 20 [(gogoproto.nullable) = false];
-    InstanceCountStateRequest  countInstance   = 21 [(gogoproto.nullable) = false];
-    InstanceCrowdStateRequest  crowdInstance   = 22 [(gogoproto.nullable) = false];
-    UpdateMappingRequest       updateMapping   = 23 [(gogoproto.nullable) = false];
-    GetMappingRequest          getMapping      = 24 [(gogoproto.nullable) = false];
-    UpdateProfileRequest       updateProfile   = 25 [(gogoproto.nullable) = false];
-    GetProfileRequest          getProfile      = 26 [(gogoproto.nullable) = false];
-    AddEventRequest            addEvent        = 27 [(gogoproto.nullable) = false];
-    FetchNotifyRequest         fetchNotify     = 28 [(gogoproto.nullable) = false];
-    AllocIDRequest             allocID         = 29 [(gogoproto.nullable) = false];
-    ResetIDRequest             resetID         = 30 [(gogoproto.nullable) = false];
-    ScanMappingRequest         scanMapping     = 31 [(gogoproto.nullable) = false];
-    GetIDSetRequest            getIDSet        = 32 [(gogoproto.nullable) = false];
+    uint64                       id              = 1  [(gogoproto.customname) = "ID"];
+    Type                         type            = 2;
+    SetRequest                   set             = 3  [(gogoproto.nullable) = false];
+    GetRequest                   get             = 4  [(gogoproto.nullable) = false];
+    DeleteRequest                delete          = 5  [(gogoproto.nullable) = false];
+    ScanRequest                  scan            = 6  [(gogoproto.nullable) = false];
+    BMCreateRequest              bmCreate        = 7  [(gogoproto.nullable) = false];
+    BMAddRequest                 bmAdd           = 8  [(gogoproto.nullable) = false];
+    BMRemoveRequest              bmRemove        = 9  [(gogoproto.nullable) = false];
+    BMClearRequest               bmClear         = 10  [(gogoproto.nullable) = false];
+    BMRangeRequest               bmRange         = 11 [(gogoproto.nullable) = false];
+    BMCountRequest               bmCount         = 12 [(gogoproto.nullable) = false];
+    BMContainsRequest            bmContains      = 13 [(gogoproto.nullable) = false];
+    TenantInitRequest            tenantInit      = 14 [(gogoproto.nullable) = false];
+    StartingInstanceRequest      startInstance   = 15 [(gogoproto.nullable) = false];
+    LastInstanceRequest          lastInstance    = 16 [(gogoproto.nullable) = false];
+    HistoryInstanceRequest       historyInstance = 17 [(gogoproto.nullable) = false];
+    UpdateCrowdRequest           updateCrowd     = 18 [(gogoproto.nullable) = false];
+    UpdateWorkflowRequest        updateWorkflow  = 19 [(gogoproto.nullable) = false];
+    StopInstanceRequest          stopInstance    = 20 [(gogoproto.nullable) = false];
+    InstanceCountStateRequest    countInstance   = 21 [(gogoproto.nullable) = false];
+    InstanceCrowdStateRequest    crowdInstance   = 22 [(gogoproto.nullable) = false];
+    UpdateMappingRequest         updateMapping   = 23 [(gogoproto.nullable) = false];
+    GetMappingRequest            getMapping      = 24 [(gogoproto.nullable) = false];
+    UpdateProfileRequest         updateProfile   = 25 [(gogoproto.nullable) = false];
+    GetProfileRequest            getProfile      = 26 [(gogoproto.nullable) = false];
+    AddEventRequest              addEvent        = 27 [(gogoproto.nullable) = false];
+    QueueJoinGroupRequest        queueJoin       = 28 [(gogoproto.nullable) = false];
+    QueueConcurrencyFetchRequest queueFetch      = 29 [(gogoproto.nullable) = false];
+    AllocIDRequest               allocID         = 30 [(gogoproto.nullable) = false];
+    ResetIDRequest               resetID         = 31 [(gogoproto.nullable) = false];
+    ScanMappingRequest           scanMapping     = 32 [(gogoproto.nullable) = false];
+    GetIDSetRequest              getIDSet        = 33 [(gogoproto.nullable) = false];
 }
 
 // Response the busybee response
 message Response {
-    uint64              id              = 1  [(gogoproto.customname) = "ID"];
-    Type                type            = 2;
-    ErrorResponse       error           = 3  [(gogoproto.nullable) = false];
-    BytesResponse       bytesResp       = 4  [(gogoproto.nullable) = false];
-    BoolResponse        boolResp        = 5  [(gogoproto.nullable) = false];
-    Uint64Response      uint64Resp      = 6  [(gogoproto.nullable) = false];
-    Uint32Response      uint32Resp      = 7  [(gogoproto.nullable) = false];
-    Uint32RangeResponse uint32RangeResp = 8  [(gogoproto.nullable) = false];
-    Uint32SliceResponse uint32SliceResp = 9  [(gogoproto.nullable) = false];
-    BytesSliceResponse  bytesSliceResp  = 10 [(gogoproto.nullable) = false];
-    StringResponse      stringResp      = 11 [(gogoproto.nullable) = false];
+    uint64                        id              = 1  [(gogoproto.customname) = "ID"];
+    Type                          type            = 2;
+    ErrorResponse                 error           = 3  [(gogoproto.nullable) = false];
+    BytesResponse                 bytesResp       = 4  [(gogoproto.nullable) = false];
+    BoolResponse                  boolResp        = 5  [(gogoproto.nullable) = false];
+    Uint64Response                uint64Resp      = 6  [(gogoproto.nullable) = false];
+    Uint32Response                uint32Resp      = 7  [(gogoproto.nullable) = false];
+    Uint32RangeResponse           uint32RangeResp = 8  [(gogoproto.nullable) = false];
+    Uint32SliceResponse           uint32SliceResp = 9  [(gogoproto.nullable) = false];
+    BytesSliceResponse            bytesSliceResp  = 10 [(gogoproto.nullable) = false];
+    StringResponse                stringResp      = 11 [(gogoproto.nullable) = false];
+    QueueJoinGroupResponse        joinResp        = 12 [(gogoproto.nullable) = false];
+    QueueConcurrencyFetchResponse fetchResp       = 13 [(gogoproto.nullable) = false];
 }
 
 // SetRequest set a key value pair
@@ -259,7 +265,7 @@ message Condition {
     bytes value = 3;
 }
 
-// QueueFetchResponse add items into a queue
+// QueueFetchResponse fetch items from a queue
 message QueueFetchRequest {
     bytes  key             = 1;
     bytes  consumer        = 2;
@@ -267,10 +273,42 @@ message QueueFetchRequest {
     uint64 count           = 4;
 }
 
+// QueueJoinGroupRequest join a group
+message QueueJoinGroupRequest {
+    uint64 id    = 1 [(gogoproto.customname) = "ID"];
+    bytes  key   = 2; 
+    bytes  group = 3;
+}
+
+// QueueJoinGroupResponse queue join group response
+message QueueJoinGroupResponse {
+    uint32          index      = 1;
+    repeated uint32 partitions = 2;
+    repeated uint64 versions   = 3;
+}
+
+// QueueConcurrencyFetchRequest concurrency fetch items from a queue
+message QueueConcurrencyFetchRequest {
+    uint64 id              = 1 [(gogoproto.customname) = "ID"];
+    bytes  key             = 2; 
+    bytes  group           = 3;
+    uint32 partition       = 4;
+    uint32 consumer        = 5;
+    uint64 version         = 6;
+    uint64 completedOffset = 7;
+    uint64 count           = 8;
+}
+
+// QueueConcurrencyFetchResponse fetch response
+message QueueConcurrencyFetchResponse {
+    bool            removed    = 1;
+    repeated bytes  items      = 2;
+    uint64          lastOffset = 3;
+} 
+
 // TenantInitRequest init tenant
 message TenantInitRequest {
-    uint64 id                   = 1 [(gogoproto.customname) = "ID"];
-    uint64 inputQueuePartitions = 2;
+    metapb.Tenant metadata = 1 [(gogoproto.nullable) = false];
 }
 
 // ScanMappingRequest scan tenant all mappinged id values
@@ -318,15 +356,6 @@ message GetProfileRequest {
 // AddEventRequest add event
 message AddEventRequest {
     metapb.UserEvent event = 1 [(gogoproto.nullable) = false];
-}
-
-// FetchNotifyRequest fetch notify request
-message FetchNotifyRequest {
-    uint64 id              = 1 [(gogoproto.customname) = "ID"];
-    uint64 completedOffset = 2;
-    uint64 count           = 3;
-    string consumer        = 4;
-    uint64 concurrency     = 5;
 }
 
 // AllocIDRequest alloc id request

@@ -64,9 +64,7 @@ type stateWorker struct {
 }
 
 func newStateWorker(key string, state metapb.WorkflowInstanceWorkerState, eng Engine) (*stateWorker, error) {
-	consumer, err := queue.NewConsumer(state.TenantID,
-		metapb.TenantInputGroup,
-		eng.Storage(), []byte(key))
+	consumer, err := queue.NewConsumer(state.TenantID, eng.Storage(), []byte(key))
 	if err != nil {
 		metric.IncStorageFailed()
 		return nil, err

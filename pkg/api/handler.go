@@ -75,8 +75,10 @@ func (s *server) onReq(sid interface{}, req *rpcpb.Request) error {
 		return s.doGetProfile(ctx)
 	case rpcpb.AddEvent:
 		return s.doAddEvent(ctx)
+	case rpcpb.QueueJoin:
+		return s.doQueueJoin(ctx)
 	case rpcpb.FetchNotify:
-		return s.doFetchNotify(ctx)
+		return s.doQueueFetch(ctx)
 	case rpcpb.AllocID:
 		return s.doAllocID(ctx)
 	case rpcpb.ResetID:
@@ -132,8 +134,7 @@ func (s *server) doBMContains(ctx ctx) error {
 }
 
 func (s *server) doTenantInit(ctx ctx) error {
-	err := s.engine.TenantInit(ctx.req.TenantInit.ID,
-		ctx.req.TenantInit.InputQueuePartitions)
+	err := s.engine.TenantInit(ctx.req.TenantInit.Metadata)
 	if err != nil {
 		return err
 	}
@@ -327,13 +328,13 @@ func (s *server) doAddEvent(ctx ctx) error {
 	return nil
 }
 
-func (s *server) doFetchNotify(ctx ctx) error {
-	req := rpcpb.AcquireQueueFetchRequest()
-	req.Key = storage.PartitionKey(ctx.req.FetchNotify.ID, 0)
-	req.CompletedOffset = ctx.req.FetchNotify.CompletedOffset
-	req.Count = ctx.req.FetchNotify.Count
-	req.Consumer = []byte(ctx.req.FetchNotify.Consumer)
-	s.engine.Storage().AsyncExecCommandWithGroup(req, metapb.TenantOutputGroup, s.onResp, ctx)
+func (s *server) doQueueJoin(ctx ctx) error {
+	s.engine.Storage().AsyncExecCommandWithGroup(&ctx.req.QueueJoin, metapb.TenantOutputGroup, s.onResp, ctx)
+	return nil
+}
+
+func (s *server) doQueueFetch(ctx ctx) error {
+	s.engine.Storage().AsyncExecCommandWithGroup(&ctx.req.QueueFetch, metapb.TenantOutputGroup, s.onResp, ctx)
 	return nil
 }
 
@@ -387,10 +388,12 @@ func (s *server) onResp(arg interface{}, value []byte, err error) {
 			rpcpb.GetMapping, rpcpb.GetProfile, rpcpb.LastInstance,
 			rpcpb.HistoryInstance:
 			resp.BytesResp.Value = value
-		case rpcpb.FetchNotify, rpcpb.Scan, rpcpb.ScanMapping:
+		case rpcpb.Scan, rpcpb.ScanMapping:
 			protoc.MustUnmarshal(&resp.BytesSliceResp, value)
 		case rpcpb.AllocID:
 			protoc.MustUnmarshal(&resp.Uint32RangeResp, value)
+		case rpcpb.FetchNotify:
+			protoc.MustUnmarshal(&resp.FetchResp, value)
 		}
 
 		rs.(*util.Session).OnResp(resp)

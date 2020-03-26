@@ -16,6 +16,19 @@ enum BMLoader {
     ClickhouseLoader = 3;
 }
 
+// TenantQueue queue metadata
+message TenantQueue {
+    uint32 partitions      = 1;
+    int64  consumerTimeout = 2;
+}
+
+// Tenant tenant metadata
+message Tenant {
+    uint64      id     = 1 [(gogoproto.customname) = "ID"];
+    TenantQueue input  = 2 [(gogoproto.nullable) = false];
+    TenantQueue output = 3 [(gogoproto.nullable) = false];
+}
+
 // WorkflowInstanceState workflow instance state
 enum WorkflowInstanceState {
     Starting = 0;
@@ -244,4 +257,39 @@ enum ExprResultType {
 message Expr {
     bytes          value = 1;
     ExprResultType type  = 2;
+}
+
+// QueueState queue state
+message QueueState {
+    uint32                  partitions = 1;
+    uint32                  consumers  = 2;
+    repeated Partiton       states     = 3 [(gogoproto.nullable) = false];
+    int64                   timeout    = 4;
+}
+
+// Partiton partition state
+message Partiton {
+    uint32        consumer       = 1;
+    uint64        version        = 2;
+    PartitonState state          = 3;
+    uint64        completed      = 4;
+    uint64        lastFetchCount = 5;
+    int64         lastFetchTS    = 6;
+}
+
+// PartitonState partition state
+enum PartitonState {
+    PSRebalancing = 0;
+    PSRunning     = 1;
+}
+
+// message CallbackAction
+message CallbackAction {
+    SetKVAction setKV = 1;
+}
+
+// SetKVAction set kv action
+message SetKVAction {
+    KV    kv    = 1 [(gogoproto.nullable) = false, (gogoproto.customname) = "KV"];
+    Group group = 2;
 }

@@ -48,7 +48,7 @@ type ShardStateAware interface {
 type CommandWriteBatch interface {
 	// Add add a request to this batch, returns true if it can be executed in this batch,
 	// otherwrise false
-	Add(uint64, *raftcmdpb.Request, *goetty.ByteBuf) (bool, *raftcmdpb.Response, error)
+	Add(uint64, *raftcmdpb.Request, map[string]interface{}) (bool, *raftcmdpb.Response, error)
 	// Execute excute the batch, and return the write bytes, and diff bytes that used to
 	// modify the size of the current shard
 	Execute() (uint64, int64, error)
@@ -57,11 +57,11 @@ type CommandWriteBatch interface {
 }
 
 // ReadCommandFunc the read command handler func
-type ReadCommandFunc func(metapb.Shard, *raftcmdpb.Request, *goetty.ByteBuf) *raftcmdpb.Response
+type ReadCommandFunc func(metapb.Shard, *raftcmdpb.Request, map[string]interface{}) *raftcmdpb.Response
 
 // WriteCommandFunc the write command handler func, returns write bytes and the diff bytes
 // that used to modify the size of the current shard
-type WriteCommandFunc func(metapb.Shard, *raftcmdpb.Request, *goetty.ByteBuf) (uint64, int64, *raftcmdpb.Response)
+type WriteCommandFunc func(metapb.Shard, *raftcmdpb.Request, map[string]interface{}) (uint64, int64, *raftcmdpb.Response)
 
 // LocalCommandFunc directly exec on local func
 type LocalCommandFunc func(metapb.Shard, *raftcmdpb.Request) (*raftcmdpb.Response, error)
@@ -639,7 +639,19 @@ func (s *store) doEnsureNewShards(limit int64) {
 			return false, err
 		}
 
-		if res != nil && len(res.Peers()) > 2 {
+		n := 2
+		if shard.LeastReplicas > 0 {
+			n = int(shard.LeastReplicas)
+		}
+
+		if res != nil && len(res.Peers()) >= n {
+			if s.opts.shardAddHandleFunc != nil {
+				err := s.opts.shardAddHandleFunc(shard)
+				if err != nil {
+					return false, err
+				}
+			}
+
 			ops = append(ops, clientv3.OpDelete(uint64Key(shard.ID, eventsPath)))
 			return true, nil
 		}

@@ -534,3 +534,619 @@ func TestPutToQueueWithKV(t *testing.T) {
 	assert.NotEmpty(t, v, "TestPutToQueueWithKV failed")
 	assert.Equal(t, string(value), string(v), "TestPutToQueueWithKV failed")
 }
+
+func TestQueueConcurrencyFetchWithNoConsumers(t *testing.T) {
+	store, deferFunc := NewTestStorage(t, true)
+	defer deferFunc()
+
+	tid := uint64(1)
+	g1 := []byte("g1")
+	state := &metapb.QueueState{
+		Partitions: 2,
+		States: []metapb.Partiton{
+			metapb.Partiton{},
+			metapb.Partiton{},
+		},
+		Timeout: 60,
+	}
+	buf := goetty.NewByteBuf(32)
+	key := ConcurrencyQueueMetaKey(tid, buf)
+	err := store.Set(key, protoc.MustMarshal(state))
+	assert.NoError(t, err, "TestQueueFetchWithNoConsumers failed")
+
+	req := rpcpb.AcquireQueueConcurrencyFetchRequest()
+	req.ID = tid
+	req.Group = g1
+	resp := getTestConcurrencyResp(t, store, req)
+	assert.True(t, resp.Removed, "TestQueueFetchWithNoConsumers failed")
+}
+
+func TestQueueConcurrencyFetchWithInvalidConsumer(t *testing.T) {
+	store, deferFunc := NewTestStorage(t, true)
+	defer deferFunc()
+
+	tid := uint64(1)
+	g1 := []byte("g1")
+	state := &metapb.QueueState{
+		Consumers:  1,
+		Partitions: 2,
+		States: []metapb.Partiton{
+			metapb.Partiton{},
+			metapb.Partiton{},
+		},
+		Timeout: 60,
+	}
+	buf := goetty.NewByteBuf(32)
+	key := ConcurrencyQueueStateKey(tid, g1, buf)
+	err := store.Set(key, protoc.MustMarshal(state))
+	assert.NoError(t, err, "TestQueueFetchWithInvalidConsumer failed")
+
+	req := rpcpb.AcquireQueueConcurrencyFetchRequest()
+	req.ID = tid
+	req.Group = g1
+	req.Consumer = 1
+	resp := getTestConcurrencyResp(t, store, req)
+	assert.True(t, resp.Removed, "TestQueueFetchWithInvalidConsumer failed")
+}
+
+func TestQueueConcurrencyFetchWithInvalidPartition(t *testing.T) {
+	store, deferFunc := NewTestStorage(t, true)
+	defer deferFunc()
+
+	tid := uint64(1)
+	g1 := []byte("g1")
+	state := &metapb.QueueState{
+		Consumers:  1,
+		Partitions: 2,
+		States: []metapb.Partiton{
+			metapb.Partiton{},
+			metapb.Partiton{},
+		},
+		Timeout: 60,
+	}
+	buf := goetty.NewByteBuf(32)
+	key := ConcurrencyQueueStateKey(tid, g1, buf)
+	err := store.Set(key, protoc.MustMarshal(state))
+	assert.NoError(t, err, "TestQueueFetchWithInvalidPartition failed")
+
+	req := rpcpb.AcquireQueueConcurrencyFetchRequest()
+	req.ID = tid
+	req.Group = g1
+	req.Consumer = 0
+	req.Partition = 2
+	resp := getTestConcurrencyResp(t, store, req)
+	assert.True(t, resp.Removed, "TestQueueFetchWithInvalidPartition failed")
+}
+
+func TestQueueJoin(t *testing.T) {
+	store, deferFunc := NewTestStorage(t, true)
+	defer deferFunc()
+
+	tid := uint64(1)
+	g1 := []byte("g1")
+	state := &metapb.QueueState{
+		Partitions: 2,
+		States: []metapb.Partiton{
+			metapb.Partiton{},
+			metapb.Partiton{},
+		},
+		Timeout: 60,
+	}
+	buf := goetty.NewByteBuf(32)
+	key := ConcurrencyQueueMetaKey(tid, buf)
+	err := store.Set(key, protoc.MustMarshal(state))
+	assert.NoError(t, err, "TestQueueJoin failed")
+
+	req := rpcpb.AcquireQueueJoinGroupRequest()
+	req.ID = tid
+	req.Group = g1
+
+	resp := getTestJoinResp(t, store, req)
+	assert.Equal(t, uint32(0), resp.Index, "TestQueueJoin failed")
+	assert.Equal(t, 2, len(resp.Partitions), "TestQueueJoin failed")
+	assert.Equal(t, 2, len(resp.Versions), "TestQueueJoin failed")
+	pvs := []uint32{0, 1}
+	vs := []uint64{0, 0}
+	for idx := range resp.Partitions {
+		assert.Equal(t, pvs[idx], resp.Partitions[idx], "TestQueueJoin failed")
+		assert.Equal(t, vs[idx], resp.Versions[idx], "TestQueueJoin failed")
+	}
+
+	state = getTestQueueuState(t, store, tid, g1)
+	assert.Equal(t, uint32(1), state.Consumers, "TestQueueJoin failed")
+
+	versionValues := []uint64{0, 0}
+	consumerValues := []uint32{0, 0}
+	stateValues := []metapb.PartitonState{metapb.PSRebalancing, metapb.PSRebalancing}
+	for i := 0; i < 2; i++ {
+		assert.Equal(t, versionValues[i], state.States[i].Version, "TestQueueJoin failed")
+		assert.Equal(t, consumerValues[i], state.States[i].Consumer, "TestQueueJoin failed")
+		assert.Equal(t, stateValues[i], state.States[i].State, "TestQueueJoin failed")
+		assert.Equal(t, uint64(0), state.States[i].Completed, "TestQueueJoin failed")
+		assert.Equal(t, uint64(0), state.States[i].LastFetchCount, "TestQueueJoin failed")
+		assert.True(t, state.States[i].LastFetchTS > 0, "TestQueueJoin failed")
+	}
+
+	req.Reset()
+	req.ID = tid
+	req.Group = g1
+
+	resp = getTestJoinResp(t, store, req)
+	assert.Equal(t, uint32(1), resp.Index, "TestQueueJoin failed")
+	assert.Equal(t, 1, len(resp.Partitions), "TestQueueJoin failed")
+	assert.Equal(t, 1, len(resp.Versions), "TestQueueJoin failed")
+	pvs = []uint32{1}
+	vs = []uint64{1}
+	for idx := range resp.Partitions {
+		assert.Equal(t, pvs[idx], resp.Partitions[idx], "TestQueueJoin failed")
+		assert.Equal(t, vs[idx], resp.Versions[idx], "TestQueueJoin failed")
+	}
+
+	state = getTestQueueuState(t, store, tid, g1)
+	assert.Equal(t, uint32(2), state.Consumers, "TestQueueJoin failed")
+
+	versionValues = []uint64{0, 1}
+	consumerValues = []uint32{0, 1}
+	stateValues = []metapb.PartitonState{metapb.PSRebalancing, metapb.PSRebalancing}
+	for i := 0; i < 2; i++ {
+		assert.Equal(t, versionValues[i], state.States[i].Version, "TestQueueJoin failed")
+		assert.Equal(t, consumerValues[i], state.States[i].Consumer, "TestQueueJoin failed")
+		assert.Equal(t, stateValues[i], state.States[i].State, "TestQueueJoin failed")
+		assert.Equal(t, uint64(0), state.States[i].Completed, "TestQueueJoin failed")
+		assert.Equal(t, uint64(0), state.States[i].LastFetchCount, "TestQueueJoin failed")
+		assert.True(t, state.States[i].LastFetchTS > 0, "TestQueueJoin failed")
+	}
+
+	for i := 0; i < 10; i++ {
+		req.Reset()
+		req.ID = tid
+		req.Group = g1
+
+		resp = getTestJoinResp(t, store, req)
+		assert.Equal(t, uint32(0), resp.Index, "TestQueueJoin failed")
+		assert.Equal(t, 0, len(resp.Partitions), "TestQueueJoin failed")
+		assert.Equal(t, 0, len(resp.Versions), "TestQueueJoin failed")
+	}
+
+	state = getTestQueueuState(t, store, tid, g1)
+	assert.Equal(t, uint32(2), state.Consumers, "TestQueueJoin failed")
+	versionValues = []uint64{0, 1}
+	consumerValues = []uint32{0, 1}
+	stateValues = []metapb.PartitonState{metapb.PSRebalancing, metapb.PSRebalancing}
+	for i := 0; i < 2; i++ {
+		assert.Equal(t, versionValues[i], state.States[i].Version, "TestQueueJoin failed")
+		assert.Equal(t, consumerValues[i], state.States[i].Consumer, "TestQueueJoin failed")
+		assert.Equal(t, stateValues[i], state.States[i].State, "TestQueueJoin failed")
+		assert.Equal(t, uint64(0), state.States[i].Completed, "TestQueueJoin failed")
+		assert.Equal(t, uint64(0), state.States[i].LastFetchCount, "TestQueueJoin failed")
+		assert.True(t, state.States[i].LastFetchTS > 0, "TestQueueJoin failed")
+	}
+}
+
+func TestQueueConcurrencyFetchAfterJoin(t *testing.T) {
+	store, deferFunc := NewTestStorage(t, true)
+	defer deferFunc()
+
+	tid := uint64(1)
+	g1 := []byte("g1")
+	state := &metapb.QueueState{
+		Partitions: 2,
+		States: []metapb.Partiton{
+			metapb.Partiton{},
+			metapb.Partiton{},
+		},
+		Timeout: 60,
+	}
+	buf := goetty.NewByteBuf(32)
+	key := ConcurrencyQueueMetaKey(tid, buf)
+	err := store.Set(key, protoc.MustMarshal(state))
+	assert.NoError(t, err, "TestQueueFetchAfterJoin failed")
+
+	req := rpcpb.AcquireQueueJoinGroupRequest()
+	req.ID = tid
+	req.Group = g1
+
+	resp := getTestJoinResp(t, store, req)
+	fetch := rpcpb.AcquireQueueConcurrencyFetchRequest()
+	fetch.ID = tid
+	fetch.Group = g1
+	fetch.Consumer = resp.Index
+	fetch.Partition = resp.Partitions[0]
+	fetchResp := getTestConcurrencyResp(t, store, fetch)
+	assert.False(t, fetchResp.Removed, "TestQueueFetchAfterJoin failed")
+
+	state = getTestQueueuState(t, store, tid, g1)
+	assert.Equal(t, uint32(1), state.Consumers, "TestQueueFetchAfterJoin failed")
+
+	versionValues := []uint64{0, 0}
+	consumerValues := []uint32{0, 0}
+	stateValues := []metapb.PartitonState{metapb.PSRunning, metapb.PSRebalancing}
+	for i := 0; i < 2; i++ {
+		assert.Equal(t, versionValues[i], state.States[i].Version, "TestQueueFetchAfterJoin failed")
+		assert.Equal(t, consumerValues[i], state.States[i].Consumer, "TestQueueFetchAfterJoin failed")
+		assert.Equal(t, stateValues[i], state.States[i].State, "TestQueueFetchAfterJoin failed")
+		assert.Equal(t, uint64(0), state.States[i].Completed, "TestQueueFetchAfterJoin failed")
+		assert.Equal(t, uint64(0), state.States[i].LastFetchCount, "TestQueueFetchAfterJoin failed")
+		assert.True(t, state.States[i].LastFetchTS > 0, "TestQueueFetchAfterJoin failed")
+	}
+}
+
+func TestQueueFetchWithRebalancing(t *testing.T) {
+	store, deferFunc := NewTestStorage(t, true)
+	defer deferFunc()
+
+	tid := uint64(1)
+	g1 := []byte("g1")
+	state := &metapb.QueueState{
+		Consumers:  1,
+		Partitions: 1,
+		States: []metapb.Partiton{
+			metapb.Partiton{
+				Consumer:       0,
+				Version:        1,
+				State:          metapb.PSRebalancing,
+				LastFetchCount: 10,
+				LastFetchTS:    time.Now().Unix(),
+			},
+		},
+		Timeout: 60,
+	}
+	buf := goetty.NewByteBuf(32)
+	key := ConcurrencyQueueStateKey(tid, g1, buf)
+	err := store.Set(key, protoc.MustMarshal(state))
+	assert.NoError(t, err, "TestQueueFetchWithRebalancing failed")
+
+	err = store.PutToQueue(tid, 0, metapb.DefaultGroup, []byte("1"))
+	assert.NoError(t, err, "TestQueueFetchWithRebalancing failed")
+
+	req := rpcpb.AcquireQueueConcurrencyFetchRequest()
+	req.Reset()
+	req.ID = tid
+	req.Group = g1
+	req.Consumer = 0
+	req.Version = 1
+	req.Partition = 0
+
+	resp := getTestConcurrencyResp(t, store, req)
+	assert.Equal(t, uint64(0), resp.LastOffset, "TestQueueFetchWithRebalancing failed")
+	assert.Empty(t, resp.Items, "TestQueueFetchWithRebalancing failed")
+	assert.False(t, resp.Removed, "TestQueueFetchWithRebalancing failed")
+
+	state.States[0].LastFetchCount = 0
+	err = store.Set(key, protoc.MustMarshal(state))
+	assert.NoError(t, err, "TestQueueFetchWithRebalancing failed")
+
+	req.Reset()
+	req.ID = tid
+	req.Group = g1
+	req.Consumer = 0
+	req.Version = 1
+	req.Partition = 0
+	req.Count = 10
+	resp = getTestConcurrencyResp(t, store, req)
+	assert.Equal(t, uint64(1), resp.LastOffset, "TestQueueFetchWithRebalancing failed")
+	assert.Equal(t, 1, len(resp.Items), "TestQueueFetchWithRebalancing failed")
+	assert.False(t, resp.Removed, "TestQueueFetchWithRebalancing failed")
+}
+
+func TestQueueConcurrencyFetchWithRemoveTimeoutConsumer(t *testing.T) {
+	store, deferFunc := NewTestStorage(t, true)
+	defer deferFunc()
+
+	tid := uint64(1)
+	g1 := []byte("g1")
+
+	state := &metapb.QueueState{
+		Consumers:  2,
+		Partitions: 2,
+		States: []metapb.Partiton{
+			metapb.Partiton{
+				Consumer:    0,
+				Version:     0,
+				State:       metapb.PSRunning,
+				LastFetchTS: time.Now().Unix() - 60 - 1,
+			},
+			metapb.Partiton{
+				Consumer:    1,
+				Version:     1,
+				State:       metapb.PSRunning,
+				LastFetchTS: time.Now().Unix(),
+			},
+		},
+		Timeout: 60,
+	}
+	buf := goetty.NewByteBuf(32)
+	key := ConcurrencyQueueMetaKey(tid, buf)
+	err := store.Set(key, protoc.MustMarshal(state))
+	assert.NoError(t, err, "TestQueueConcurrencyFetchWithRemoveTimeoutConsumer failed")
+
+	req := rpcpb.AcquireQueueConcurrencyFetchRequest()
+	for i := 0; i < 2; i++ {
+		req.Reset()
+		req.ID = tid
+		req.Group = g1
+		req.Consumer = 0
+		req.Version = 0
+
+		resp := getTestConcurrencyResp(t, store, req)
+		assert.True(t, resp.Removed, "TestQueueConcurrencyFetchWithRemoveTimeoutConsumer failed")
+
+		state = getTestQueueuState(t, store, tid, g1)
+		assert.Equal(t, uint32(0), state.Consumers, "TestQueueConcurrencyFetchWithRemoveTimeoutConsumer failed")
+
+		versionValues := []uint64{1, 2}
+		consumerValues := []uint32{0, 0}
+		stateValues := []metapb.PartitonState{metapb.PSRebalancing, metapb.PSRebalancing}
+		for i := 0; i < 2; i++ {
+			assert.Equal(t, versionValues[i], state.States[i].Version, "TestQueueConcurrencyFetchWithRemoveTimeoutConsumer failed")
+			assert.Equal(t, consumerValues[i], state.States[i].Consumer, "TestQueueConcurrencyFetchWithRemoveTimeoutConsumer failed")
+			assert.Equal(t, stateValues[i], state.States[i].State, "TestQueueConcurrencyFetchWithRemoveTimeoutConsumer failed")
+			assert.Equal(t, uint64(0), state.States[i].Completed, "TestQueueConcurrencyFetchWithRemoveTimeoutConsumer failed")
+			assert.Equal(t, uint64(0), state.States[i].LastFetchCount, "TestQueueConcurrencyFetchWithRemoveTimeoutConsumer failed")
+			assert.True(t, state.States[i].LastFetchTS > 0, "TestQueueConcurrencyFetchWithRemoveTimeoutConsumer failed")
+		}
+	}
+
+	req.Reset()
+	req.ID = tid
+	req.Group = g1
+	req.Consumer = 0
+	req.Version = 0
+	resp := getTestConcurrencyResp(t, store, req)
+	assert.True(t, resp.Removed, "TestQueueConcurrencyFetchWithRemoveTimeoutConsumer failed")
+
+	req.Reset()
+	req.ID = tid
+	req.Group = g1
+	req.Consumer = 1
+	req.Version = 1
+	resp = getTestConcurrencyResp(t, store, req)
+	assert.True(t, resp.Removed, "TestQueueConcurrencyFetchWithRemoveTimeoutConsumer failed")
+}
+
+func TestQueueJoinAfterClearConsumers(t *testing.T) {
+	store, deferFunc := NewTestStorage(t, true)
+	defer deferFunc()
+
+	tid := uint64(1)
+	g1 := []byte("g1")
+
+	now := time.Now().Unix()
+	state := &metapb.QueueState{
+		Consumers:  0,
+		Partitions: 2,
+		States: []metapb.Partiton{
+			metapb.Partiton{
+				Consumer:    0,
+				Version:     1,
+				State:       metapb.PSRebalancing,
+				LastFetchTS: now - 60 - 1,
+			},
+			metapb.Partiton{
+				Consumer:    0,
+				Version:     2,
+				State:       metapb.PSRebalancing,
+				LastFetchTS: now,
+			},
+		},
+		Timeout: 60,
+	}
+	buf := goetty.NewByteBuf(32)
+	key := ConcurrencyQueueStateKey(tid, g1, buf)
+	err := store.Set(key, protoc.MustMarshal(state))
+	assert.NoError(t, err, "TestQueueJoinAfterClearConsumers failed")
+
+	req := rpcpb.AcquireQueueJoinGroupRequest()
+	req.ID = tid
+	req.Group = g1
+
+	resp := getTestJoinResp(t, store, req)
+	assert.Equal(t, uint32(0), resp.Index, "TestQueueJoin failed")
+	assert.Equal(t, 2, len(resp.Partitions), "TestQueueJoin failed")
+	assert.Equal(t, 2, len(resp.Versions), "TestQueueJoin failed")
+	pvs := []uint32{0, 1}
+	vs := []uint64{1, 2}
+	for idx := range resp.Partitions {
+		assert.Equal(t, pvs[idx], resp.Partitions[idx], "TestQueueJoin failed")
+		assert.Equal(t, vs[idx], resp.Versions[idx], "TestQueueJoin failed")
+	}
+
+	state = getTestQueueuState(t, store, tid, g1)
+	assert.Equal(t, uint32(1), state.Consumers, "TestQueueJoin failed")
+
+	versionValues := []uint64{1, 2}
+	consumerValues := []uint32{0, 0}
+	stateValues := []metapb.PartitonState{metapb.PSRebalancing, metapb.PSRebalancing}
+	for i := 0; i < 2; i++ {
+		assert.Equal(t, versionValues[i], state.States[i].Version, "TestQueueJoin failed")
+		assert.Equal(t, consumerValues[i], state.States[i].Consumer, "TestQueueJoin failed")
+		assert.Equal(t, stateValues[i], state.States[i].State, "TestQueueJoin failed")
+		assert.Equal(t, uint64(0), state.States[i].Completed, "TestQueueJoin failed")
+		assert.Equal(t, uint64(0), state.States[i].LastFetchCount, "TestQueueJoin failed")
+		assert.True(t, state.States[i].LastFetchTS >= now, "TestQueueJoin failed")
+	}
+}
+
+func TestQueueConcurrencyFetchWithCommitOffset(t *testing.T) {
+	store, deferFunc := NewTestStorage(t, true)
+	defer deferFunc()
+
+	tid := uint64(1)
+	g1 := []byte("g1")
+
+	state := &metapb.QueueState{
+		Consumers:  2,
+		Partitions: 2,
+		States: []metapb.Partiton{
+			metapb.Partiton{
+				Consumer:    0,
+				Version:     0,
+				State:       metapb.PSRunning,
+				LastFetchTS: time.Now().Unix(),
+			},
+			metapb.Partiton{
+				Consumer:    1,
+				Version:     1,
+				State:       metapb.PSRunning,
+				LastFetchTS: time.Now().Unix(),
+			},
+		},
+		Timeout: 60,
+	}
+	buf := goetty.NewByteBuf(32)
+	key := ConcurrencyQueueStateKey(tid, g1, buf)
+	err := store.Set(key, protoc.MustMarshal(state))
+	assert.NoError(t, err, "TestQueueConcurrencyFetchWithCommitOffset failed")
+
+	req := rpcpb.AcquireQueueConcurrencyFetchRequest()
+	req.ID = tid
+	req.Group = g1
+	req.Partition = 0
+	req.Consumer = 0
+	req.Version = 0
+	req.CompletedOffset = 10
+	resp := getTestConcurrencyResp(t, store, req)
+	assert.False(t, resp.Removed, "TestQueueConcurrencyFetchWithCommitOffset failed")
+
+	req.Reset()
+	req.ID = tid
+	req.Group = g1
+	req.Partition = 1
+	req.Consumer = 1
+	req.Version = 1
+	req.CompletedOffset = 20
+	resp = getTestConcurrencyResp(t, store, req)
+	assert.False(t, resp.Removed, "TestQueueConcurrencyFetchWithCommitOffset failed")
+
+	state = getTestQueueuState(t, store, tid, g1)
+	assert.Equal(t, uint32(2), state.Consumers, "TestQueueConcurrencyFetchWithCommitOffset failed")
+
+	offsetValues := []uint64{10, 20}
+	versionValues := []uint64{0, 1}
+	consumerValues := []uint32{0, 1}
+	stateValues := []metapb.PartitonState{metapb.PSRunning, metapb.PSRunning}
+	for i := 0; i < 2; i++ {
+		assert.Equal(t, versionValues[i], state.States[i].Version, "TestQueueConcurrencyFetchWithCommitOffset failed")
+		assert.Equal(t, consumerValues[i], state.States[i].Consumer, "TestQueueConcurrencyFetchWithCommitOffset failed")
+		assert.Equal(t, stateValues[i], state.States[i].State, "TestQueueConcurrencyFetchWithCommitOffset failed")
+		assert.Equal(t, offsetValues[i], state.States[i].Completed, "TestQueueConcurrencyFetchWithCommitOffset failed")
+		assert.Equal(t, uint64(0), state.States[i].LastFetchCount, "TestQueueConcurrencyFetchWithCommitOffset failed")
+		assert.True(t, state.States[i].LastFetchTS > 0, "TestQueueConcurrencyFetchWithCommitOffset failed")
+	}
+}
+
+func TestQueueConcurrencyFetchWithStaleCommitOffset(t *testing.T) {
+	store, deferFunc := NewTestStorage(t, true)
+	defer deferFunc()
+
+	tid := uint64(1)
+	g1 := []byte("g1")
+
+	state := &metapb.QueueState{
+		Consumers:  3,
+		Partitions: 3,
+		States: []metapb.Partiton{
+			metapb.Partiton{
+				Consumer:       0,
+				Version:        1,
+				State:          metapb.PSRunning,
+				LastFetchCount: 0,
+				LastFetchTS:    time.Now().Unix(),
+			},
+			metapb.Partiton{
+				Consumer:       1,
+				Version:        1,
+				State:          metapb.PSRebalancing,
+				LastFetchCount: 0,
+				LastFetchTS:    time.Now().Unix(),
+			},
+			metapb.Partiton{
+				Consumer:       2,
+				Version:        1,
+				State:          metapb.PSRebalancing,
+				LastFetchCount: 10,
+				LastFetchTS:    time.Now().Unix(),
+			},
+		},
+		Timeout: 60,
+	}
+	buf := goetty.NewByteBuf(32)
+	key := ConcurrencyQueueStateKey(tid, g1, buf)
+	err := store.Set(key, protoc.MustMarshal(state))
+	assert.NoError(t, err, "TestQueueConcurrencyFetchWithStaleCommitOffset failed")
+
+	req := rpcpb.AcquireQueueConcurrencyFetchRequest()
+	req.ID = tid
+	req.Group = g1
+	req.Partition = 0
+	req.Consumer = 0
+	req.Version = 0
+	req.CompletedOffset = 10
+	resp := getTestConcurrencyResp(t, store, req)
+	assert.True(t, resp.Removed, "TestQueueConcurrencyFetchWithStaleCommitOffset failed")
+
+	req.Reset()
+	req.ID = tid
+	req.Group = g1
+	req.Partition = 1
+	req.Consumer = 1
+	req.Version = 0
+	req.CompletedOffset = 20
+	resp = getTestConcurrencyResp(t, store, req)
+	assert.True(t, resp.Removed, "TestQueueConcurrencyFetchWithStaleCommitOffset failed")
+
+	req.Reset()
+	req.ID = tid
+	req.Group = g1
+	req.Partition = 2
+	req.Consumer = 2
+	req.Version = 0
+	req.CompletedOffset = 30
+	resp = getTestConcurrencyResp(t, store, req)
+	assert.True(t, resp.Removed, "TestQueueConcurrencyFetchWithStaleCommitOffset failed")
+
+	state = getTestQueueuState(t, store, tid, g1)
+	assert.Equal(t, uint32(3), state.Consumers, "TestQueueConcurrencyFetchWithStaleCommitOffset failed")
+
+	offsetValues := []uint64{0, 0, 30}
+	versionValues := []uint64{1, 1, 1}
+	consumerValues := []uint32{0, 1, 2}
+	stateValues := []metapb.PartitonState{metapb.PSRunning, metapb.PSRebalancing, metapb.PSRunning}
+	for i := 0; i < 1; i++ {
+		assert.Equal(t, versionValues[i], state.States[i].Version, "TestQueueConcurrencyFetchWithStaleCommitOffset failed")
+		assert.Equal(t, consumerValues[i], state.States[i].Consumer, "TestQueueConcurrencyFetchWithStaleCommitOffset failed")
+		assert.Equal(t, stateValues[i], state.States[i].State, "TestQueueConcurrencyFetchWithStaleCommitOffset failed")
+		assert.Equal(t, offsetValues[i], state.States[i].Completed, "TestQueueConcurrencyFetchWithStaleCommitOffset failed")
+		assert.Equal(t, uint64(0), state.States[i].LastFetchCount, "TestQueueConcurrencyFetchWithStaleCommitOffset failed")
+		assert.True(t, state.States[i].LastFetchTS > 0, "TestQueueConcurrencyFetchWithStaleCommitOffset failed")
+	}
+}
+
+func getTestQueueuState(t *testing.T, store Storage, tid uint64, g []byte) *metapb.QueueState {
+	buf := goetty.NewByteBuf(32)
+	key := ConcurrencyQueueStateKey(tid, g, buf)
+	data, err := store.Get(key)
+	assert.NoError(t, err, "getQueueuState failed")
+
+	state := &metapb.QueueState{}
+	protoc.MustUnmarshal(state, data)
+	return state
+}
+
+func getTestConcurrencyResp(t *testing.T, store Storage, req *rpcpb.QueueConcurrencyFetchRequest) *rpcpb.QueueConcurrencyFetchResponse {
+	data, err := store.ExecCommand(req)
+	assert.NoError(t, err, "getTestConcurrencyResp failed")
+
+	resp := &rpcpb.QueueConcurrencyFetchResponse{}
+	protoc.MustUnmarshal(resp, data)
+	return resp
+}
+
+func getTestJoinResp(t *testing.T, store Storage, req *rpcpb.QueueJoinGroupRequest) *rpcpb.QueueJoinGroupResponse {
+	data, err := store.ExecCommand(req)
+	assert.NoError(t, err, "getTestJoinResp failed")
+
+	resp := &rpcpb.QueueJoinGroupResponse{}
+	protoc.MustUnmarshal(resp, data)
+	return resp
+}

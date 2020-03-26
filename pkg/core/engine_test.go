@@ -44,16 +44,31 @@ func TestTenantInit(t *testing.T) {
 	assert.NoError(t, err, "TestTenantInit failed")
 	assert.NoError(t, ng.Start(), "TestTenantInit failed")
 
-	err = ng.TenantInit(10001, 1)
+	tid := uint64(10001)
+	err = ng.(*engine).tenantInitWithReplicas(metapb.Tenant{
+		ID: tid,
+		Input: metapb.TenantQueue{
+			Partitions:      1,
+			ConsumerTimeout: 60,
+		},
+		Output: metapb.TenantQueue{
+			Partitions:      2,
+			ConsumerTimeout: 60,
+		},
+	}, 1)
 	assert.NoError(t, err, "TestTenantInit failed")
 
-	time.Sleep(time.Millisecond * 500)
-
+	time.Sleep(time.Second * 12)
 	c := 0
 	err = store.RaftStore().Prophet().GetStore().LoadResources(16, func(res prophet.Resource) {
 		c++
 	})
 	assert.Equal(t, 3, c, "TestTenantInit failed")
+
+	buf := goetty.NewByteBuf(32)
+	data, err := store.GetWithGroup(storage.ConcurrencyQueueMetaKey(tid, buf), metapb.TenantOutputGroup)
+	assert.NoError(t, err, "TestTenantInit failed")
+	assert.NotEmpty(t, data, "TestTenantInit failed")
 }
 
 func TestStopInstanceAndRestart(t *testing.T) {
@@ -64,7 +79,17 @@ func TestStopInstanceAndRestart(t *testing.T) {
 	assert.NoError(t, err, "TestStopInstance failed")
 	assert.NoError(t, ng.Start(), "TestStopInstance failed")
 
-	err = ng.TenantInit(10001, 1)
+	err = ng.TenantInit(metapb.Tenant{
+		ID: 10001,
+		Input: metapb.TenantQueue{
+			Partitions:      1,
+			ConsumerTimeout: 60,
+		},
+		Output: metapb.TenantQueue{
+			Partitions:      1,
+			ConsumerTimeout: 60,
+		},
+	})
 	assert.NoError(t, err, "TestStopInstance failed")
 	time.Sleep(time.Second)
 
@@ -142,7 +167,17 @@ func TestStartInstance(t *testing.T) {
 	assert.NoError(t, err, "TestStartInstance failed")
 	assert.NoError(t, ng.Start(), "TestStartInstance failed")
 
-	err = ng.TenantInit(10001, 1)
+	err = ng.TenantInit(metapb.Tenant{
+		ID: 10001,
+		Input: metapb.TenantQueue{
+			Partitions:      1,
+			ConsumerTimeout: 60,
+		},
+		Output: metapb.TenantQueue{
+			Partitions:      1,
+			ConsumerTimeout: 60,
+		},
+	})
 	assert.NoError(t, err, "TestStartInstance failed")
 	time.Sleep(time.Second)
 
@@ -263,7 +298,17 @@ func TestTriggerDirect(t *testing.T) {
 	assert.NoError(t, err, "TestTriggerDirect failed")
 	assert.NoError(t, ng.Start(), "TestTriggerDirect failed")
 
-	err = ng.TenantInit(10001, 1)
+	err = ng.TenantInit(metapb.Tenant{
+		ID: 10001,
+		Input: metapb.TenantQueue{
+			Partitions:      1,
+			ConsumerTimeout: 60,
+		},
+		Output: metapb.TenantQueue{
+			Partitions:      1,
+			ConsumerTimeout: 60,
+		},
+	})
 	assert.NoError(t, err, "TestTriggerDirect failed")
 	time.Sleep(time.Second)
 
@@ -407,7 +452,17 @@ func TestUpdateCrowd(t *testing.T) {
 	assert.NoError(t, err, "TestUpdateCrowd failed")
 	assert.NoError(t, ng.Start(), "TestUpdateCrowd failed")
 
-	err = ng.TenantInit(tid, 1)
+	err = ng.TenantInit(metapb.Tenant{
+		ID: tid,
+		Input: metapb.TenantQueue{
+			Partitions:      1,
+			ConsumerTimeout: 60,
+		},
+		Output: metapb.TenantQueue{
+			Partitions:      1,
+			ConsumerTimeout: 60,
+		},
+	})
 	assert.NoError(t, err, "TestUpdateCrowd failed")
 	time.Sleep(time.Second)
 
@@ -558,7 +613,17 @@ func TestUpdateWorkflow(t *testing.T) {
 	assert.NoError(t, err, "TestUpdateWorkflow failed")
 	assert.NoError(t, ng.Start(), "TestUpdateWorkflow failed")
 
-	err = ng.TenantInit(tid, 1)
+	err = ng.TenantInit(metapb.Tenant{
+		ID: tid,
+		Input: metapb.TenantQueue{
+			Partitions:      1,
+			ConsumerTimeout: 60,
+		},
+		Output: metapb.TenantQueue{
+			Partitions:      1,
+			ConsumerTimeout: 60,
+		},
+	})
 	assert.NoError(t, err, "TestUpdateWorkflow failed")
 	time.Sleep(time.Second)
 
@@ -817,7 +882,17 @@ func TestStartInstanceWithStepTTL(t *testing.T) {
 	assert.NoError(t, err, "TestStartInstanceWithStepTTL failed")
 	assert.NoError(t, ng.Start(), "TestStartInstanceWithStepTTL failed")
 
-	err = ng.TenantInit(10001, 1)
+	err = ng.TenantInit(metapb.Tenant{
+		ID: 10001,
+		Input: metapb.TenantQueue{
+			Partitions:      1,
+			ConsumerTimeout: 60,
+		},
+		Output: metapb.TenantQueue{
+			Partitions:      1,
+			ConsumerTimeout: 60,
+		},
+	})
 	assert.NoError(t, err, "TestStartInstanceWithStepTTL failed")
 	time.Sleep(time.Second)
 
@@ -1003,7 +1078,17 @@ func TestTransaction(t *testing.T) {
 	assert.NoError(t, err, "TestTransaction failed")
 	assert.NoError(t, ng.Start(), "TestTransaction failed")
 
-	err = ng.TenantInit(tid, 1)
+	err = ng.TenantInit(metapb.Tenant{
+		ID: tid,
+		Input: metapb.TenantQueue{
+			Partitions:      1,
+			ConsumerTimeout: 60,
+		},
+		Output: metapb.TenantQueue{
+			Partitions:      1,
+			ConsumerTimeout: 60,
+		},
+	})
 	assert.NoError(t, err, "TestTransaction failed")
 	time.Sleep(time.Second)
 
@@ -1152,7 +1237,17 @@ func TestTimerWithUseStepCrowdToDrive(t *testing.T) {
 	assert.NoError(t, err, "TestTimerWithUseStepCrowdToDrive failed")
 	assert.NoError(t, ng.Start(), "TestTimerWithUseStepCrowdToDrive failed")
 
-	err = ng.TenantInit(tid, 1)
+	err = ng.TenantInit(metapb.Tenant{
+		ID: tid,
+		Input: metapb.TenantQueue{
+			Partitions:      1,
+			ConsumerTimeout: 60,
+		},
+		Output: metapb.TenantQueue{
+			Partitions:      1,
+			ConsumerTimeout: 60,
+		},
+	})
 	assert.NoError(t, err, "TestTimerWithUseStepCrowdToDrive failed")
 	time.Sleep(time.Second)
 
@@ -1207,7 +1302,17 @@ func TestLastTransactionNotCompleted(t *testing.T) {
 	assert.NoError(t, err, "TestLastTransaction failed")
 	assert.NoError(t, ng.Start(), "TestLastTransaction failed")
 
-	err = ng.TenantInit(tid, 1)
+	err = ng.TenantInit(metapb.Tenant{
+		ID: tid,
+		Input: metapb.TenantQueue{
+			Partitions:      1,
+			ConsumerTimeout: 60,
+		},
+		Output: metapb.TenantQueue{
+			Partitions:      1,
+			ConsumerTimeout: 60,
+		},
+	})
 	assert.NoError(t, err, "TestLastTransaction failed")
 	time.Sleep(time.Second)
 
@@ -1325,7 +1430,17 @@ func TestLastTransactionCompleted(t *testing.T) {
 	assert.NoError(t, err, "TestLastTransactionCompleted failed")
 	assert.NoError(t, ng.Start(), "TestLastTransactionCompleted failed")
 
-	err = ng.TenantInit(tid, 1)
+	err = ng.TenantInit(metapb.Tenant{
+		ID: tid,
+		Input: metapb.TenantQueue{
+			Partitions:      1,
+			ConsumerTimeout: 60,
+		},
+		Output: metapb.TenantQueue{
+			Partitions:      1,
+			ConsumerTimeout: 60,
+		},
+	})
 	assert.NoError(t, err, "TestLastTransactionCompleted failed")
 	time.Sleep(time.Second)
 
@@ -1464,7 +1579,17 @@ func TestNotifyWithErrorRetry(t *testing.T) {
 	assert.NoError(t, err, "TestNotifyWithErrorRetry failed")
 	assert.NoError(t, ng.Start(), "TestNotifyWithErrorRetry failed")
 
-	err = ng.TenantInit(10001, 1)
+	err = ng.TenantInit(metapb.Tenant{
+		ID: 10001,
+		Input: metapb.TenantQueue{
+			Partitions:      1,
+			ConsumerTimeout: 60,
+		},
+		Output: metapb.TenantQueue{
+			Partitions:      1,
+			ConsumerTimeout: 60,
+		},
+	})
 	assert.NoError(t, err, "TestNotifyWithErrorRetry failed")
 	time.Sleep(time.Second)
 

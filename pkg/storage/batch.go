@@ -6,7 +6,6 @@ import (
 	bhstorage "github.com/deepfabric/beehive/storage"
 	bhutil "github.com/deepfabric/beehive/util"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
-	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/log"
 )
 
@@ -20,7 +19,7 @@ const (
 
 type batchType interface {
 	support() []rpcpb.Type
-	addReq(*raftcmdpb.Request, *raftcmdpb.Response, *batch, *goetty.ByteBuf)
+	addReq(*raftcmdpb.Request, *raftcmdpb.Response, *batch, map[string]interface{})
 	exec(bhstorage.DataStorage, *batch) error
 	reset()
 }
@@ -53,7 +52,7 @@ func newBatch(bs *beeStorage, types ...batchType) *batch {
 	return b
 }
 
-func (b *batch) Add(shard uint64, req *raftcmdpb.Request, buf *goetty.ByteBuf) (bool, *raftcmdpb.Response, error) {
+func (b *batch) Add(shard uint64, req *raftcmdpb.Request, attrs map[string]interface{}) (bool, *raftcmdpb.Response, error) {
 	if b.shard != 0 && b.shard != shard {
 		log.Fatalf("BUG: diffent shard opts in a batch, %d, %d",
 			b.shard,
@@ -64,7 +63,7 @@ func (b *batch) Add(shard uint64, req *raftcmdpb.Request, buf *goetty.ByteBuf) (
 	resp := pb.AcquireResponse()
 
 	if tp, ok := b.fn[rpcpb.Type(req.CustemType)]; ok {
-		tp.addReq(req, resp, b, buf)
+		tp.addReq(req, resp, b, attrs)
 		return true, resp, nil
 	}
 

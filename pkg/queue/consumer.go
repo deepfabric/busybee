@@ -9,7 +9,6 @@ import (
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/deepfabric/busybee/pkg/storage"
-	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/log"
 	"github.com/fagongzi/util/protoc"
 )
@@ -33,38 +32,36 @@ type Consumer interface {
 type consumer struct {
 	consumer   []byte
 	id         uint64
-	group      metapb.Group
-	partitions uint64
+	partitions uint32
 	store      storage.Storage
 	cancels    []context.CancelFunc
 }
 
 // NewConsumer returns a consumer
-func NewConsumer(id uint64, group metapb.Group, store storage.Storage, name []byte) (Consumer, error) {
-	value, err := store.Get(storage.QueueMetadataKey(id, group))
+func NewConsumer(id uint64, store storage.Storage, name []byte) (Consumer, error) {
+	value, err := store.Get(storage.TenantMetadataKey(id))
 	if err != nil {
 		metric.IncStorageFailed()
 		return nil, err
 	}
 	if len(value) == 0 {
-		return nil, fmt.Errorf("%s group %s queue %d not created",
+		return nil, fmt.Errorf("%s queue %d not created",
 			string(name),
-			group.String(),
 			id)
 	}
 
-	partitions := goetty.Byte2UInt64(value)
+	meta := &metapb.Tenant{}
+	protoc.MustUnmarshal(meta, value)
 	return &consumer{
 		id:         id,
-		partitions: partitions,
+		partitions: meta.Input.Partitions,
 		store:      store,
-		group:      group,
 		consumer:   name,
 	}, nil
 }
 
 func (c *consumer) Start(batch, concurrency uint64, fn func(uint64, ...[]byte) (uint64, error)) {
-	for i := uint64(0); i < c.partitions; i++ {
+	for i := uint32(0); i < c.partitions; i++ {
 		ctx, cancel := context.WithCancel(context.Background())
 		c.startPartition(ctx, i, batch, concurrency, fn)
 		c.cancels = append(c.cancels, cancel)
@@ -77,7 +74,7 @@ func (c *consumer) Stop() {
 	}
 }
 
-func (c *consumer) startPartition(ctx context.Context, idx, batch, concurrency uint64, fn func(uint64, ...[]byte) (uint64, error)) {
+func (c *consumer) startPartition(ctx context.Context, idx uint32, batch, concurrency uint64, fn func(uint64, ...[]byte) (uint64, error)) {
 	offset := uint64(0)
 	key := storage.PartitionKey(c.id, idx)
 	go func() {
@@ -96,7 +93,7 @@ func (c *consumer) startPartition(ctx context.Context, idx, batch, concurrency u
 				req.Consumer = c.consumer
 				req.Count = batch
 
-				value, err := c.store.ExecCommandWithGroup(req, c.group)
+				value, err := c.store.ExecCommandWithGroup(req, metapb.TenantInputGroup)
 				if err != nil {
 					metric.IncStorageFailed()
 					logger.Errorf("%s failed with %+v, retry after 10s",

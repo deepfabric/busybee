@@ -2,6 +2,7 @@ package storage
 
 import (
 	"github.com/deepfabric/beehive/pb/raftcmdpb"
+	"github.com/deepfabric/beehive/raftstore"
 	bhstorage "github.com/deepfabric/beehive/storage"
 	"github.com/deepfabric/beehive/util"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
@@ -21,10 +22,12 @@ func (kv *kvBatch) support() []rpcpb.Type {
 	return []rpcpb.Type{rpcpb.Set, rpcpb.Delete}
 }
 
-func (kv *kvBatch) addReq(req *raftcmdpb.Request, resp *raftcmdpb.Response, b *batch, buf *goetty.ByteBuf) {
+func (kv *kvBatch) addReq(req *raftcmdpb.Request, resp *raftcmdpb.Response, b *batch, attrs map[string]interface{}) {
+	buf := attrs[raftstore.AttrBuf].(*goetty.ByteBuf)
+
 	switch rpcpb.Type(req.CustemType) {
 	case rpcpb.Set:
-		msg := rpcpb.AcquireSetRequest()
+		msg := getSetRequest(attrs)
 		protoc.MustUnmarshal(msg, req.Cmd)
 		msg.Key = req.Key
 
@@ -34,10 +37,8 @@ func (kv *kvBatch) addReq(req *raftcmdpb.Request, resp *raftcmdpb.Response, b *b
 		b.changedBytes += int64(len(msg.Key) + len(msg.Value))
 
 		resp.Value = rpcpb.EmptyRespBytes
-		rpcpb.ReleaseSetRequest(msg)
 	case rpcpb.Delete:
-		msg := rpcpb.AcquireDeleteRequest()
-		protoc.MustUnmarshal(msg, req.Cmd)
+		msg := getDeleteRequest(attrs)
 		msg.Key = req.Key
 		kv.delete(msg, b.wb)
 
@@ -45,7 +46,6 @@ func (kv *kvBatch) addReq(req *raftcmdpb.Request, resp *raftcmdpb.Response, b *b
 		b.changedBytes -= int64(len(msg.Key))
 
 		resp.Value = rpcpb.EmptyRespBytes
-		rpcpb.ReleaseDeleteRequest(msg)
 	default:
 		log.Fatalf("BUG: not supoprt rpctype: %d", rpcpb.Type(req.CustemType))
 	}

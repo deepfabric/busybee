@@ -28,6 +28,8 @@ func (h *beeStorage) init() {
 	h.AddWriteFunc("update-state", uint64(rpcpb.UpdateInstanceStateShard), h.updateInstanceWorkerState)
 	h.AddWriteFunc("remove-state", uint64(rpcpb.RemoveInstanceStateShard), h.removeInstanceWorker)
 	h.AddWriteFunc("queue-fetch", uint64(rpcpb.QueueFetch), h.queueFetch)
+	h.AddWriteFunc("queue-join", uint64(rpcpb.QueueJoin), h.queueJoinGroup)
+	h.AddWriteFunc("queue-concurrency-fetch", uint64(rpcpb.QueueConcurrencyFetch), h.queueConcurrencyFetch)
 
 	h.runner.RunCancelableTask(h.handleShardCycle)
 }
@@ -194,6 +196,26 @@ func (h *beeStorage) BuildRequest(req *raftcmdpb.Request, cmd interface{}) error
 		req.Type = raftcmdpb.Write
 		req.Cmd = protoc.MustMarshal(msg)
 		rpcpb.ReleaseQueueFetchRequest(msg)
+	case *rpcpb.QueueConcurrencyFetchRequest:
+		msg := cmd.(*rpcpb.QueueConcurrencyFetchRequest)
+		if len(msg.Key) == 0 {
+			msg.Key = PartitionKey(msg.ID, msg.Partition)
+		}
+		req.Key = msg.Key
+		req.CustemType = uint64(rpcpb.QueueConcurrencyFetch)
+		req.Type = raftcmdpb.Write
+		req.Cmd = protoc.MustMarshal(msg)
+		rpcpb.ReleaseQueueConcurrencyFetchRequest(msg)
+	case *rpcpb.QueueJoinGroupRequest:
+		msg := cmd.(*rpcpb.QueueJoinGroupRequest)
+		if len(msg.Key) == 0 {
+			msg.Key = PartitionKey(msg.ID, 0)
+		}
+		req.Key = msg.Key
+		req.CustemType = uint64(rpcpb.QueueJoin)
+		req.Type = raftcmdpb.Write
+		req.Cmd = protoc.MustMarshal(msg)
+		rpcpb.ReleaseQueueJoinGroupRequest(msg)
 	case *rpcpb.UpdateMappingRequest:
 		msg := cmd.(*rpcpb.UpdateMappingRequest)
 		req.Key = MappingIDKey(msg.ID, msg.UserID)
