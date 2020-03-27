@@ -394,6 +394,8 @@ func (s *server) onResp(arg interface{}, value []byte, err error) {
 			protoc.MustUnmarshal(&resp.Uint32RangeResp, value)
 		case rpcpb.FetchNotify:
 			protoc.MustUnmarshal(&resp.FetchResp, value)
+		case rpcpb.QueueJoin:
+			protoc.MustUnmarshal(&resp.JoinResp, value)
 		}
 
 		rs.(*util.Session).OnResp(resp)

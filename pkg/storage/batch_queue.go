@@ -270,7 +270,6 @@ func (qb *queuePartitionBatch) exec(s bhstorage.DataStorage, b *batch) error {
 
 	n := len(qb.pairs) / 2
 	for i := 0; i < n; i++ {
-		log.Infof("################# add %+v", qb.pairs[2*i])
 		b.wb.Set(qb.pairs[2*i], qb.pairs[2*i+1])
 	}
 

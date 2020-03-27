@@ -582,7 +582,7 @@ func (eng *engine) loadRunningInstance(id uint64) (*metapb.WorkflowInstance, err
 		return nil, err
 	}
 
-	if instance == nil || instance.State != metapb.Running {
+	if instance == nil {
 		return nil, fmt.Errorf("workflow-%d has no instance",
 			id)
 	}
