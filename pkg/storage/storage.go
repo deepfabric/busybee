@@ -322,7 +322,8 @@ func (h *beeStorage) scanWorkflow() {
 		_, values, err := h.Scan(start, end, 16)
 		if err != nil {
 			metric.IncStorageFailed()
-			log.Errorf("scan workflow failed with %+v")
+			log.Errorf("scan workflow failed with %+v",
+				err)
 			return
 		}
 
