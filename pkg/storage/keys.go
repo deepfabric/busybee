@@ -168,16 +168,16 @@ func QueueItemKey(src []byte, offset uint64, buf *goetty.ByteBuf) []byte {
 	return buf.WrittenDataAfterMark()
 }
 
-// ConcurrencyQueueMetaKey returns concurrency queue meta key
-func ConcurrencyQueueMetaKey(id uint64, buf *goetty.ByteBuf) []byte {
+// QueueMetaKey returns concurrency queue meta key
+func QueueMetaKey(id uint64, buf *goetty.ByteBuf) []byte {
 	buf.MarkWrite()
 	buf.WriteUInt64(id)
 	buf.WriteByte(queueMetaField)
 	return buf.WrittenDataAfterMark()
 }
 
-// ConcurrencyQueueStateKey returns concurrency queue key
-func ConcurrencyQueueStateKey(id uint64, group []byte, buf *goetty.ByteBuf) []byte {
+// QueueStateKey returns concurrency queue key
+func QueueStateKey(id uint64, group []byte, buf *goetty.ByteBuf) []byte {
 	buf.MarkWrite()
 	buf.WriteUInt64(id)
 	buf.WriteByte(queueStateField)

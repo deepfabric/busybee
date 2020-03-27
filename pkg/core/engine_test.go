@@ -69,7 +69,7 @@ func TestTenantInit(t *testing.T) {
 	assert.Equal(t, 3, c, "TestTenantInit failed")
 
 	buf := goetty.NewByteBuf(32)
-	data, err := store.GetWithGroup(storage.ConcurrencyQueueMetaKey(tid, buf), metapb.TenantOutputGroup)
+	data, err := store.GetWithGroup(storage.QueueMetaKey(tid, buf), metapb.TenantOutputGroup)
 	assert.NoError(t, err, "TestTenantInit failed")
 	assert.NotEmpty(t, data, "TestTenantInit failed")
 }

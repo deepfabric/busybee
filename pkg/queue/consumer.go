@@ -64,7 +64,7 @@ func newConsumerWithGroup(id uint64, store storage.Storage, consumerGroup []byte
 	buf := goetty.NewByteBuf(32)
 	defer buf.Release()
 
-	value, err = store.GetWithGroup(storage.ConcurrencyQueueMetaKey(id, buf), group)
+	value, err = store.GetWithGroup(storage.QueueMetaKey(id, buf), group)
 	if err != nil {
 		metric.IncStorageFailed()
 		return nil, err

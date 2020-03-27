@@ -215,7 +215,7 @@ func (eng *engine) tenantInitWithReplicas(metadata metapb.Tenant, replicas uint3
 		Data: protoc.MustMarshal(&metapb.CallbackAction{
 			SetKV: &metapb.SetKVAction{
 				KV: metapb.KV{
-					Key: storage.ConcurrencyQueueMetaKey(metadata.ID, buf),
+					Key: storage.QueueMetaKey(metadata.ID, buf),
 					Value: protoc.MustMarshal(&metapb.QueueState{
 						Partitions: metadata.Input.Partitions,
 						Timeout:    metadata.Input.ConsumerTimeout,
@@ -234,7 +234,7 @@ func (eng *engine) tenantInitWithReplicas(metadata metapb.Tenant, replicas uint3
 		Data: protoc.MustMarshal(&metapb.CallbackAction{
 			SetKV: &metapb.SetKVAction{
 				KV: metapb.KV{
-					Key: storage.ConcurrencyQueueMetaKey(metadata.ID, buf),
+					Key: storage.QueueMetaKey(metadata.ID, buf),
 					Value: protoc.MustMarshal(&metapb.QueueState{
 						Partitions: metadata.Output.Partitions,
 						Timeout:    metadata.Output.ConsumerTimeout,

@@ -505,18 +505,18 @@ func TestQueueConcurrencyFetchWithNoConsumers(t *testing.T) {
 		Timeout: 60,
 	}
 	buf := goetty.NewByteBuf(32)
-	key := ConcurrencyQueueMetaKey(tid, buf)
+	key := QueueMetaKey(tid, buf)
 	err := store.Set(key, protoc.MustMarshal(state))
 	assert.NoError(t, err, "TestQueueFetchWithNoConsumers failed")
 
 	req := rpcpb.AcquireQueueFetchRequest()
 	req.ID = tid
 	req.Group = g1
-	resp := getTestConcurrencyResp(t, store, req)
+	resp := getTestFetchResp(t, store, req)
 	assert.True(t, resp.Removed, "TestQueueFetchWithNoConsumers failed")
 }
 
-func TestQueueConcurrencyFetchWithInvalidConsumer(t *testing.T) {
+func TestQueueFetchWithInvalidConsumer(t *testing.T) {
 	store, deferFunc := NewTestStorage(t, true)
 	defer deferFunc()
 
@@ -532,7 +532,7 @@ func TestQueueConcurrencyFetchWithInvalidConsumer(t *testing.T) {
 		Timeout: 60,
 	}
 	buf := goetty.NewByteBuf(32)
-	key := ConcurrencyQueueStateKey(tid, g1, buf)
+	key := QueueStateKey(tid, g1, buf)
 	err := store.Set(key, protoc.MustMarshal(state))
 	assert.NoError(t, err, "TestQueueFetchWithInvalidConsumer failed")
 
@@ -540,11 +540,11 @@ func TestQueueConcurrencyFetchWithInvalidConsumer(t *testing.T) {
 	req.ID = tid
 	req.Group = g1
 	req.Consumer = 1
-	resp := getTestConcurrencyResp(t, store, req)
+	resp := getTestFetchResp(t, store, req)
 	assert.True(t, resp.Removed, "TestQueueFetchWithInvalidConsumer failed")
 }
 
-func TestQueueConcurrencyFetchWithInvalidPartition(t *testing.T) {
+func TestQueueFetchWithInvalidPartition(t *testing.T) {
 	store, deferFunc := NewTestStorage(t, true)
 	defer deferFunc()
 
@@ -560,7 +560,7 @@ func TestQueueConcurrencyFetchWithInvalidPartition(t *testing.T) {
 		Timeout: 60,
 	}
 	buf := goetty.NewByteBuf(32)
-	key := ConcurrencyQueueStateKey(tid, g1, buf)
+	key := QueueStateKey(tid, g1, buf)
 	err := store.Set(key, protoc.MustMarshal(state))
 	assert.NoError(t, err, "TestQueueFetchWithInvalidPartition failed")
 
@@ -569,7 +569,7 @@ func TestQueueConcurrencyFetchWithInvalidPartition(t *testing.T) {
 	req.Group = g1
 	req.Consumer = 0
 	req.Partition = 2
-	resp := getTestConcurrencyResp(t, store, req)
+	resp := getTestFetchResp(t, store, req)
 	assert.True(t, resp.Removed, "TestQueueFetchWithInvalidPartition failed")
 }
 
@@ -588,7 +588,7 @@ func TestQueueJoin(t *testing.T) {
 		Timeout: 60,
 	}
 	buf := goetty.NewByteBuf(32)
-	key := ConcurrencyQueueMetaKey(tid, buf)
+	key := QueueMetaKey(tid, buf)
 	err := store.Set(key, protoc.MustMarshal(state))
 	assert.NoError(t, err, "TestQueueJoin failed")
 
@@ -678,7 +678,7 @@ func TestQueueJoin(t *testing.T) {
 	}
 }
 
-func TestQueueConcurrencyFetchAfterJoin(t *testing.T) {
+func TestQueueFetchAfterJoin(t *testing.T) {
 	store, deferFunc := NewTestStorage(t, true)
 	defer deferFunc()
 
@@ -693,7 +693,7 @@ func TestQueueConcurrencyFetchAfterJoin(t *testing.T) {
 		Timeout: 60,
 	}
 	buf := goetty.NewByteBuf(32)
-	key := ConcurrencyQueueMetaKey(tid, buf)
+	key := QueueMetaKey(tid, buf)
 	err := store.Set(key, protoc.MustMarshal(state))
 	assert.NoError(t, err, "TestQueueFetchAfterJoin failed")
 
@@ -707,7 +707,7 @@ func TestQueueConcurrencyFetchAfterJoin(t *testing.T) {
 	fetch.Group = g1
 	fetch.Consumer = resp.Index
 	fetch.Partition = resp.Partitions[0]
-	fetchResp := getTestConcurrencyResp(t, store, fetch)
+	fetchResp := getTestFetchResp(t, store, fetch)
 	assert.False(t, fetchResp.Removed, "TestQueueFetchAfterJoin failed")
 
 	state = getTestQueueuState(t, store, tid, g1)
@@ -747,7 +747,7 @@ func TestQueueFetchWithRebalancing(t *testing.T) {
 		Timeout: 60,
 	}
 	buf := goetty.NewByteBuf(32)
-	key := ConcurrencyQueueStateKey(tid, g1, buf)
+	key := QueueStateKey(tid, g1, buf)
 	err := store.Set(key, protoc.MustMarshal(state))
 	assert.NoError(t, err, "TestQueueFetchWithRebalancing failed")
 
@@ -762,7 +762,7 @@ func TestQueueFetchWithRebalancing(t *testing.T) {
 	req.Version = 1
 	req.Partition = 0
 
-	resp := getTestConcurrencyResp(t, store, req)
+	resp := getTestFetchResp(t, store, req)
 	assert.Equal(t, uint64(0), resp.LastOffset, "TestQueueFetchWithRebalancing failed")
 	assert.Empty(t, resp.Items, "TestQueueFetchWithRebalancing failed")
 	assert.False(t, resp.Removed, "TestQueueFetchWithRebalancing failed")
@@ -778,13 +778,13 @@ func TestQueueFetchWithRebalancing(t *testing.T) {
 	req.Version = 1
 	req.Partition = 0
 	req.Count = 10
-	resp = getTestConcurrencyResp(t, store, req)
+	resp = getTestFetchResp(t, store, req)
 	assert.Equal(t, uint64(1), resp.LastOffset, "TestQueueFetchWithRebalancing failed")
 	assert.Equal(t, 1, len(resp.Items), "TestQueueFetchWithRebalancing failed")
 	assert.False(t, resp.Removed, "TestQueueFetchWithRebalancing failed")
 }
 
-func TestQueueConcurrencyFetchWithRemoveTimeoutConsumer(t *testing.T) {
+func TestQueueFetchWithRemoveTimeoutConsumer(t *testing.T) {
 	store, deferFunc := NewTestStorage(t, true)
 	defer deferFunc()
 
@@ -811,7 +811,7 @@ func TestQueueConcurrencyFetchWithRemoveTimeoutConsumer(t *testing.T) {
 		Timeout: 60,
 	}
 	buf := goetty.NewByteBuf(32)
-	key := ConcurrencyQueueMetaKey(tid, buf)
+	key := QueueMetaKey(tid, buf)
 	err := store.Set(key, protoc.MustMarshal(state))
 	assert.NoError(t, err, "TestQueueConcurrencyFetchWithRemoveTimeoutConsumer failed")
 
@@ -823,7 +823,7 @@ func TestQueueConcurrencyFetchWithRemoveTimeoutConsumer(t *testing.T) {
 		req.Consumer = 0
 		req.Version = 0
 
-		resp := getTestConcurrencyResp(t, store, req)
+		resp := getTestFetchResp(t, store, req)
 		assert.True(t, resp.Removed, "TestQueueConcurrencyFetchWithRemoveTimeoutConsumer failed")
 
 		state = getTestQueueuState(t, store, tid, g1)
@@ -847,7 +847,7 @@ func TestQueueConcurrencyFetchWithRemoveTimeoutConsumer(t *testing.T) {
 	req.Group = g1
 	req.Consumer = 0
 	req.Version = 0
-	resp := getTestConcurrencyResp(t, store, req)
+	resp := getTestFetchResp(t, store, req)
 	assert.True(t, resp.Removed, "TestQueueConcurrencyFetchWithRemoveTimeoutConsumer failed")
 
 	req.Reset()
@@ -855,7 +855,7 @@ func TestQueueConcurrencyFetchWithRemoveTimeoutConsumer(t *testing.T) {
 	req.Group = g1
 	req.Consumer = 1
 	req.Version = 1
-	resp = getTestConcurrencyResp(t, store, req)
+	resp = getTestFetchResp(t, store, req)
 	assert.True(t, resp.Removed, "TestQueueConcurrencyFetchWithRemoveTimeoutConsumer failed")
 }
 
@@ -887,7 +887,7 @@ func TestQueueJoinAfterClearConsumers(t *testing.T) {
 		Timeout: 60,
 	}
 	buf := goetty.NewByteBuf(32)
-	key := ConcurrencyQueueStateKey(tid, g1, buf)
+	key := QueueStateKey(tid, g1, buf)
 	err := store.Set(key, protoc.MustMarshal(state))
 	assert.NoError(t, err, "TestQueueJoinAfterClearConsumers failed")
 
@@ -922,7 +922,7 @@ func TestQueueJoinAfterClearConsumers(t *testing.T) {
 	}
 }
 
-func TestQueueConcurrencyFetchWithCommitOffset(t *testing.T) {
+func TestQueueFetchWithCommitOffset(t *testing.T) {
 	store, deferFunc := NewTestStorage(t, true)
 	defer deferFunc()
 
@@ -949,7 +949,7 @@ func TestQueueConcurrencyFetchWithCommitOffset(t *testing.T) {
 		Timeout: 60,
 	}
 	buf := goetty.NewByteBuf(32)
-	key := ConcurrencyQueueStateKey(tid, g1, buf)
+	key := QueueStateKey(tid, g1, buf)
 	err := store.Set(key, protoc.MustMarshal(state))
 	assert.NoError(t, err, "TestQueueConcurrencyFetchWithCommitOffset failed")
 
@@ -960,7 +960,7 @@ func TestQueueConcurrencyFetchWithCommitOffset(t *testing.T) {
 	req.Consumer = 0
 	req.Version = 0
 	req.CompletedOffset = 10
-	resp := getTestConcurrencyResp(t, store, req)
+	resp := getTestFetchResp(t, store, req)
 	assert.False(t, resp.Removed, "TestQueueConcurrencyFetchWithCommitOffset failed")
 
 	req.Reset()
@@ -970,7 +970,7 @@ func TestQueueConcurrencyFetchWithCommitOffset(t *testing.T) {
 	req.Consumer = 1
 	req.Version = 1
 	req.CompletedOffset = 20
-	resp = getTestConcurrencyResp(t, store, req)
+	resp = getTestFetchResp(t, store, req)
 	assert.False(t, resp.Removed, "TestQueueConcurrencyFetchWithCommitOffset failed")
 
 	state = getTestQueueuState(t, store, tid, g1)
@@ -990,7 +990,7 @@ func TestQueueConcurrencyFetchWithCommitOffset(t *testing.T) {
 	}
 }
 
-func TestQueueConcurrencyFetchWithStaleCommitOffset(t *testing.T) {
+func TestQueueFetchWithStaleCommitOffset(t *testing.T) {
 	store, deferFunc := NewTestStorage(t, true)
 	defer deferFunc()
 
@@ -1026,7 +1026,7 @@ func TestQueueConcurrencyFetchWithStaleCommitOffset(t *testing.T) {
 		Timeout: 60,
 	}
 	buf := goetty.NewByteBuf(32)
-	key := ConcurrencyQueueStateKey(tid, g1, buf)
+	key := QueueStateKey(tid, g1, buf)
 	err := store.Set(key, protoc.MustMarshal(state))
 	assert.NoError(t, err, "TestQueueConcurrencyFetchWithStaleCommitOffset failed")
 
@@ -1037,7 +1037,7 @@ func TestQueueConcurrencyFetchWithStaleCommitOffset(t *testing.T) {
 	req.Consumer = 0
 	req.Version = 0
 	req.CompletedOffset = 10
-	resp := getTestConcurrencyResp(t, store, req)
+	resp := getTestFetchResp(t, store, req)
 	assert.True(t, resp.Removed, "TestQueueConcurrencyFetchWithStaleCommitOffset failed")
 
 	req.Reset()
@@ -1047,7 +1047,7 @@ func TestQueueConcurrencyFetchWithStaleCommitOffset(t *testing.T) {
 	req.Consumer = 1
 	req.Version = 0
 	req.CompletedOffset = 20
-	resp = getTestConcurrencyResp(t, store, req)
+	resp = getTestFetchResp(t, store, req)
 	assert.True(t, resp.Removed, "TestQueueConcurrencyFetchWithStaleCommitOffset failed")
 
 	req.Reset()
@@ -1057,7 +1057,7 @@ func TestQueueConcurrencyFetchWithStaleCommitOffset(t *testing.T) {
 	req.Consumer = 2
 	req.Version = 0
 	req.CompletedOffset = 30
-	resp = getTestConcurrencyResp(t, store, req)
+	resp = getTestFetchResp(t, store, req)
 	assert.True(t, resp.Removed, "TestQueueConcurrencyFetchWithStaleCommitOffset failed")
 
 	state = getTestQueueuState(t, store, tid, g1)
@@ -1079,7 +1079,7 @@ func TestQueueConcurrencyFetchWithStaleCommitOffset(t *testing.T) {
 
 func getTestQueueuState(t *testing.T, store Storage, tid uint64, g []byte) *metapb.QueueState {
 	buf := goetty.NewByteBuf(32)
-	key := ConcurrencyQueueStateKey(tid, g, buf)
+	key := QueueStateKey(tid, g, buf)
 	data, err := store.Get(key)
 	assert.NoError(t, err, "getQueueuState failed")
 
@@ -1088,7 +1088,7 @@ func getTestQueueuState(t *testing.T, store Storage, tid uint64, g []byte) *meta
 	return state
 }
 
-func getTestConcurrencyResp(t *testing.T, store Storage, req *rpcpb.QueueFetchRequest) *rpcpb.QueueFetchResponse {
+func getTestFetchResp(t *testing.T, store Storage, req *rpcpb.QueueFetchRequest) *rpcpb.QueueFetchResponse {
 	data, err := store.ExecCommand(req)
 	assert.NoError(t, err, "getTestConcurrencyResp failed")
 
