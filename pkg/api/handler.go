@@ -396,7 +396,7 @@ func (s *server) onResp(arg interface{}, value []byte, err error) {
 			protoc.MustUnmarshal(&resp.Uint32SliceResp, value)
 		case rpcpb.BMCount:
 			protoc.MustUnmarshal(&resp.Uint64Resp, value)
-		case rpcpb.BMContains:
+		case rpcpb.BMContains, rpcpb.SetIf, rpcpb.DeleteIf:
 			protoc.MustUnmarshal(&resp.BoolResp, value)
 		case rpcpb.InstanceCountState, rpcpb.InstanceCrowdState,
 			rpcpb.GetMapping, rpcpb.GetProfile, rpcpb.LastInstance,
