@@ -239,10 +239,11 @@ message InstanceCrowdStateRequest {
 
 // QueueAddRequest add items into a queue
 message QueueAddRequest {
-    bytes          key       = 1;
-    repeated bytes items     = 2;
-    repeated bytes kvs       = 3 [(gogoproto.customname) = "KVS"];
-    Condition      condition = 4;
+    bytes          key            = 1;
+    repeated bytes items          = 2;
+    repeated bytes kvs            = 3 [(gogoproto.customname) = "KVS"];
+    Condition      condition      = 4;
+    bool           allocPartition = 5;
 }
 
 // Cmp cmp operation

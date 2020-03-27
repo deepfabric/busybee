@@ -55,14 +55,13 @@ func PartitionKey(id uint64, partition uint32) []byte {
 	return key
 }
 
-// PartitionKVKey returns partition kv key
-func PartitionKVKey(id uint64, partition uint32, src []byte) []byte {
-	prefixKey := PartitionKey(id, partition)
-	n := len(prefixKey) + len(src) + 1
+// QueueKVKey returns partition kv key
+func QueueKVKey(id uint64, src []byte) []byte {
+	n := 9 + len(src)
 	key := make([]byte, n, n)
-	copy(key, prefixKey)
-	key[len(prefixKey)] = queueKVField
-	copy(key[len(prefixKey)+1:], src)
+	goetty.Uint64ToBytesTo(id, key)
+	key[8] = queueKVField
+	copy(key[9:], src)
 	return key
 }
 
@@ -208,9 +207,10 @@ func committedOffsetKey(src []byte, consumer []byte, buf *goetty.ByteBuf) []byte
 	return buf.WrittenDataAfterMark()
 }
 
-func queueKVKey(src []byte, key []byte, buf *goetty.ByteBuf) []byte {
+func queueKVKey(prefix []byte, id uint64, key []byte, buf *goetty.ByteBuf) []byte {
 	buf.MarkWrite()
-	buf.Write(src)
+	buf.Write(prefix)
+	buf.WriteUInt64(id)
 	buf.WriteByte(queueKVField)
 	buf.Write(key)
 	return buf.WrittenDataAfterMark()
@@ -230,8 +230,8 @@ func consumerEndKey(src []byte, buf *goetty.ByteBuf) []byte {
 	return buf.WrittenDataAfterMark()
 }
 
-func copyKey(key []byte, buf *goetty.ByteBuf) []byte {
-	buf.MarkWrite()
-	buf.Write(key)
-	return buf.WrittenDataAfterMark()
+func copyKey(src []byte) []byte {
+	dst := make([]byte, len(src), len(src))
+	copy(dst, src)
+	return dst
 }

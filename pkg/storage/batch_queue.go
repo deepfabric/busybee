@@ -22,30 +22,22 @@ const (
 	maxConsumerAlive = int64(7 * 24 * 60 * 60) // 7 day
 )
 
-type queueBatch struct {
-	loaded                 bool
-	maxOffset              uint64
-	removedOffset          uint64
-	queueKey               []byte
-	consumerStartKey       []byte
-	consumerEndKey         []byte
-	maxAndCleanOffsetValue []byte
-	maxAndCleanOffsetKey   []byte
-	pairs                  [][]byte
-	buf                    *goetty.ByteBuf
-	group                  metapb.Group
-	tenant                 string
-}
-
 func newQueueBatch() batchType {
 	return &queueBatch{
-		maxAndCleanOffsetValue: make([]byte, 16, 16),
-		buf:                    goetty.NewByteBuf(256),
+		buf: goetty.NewByteBuf(256),
+		pbs: make(map[uint32]*queuePartitionBatch),
 	}
 }
 
-func (qb *queueBatch) support() []rpcpb.Type {
-	return []rpcpb.Type{rpcpb.QueueAdd}
+type queueBatch struct {
+	tenant string
+	buf    *goetty.ByteBuf
+
+	// not reset
+	loaded   bool
+	pbs      map[uint32]*queuePartitionBatch
+	ops      uint32
+	metadata metapb.QueueState
 }
 
 func (qb *queueBatch) addReq(req *raftcmdpb.Request, resp *raftcmdpb.Response, b *batch, attrs map[string]interface{}) {
@@ -53,62 +45,106 @@ func (qb *queueBatch) addReq(req *raftcmdpb.Request, resp *raftcmdpb.Response, b
 	case rpcpb.QueueAdd:
 		msg := getQueueAddRequest(attrs)
 		protoc.MustUnmarshal(msg, req.Cmd)
-		msg.Key = req.Key
+		id := goetty.Byte2UInt64(msg.Key)
+		target := goetty.Byte2UInt32(msg.Key[8:])
 
-		qb.group = metapb.Group(req.Group)
-		qb.add(msg, b)
+		prefix := req.Key[:len(req.Key)-len(msg.Key)]
+
+		if !qb.loaded {
+			key := QueueMetaKey(id, qb.buf)
+			qb.buf.MarkWrite()
+			qb.buf.Write(prefix)
+			qb.buf.Write(key)
+			value, err := b.bs.getStore(b.shard).Get(qb.buf.WrittenDataAfterMark())
+			if err != nil {
+				log.Fatalf("load queue meta failed with %+v", err)
+			}
+
+			if len(value) == 0 {
+				value := getUint64Response(attrs)
+				value.Value = 0
+				resp.Value = protoc.MustMarshal(value)
+				return
+			}
+
+			protoc.MustUnmarshal(&qb.metadata, value)
+
+			qb.tenant = string(format.UInt64ToString(id))
+			qb.loaded = true
+		}
+
+		if !qb.matchCondition(msg, b, id, prefix) {
+			value := getUint64Response(attrs)
+			value.Value = 0
+			resp.Value = protoc.MustMarshal(value)
+			return
+		}
+
+		for _, item := range msg.Items {
+			if msg.AllocPartition {
+				target = qb.nextPartition()
+			}
+
+			pb, ok := qb.pbs[target]
+			if !ok {
+				pb = newPartitionBatch(b, qb.tenant, metapb.Group(req.Group), id, target, prefix, qb.buf)
+				qb.pbs[target] = pb
+			}
+
+			pb.add(b, item)
+		}
+
+		n := len(msg.KVS) / 2
+		for i := 0; i < n; i++ {
+			b.wb.Set(queueKVKey(prefix, id, msg.KVS[2*i], qb.buf), msg.KVS[2*i+1])
+		}
 
 		value := getUint64Response(attrs)
-		value.Value = qb.maxOffset
+		value.Value = 0
 		resp.Value = protoc.MustMarshal(value)
 	default:
 		log.Fatalf("BUG: not supoprt rpctype: %d", rpcpb.Type(req.CustemType))
 	}
 }
 
-func (qb *queueBatch) add(req *rpcpb.QueueAddRequest, b *batch) {
-	if !qb.loaded {
-		qb.tenant = string(format.UInt64ToString(goetty.Byte2UInt64(req.Key[len(req.Key)-16:])))
-		qb.queueKey = copyKey(req.Key, qb.buf)
-		qb.consumerStartKey = consumerStartKey(req.Key, qb.buf)
-		qb.consumerEndKey = consumerEndKey(req.Key, qb.buf)
-		qb.maxAndCleanOffsetKey = maxAndCleanOffsetKey(req.Key, qb.buf)
-		value, err := b.bs.getStore(b.shard).Get(qb.maxAndCleanOffsetKey)
+func (qb *queueBatch) exec(s bhstorage.DataStorage, b *batch) error {
+	for _, pb := range qb.pbs {
+		err := pb.exec(s, b)
 		if err != nil {
-			log.Fatalf("load max queue offset failed with %+v", err)
+			return err
 		}
-
-		if len(value) > 0 {
-			copy(qb.maxAndCleanOffsetValue, value)
-			qb.maxOffset = goetty.Byte2UInt64(qb.maxAndCleanOffsetValue)
-			qb.removedOffset = goetty.Byte2UInt64(qb.maxAndCleanOffsetValue[8:])
-		}
-
-		qb.loaded = true
 	}
 
-	if !qb.matchCondition(req, b) {
-		return
-	}
-
-	for _, item := range req.Items {
-		qb.maxOffset++
-		qb.pairs = append(qb.pairs, QueueItemKey(req.Key, qb.maxOffset, qb.buf), item)
-	}
-
-	n := len(req.KVS) / 2
-	for i := 0; i < n; i++ {
-		qb.pairs = append(qb.pairs, queueKVKey(req.Key, req.KVS[2*i], qb.buf), req.KVS[2*i+1])
-	}
+	return nil
 }
 
-func (qb *queueBatch) matchCondition(req *rpcpb.QueueAddRequest, b *batch) bool {
+func (qb *queueBatch) support() []rpcpb.Type {
+	return []rpcpb.Type{rpcpb.QueueAdd}
+}
+
+func (qb *queueBatch) reset() {
+	for _, pb := range qb.pbs {
+		pb.reset()
+	}
+	qb.buf.Clear()
+}
+
+func (qb *queueBatch) nextPartition() uint32 {
+	v := qb.ops
+	qb.ops++
+	if qb.ops == qb.metadata.Partitions {
+		qb.ops = 0
+	}
+	return v
+}
+
+func (qb *queueBatch) matchCondition(req *rpcpb.QueueAddRequest, b *batch, id uint64, prefix []byte) bool {
 	cond := req.Condition
 	if cond == nil {
 		return true
 	}
 
-	value, err := b.bs.getStore(b.shard).Get(queueKVKey(req.Key, cond.Key, qb.buf))
+	value, err := b.bs.getStore(b.shard).Get(queueKVKey(prefix, id, cond.Key, qb.buf))
 	if err != nil {
 		log.Fatalf("load max queue offset failed with %+v", err)
 	}
@@ -133,7 +169,65 @@ func (qb *queueBatch) matchCondition(req *rpcpb.QueueAddRequest, b *batch) bool 
 	return false
 }
 
-func (qb *queueBatch) exec(s bhstorage.DataStorage, b *batch) error {
+type queuePartitionBatch struct {
+	loaded        bool
+	maxOffset     uint64
+	removedOffset uint64
+	pairs         [][]byte
+
+	tenant                 string
+	id                     uint64
+	group                  metapb.Group
+	buf                    *goetty.ByteBuf
+	queueKey               []byte
+	consumerStartKey       []byte
+	consumerEndKey         []byte
+	maxAndCleanOffsetKey   []byte
+	maxAndCleanOffsetValue []byte
+}
+
+func newPartitionBatch(b *batch, tenant string, group metapb.Group, id uint64, partition uint32, prefix []byte, buf *goetty.ByteBuf) *queuePartitionBatch {
+	buf.MarkWrite()
+	buf.Write(prefix)
+	buf.Write(PartitionKey(id, partition))
+	queueKey := copyKey(buf.WrittenDataAfterMark())
+
+	pb := &queuePartitionBatch{
+		maxAndCleanOffsetValue: make([]byte, 16, 16),
+		buf:                    buf,
+		tenant:                 tenant,
+		id:                     id,
+		group:                  group,
+		queueKey:               queueKey,
+		consumerStartKey:       copyKey(consumerStartKey(queueKey, buf)),
+		consumerEndKey:         copyKey(consumerEndKey(queueKey, buf)),
+		maxAndCleanOffsetKey:   copyKey(maxAndCleanOffsetKey(queueKey, buf)),
+	}
+
+	return pb
+}
+
+func (qb *queuePartitionBatch) add(b *batch, item []byte) {
+	if !qb.loaded {
+		value, err := b.bs.getStore(b.shard).Get(qb.maxAndCleanOffsetKey)
+		if err != nil {
+			log.Fatalf("load max queue offset failed with %+v", err)
+		}
+
+		if len(value) > 0 {
+			copy(qb.maxAndCleanOffsetValue, value)
+			qb.maxOffset = goetty.Byte2UInt64(qb.maxAndCleanOffsetValue)
+			qb.removedOffset = goetty.Byte2UInt64(qb.maxAndCleanOffsetValue[8:])
+		}
+
+		qb.loaded = true
+	}
+
+	qb.maxOffset++
+	qb.pairs = append(qb.pairs, QueueItemKey(qb.queueKey, qb.maxOffset, qb.buf), item)
+}
+
+func (qb *queuePartitionBatch) exec(s bhstorage.DataStorage, b *batch) error {
 	if len(qb.pairs)%2 != 0 {
 		return fmt.Errorf("queue batch pairs len must pow of 2, but %d", len(qb.pairs))
 	}
@@ -176,6 +270,7 @@ func (qb *queueBatch) exec(s bhstorage.DataStorage, b *batch) error {
 
 	n := len(qb.pairs) / 2
 	for i := 0; i < n; i++ {
+		log.Infof("################# add %+v", qb.pairs[2*i])
 		b.wb.Set(qb.pairs[2*i], qb.pairs[2*i+1])
 	}
 
@@ -184,14 +279,9 @@ func (qb *queueBatch) exec(s bhstorage.DataStorage, b *batch) error {
 	return nil
 }
 
-func (qb *queueBatch) reset() {
+func (qb *queuePartitionBatch) reset() {
 	qb.loaded = false
 	qb.maxOffset = 0
 	qb.removedOffset = 0
-	qb.queueKey = qb.queueKey[:0]
-	qb.consumerStartKey = qb.consumerStartKey[:0]
-	qb.consumerEndKey = qb.consumerEndKey[:0]
-	qb.maxAndCleanOffsetKey = qb.maxAndCleanOffsetKey[:0]
 	qb.pairs = qb.pairs[:0]
-	qb.buf.Clear()
 }

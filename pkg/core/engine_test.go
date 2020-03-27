@@ -1367,7 +1367,7 @@ func TestLastTransactionNotCompleted(t *testing.T) {
 	goetty.Uint64ToBytesTo(instanceID, key)
 	goetty.Uint32ToBytesTo(0, key[8:])
 	_, err = store.ExecCommandWithGroup(&rpcpb.SetRequest{
-		Key: storage.PartitionKVKey(tid, 0, key),
+		Key: storage.QueueKVKey(tid, key),
 		Value: protoc.MustMarshal(&metapb.WorkflowInstanceWorkerState{
 			Version:    10,
 			TenantID:   tid,
@@ -1496,7 +1496,7 @@ func TestLastTransactionCompleted(t *testing.T) {
 	goetty.Uint64ToBytesTo(instanceID, key)
 	goetty.Uint32ToBytesTo(0, key[8:])
 	_, err = store.ExecCommandWithGroup(&rpcpb.SetRequest{
-		Key: storage.PartitionKVKey(tid, 0, key),
+		Key: storage.QueueKVKey(tid, key),
 		Value: protoc.MustMarshal(&metapb.WorkflowInstanceWorkerState{
 			Version:    0,
 			TenantID:   tid,

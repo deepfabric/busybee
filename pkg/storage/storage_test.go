@@ -400,6 +400,11 @@ func TestPutToQueue(t *testing.T) {
 	store, deferFunc := NewTestStorage(t, true)
 	defer deferFunc()
 
+	buf := goetty.NewByteBuf(32)
+	store.Set(QueueMetaKey(10, buf), protoc.MustMarshal(&metapb.QueueState{
+		Partitions: 2,
+	}))
+
 	err := store.PutToQueue(10, 0, metapb.DefaultGroup, protoc.MustMarshal(&metapb.Event{
 		Type: metapb.UserType,
 		User: &metapb.UserEvent{
@@ -439,22 +444,46 @@ func TestPutToQueue(t *testing.T) {
 	}))
 	assert.NoError(t, err, "TestPutToQueue failed")
 
-	buf := goetty.NewByteBuf(32)
-
 	for i := uint64(1); i < 4; i++ {
 		data, err := store.Get(QueueItemKey(PartitionKey(10, 0), i, buf))
 		assert.NoError(t, err, "TestPutToQueue failed")
 
 		evt := &metapb.Event{}
 		protoc.MustUnmarshal(evt, data)
+
 		assert.Equal(t, metapb.UserType, evt.Type, "TestPutToQueue failed")
 		assert.Equal(t, fmt.Sprintf("%d", i), string(evt.User.Data[0].Value), "TestPutToQueue failed")
+	}
+}
+
+func TestPutToQueueWithAlloc(t *testing.T) {
+	store, deferFunc := NewTestStorage(t, true)
+	defer deferFunc()
+
+	buf := goetty.NewByteBuf(32)
+	store.Set(QueueMetaKey(10, buf), protoc.MustMarshal(&metapb.QueueState{
+		Partitions: 3,
+	}))
+
+	values := [][]byte{[]byte("1"), []byte("2"), []byte("3")}
+	err := store.PutToQueueWithAlloc(10, metapb.DefaultGroup, values...)
+	assert.NoError(t, err, "TestPutToQueueWithAlloc failed")
+
+	for i := uint32(0); i < 3; i++ {
+		data, err := store.Get(QueueItemKey(PartitionKey(10, i), 1, buf))
+		assert.NoError(t, err, "TestPutToQueueWithAlloc failed")
+		assert.Equal(t, values[i], data, "TestPutToQueue failed")
 	}
 }
 
 func TestPutToQueueWithKV(t *testing.T) {
 	store, deferFunc := NewTestStorage(t, true)
 	defer deferFunc()
+
+	buf := goetty.NewByteBuf(32)
+	store.Set(QueueMetaKey(10, buf), protoc.MustMarshal(&metapb.QueueState{
+		Partitions: 2,
+	}))
 
 	key := []byte("key1")
 	value := []byte("value")
@@ -475,7 +504,6 @@ func TestPutToQueueWithKV(t *testing.T) {
 	}, key, value)
 	assert.NoError(t, err, "TestPutToQueueWithKV failed")
 
-	buf := goetty.NewByteBuf(32)
 	data, err := store.Get(QueueItemKey(PartitionKey(10, 0), 1, buf))
 	assert.NoError(t, err, "TestPutToQueueWithKV failed")
 
@@ -484,13 +512,39 @@ func TestPutToQueueWithKV(t *testing.T) {
 	assert.Equal(t, metapb.UserType, evt.Type, "TestPutToQueueWithKV failed")
 	assert.Equal(t, 1, len(evt.User.Data), "TestPutToQueueWithKV failed")
 
-	v, err := store.Get(PartitionKVKey(10, 0, key))
+	v, err := store.Get(QueueKVKey(10, key))
 	assert.NoError(t, err, "TestPutToQueueWithKV failed")
 	assert.NotEmpty(t, v, "TestPutToQueueWithKV failed")
 	assert.Equal(t, string(value), string(v), "TestPutToQueueWithKV failed")
 }
 
-func TestQueueConcurrencyFetchWithNoConsumers(t *testing.T) {
+func TestPutToQueueWithAllocAndKV(t *testing.T) {
+	store, deferFunc := NewTestStorage(t, true)
+	defer deferFunc()
+
+	buf := goetty.NewByteBuf(32)
+	store.Set(QueueMetaKey(10, buf), protoc.MustMarshal(&metapb.QueueState{
+		Partitions: 3,
+	}))
+
+	key := []byte("key")
+	value := []byte("value")
+	values := [][]byte{[]byte("1"), []byte("2"), []byte("3")}
+	err := store.PutToQueueWithAllocAndKV(10, metapb.DefaultGroup, values, key, value)
+	assert.NoError(t, err, "TestPutToQueueWithAllocAndKV failed")
+
+	for i := uint32(0); i < 3; i++ {
+		data, err := store.Get(QueueItemKey(PartitionKey(10, i), 1, buf))
+		assert.NoError(t, err, "TestPutToQueueWithAllocAndKV failed")
+		assert.Equal(t, values[i], data, "TestPutToQueueWithAllocAndKV failed")
+	}
+
+	data, err := store.Get(QueueKVKey(10, key))
+	assert.NoError(t, err, "TestPutToQueueWithAllocAndKV failed")
+	assert.Equal(t, value, data, "TestPutToQueueWithAllocAndKV failed")
+}
+
+func TestQueueFetchWithNoConsumers(t *testing.T) {
 	store, deferFunc := NewTestStorage(t, true)
 	defer deferFunc()
 
@@ -750,6 +804,8 @@ func TestQueueFetchWithRebalancing(t *testing.T) {
 	key := QueueStateKey(tid, g1, buf)
 	err := store.Set(key, protoc.MustMarshal(state))
 	assert.NoError(t, err, "TestQueueFetchWithRebalancing failed")
+
+	store.Set(QueueMetaKey(tid, buf), protoc.MustMarshal(state))
 
 	err = store.PutToQueue(tid, 0, metapb.DefaultGroup, []byte("1"))
 	assert.NoError(t, err, "TestQueueFetchWithRebalancing failed")

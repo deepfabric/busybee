@@ -49,6 +49,12 @@ type Storage interface {
 	PutToQueueWithKV(id uint64, partition uint32, group metapb.Group, items [][]byte, kvs ...[]byte) error
 	// PutToQueueWithKVAndCondition put data to queue and put a kv and a condition
 	PutToQueueWithKVAndCondition(id uint64, partition uint32, group metapb.Group, items [][]byte, cond *rpcpb.Condition, kvs ...[]byte) error
+	// PutToQueueWithAlloc put data to queue
+	PutToQueueWithAlloc(id uint64, group metapb.Group, data ...[]byte) error
+	// PutToQueueWithAllocAndKV put data to queue and put a kv
+	PutToQueueWithAllocAndKV(id uint64, group metapb.Group, items [][]byte, kvs ...[]byte) error
+	// PutToQueueWithAllocAndKVAndCondition put data to queue and put a kv and a condition
+	PutToQueueWithAllocAndKVAndCondition(id uint64, group metapb.Group, items [][]byte, cond *rpcpb.Condition, kvs ...[]byte) error
 	// ExecCommand exec command
 	ExecCommand(cmd interface{}) ([]byte, error)
 	// AsyncExecCommand async exec command
@@ -214,6 +220,26 @@ func (h *beeStorage) PutToQueueWithKVAndCondition(id uint64, partition uint32, g
 	req.Items = items
 	req.KVS = kvs
 	req.Condition = cond
+
+	_, err := h.ExecCommandWithGroup(req, group)
+	return err
+}
+
+func (h *beeStorage) PutToQueueWithAlloc(id uint64, group metapb.Group, items ...[]byte) error {
+	return h.PutToQueueWithAllocAndKV(id, group, items)
+}
+
+func (h *beeStorage) PutToQueueWithAllocAndKV(id uint64, group metapb.Group, items [][]byte, kvs ...[]byte) error {
+	return h.PutToQueueWithAllocAndKVAndCondition(id, group, items, nil, kvs...)
+}
+
+func (h *beeStorage) PutToQueueWithAllocAndKVAndCondition(id uint64, group metapb.Group, items [][]byte, cond *rpcpb.Condition, kvs ...[]byte) error {
+	req := rpcpb.AcquireQueueAddRequest()
+	req.Key = PartitionKey(id, 0)
+	req.Items = items
+	req.KVS = kvs
+	req.Condition = cond
+	req.AllocPartition = true
 
 	_, err := h.ExecCommandWithGroup(req, group)
 	return err

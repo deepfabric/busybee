@@ -7,6 +7,7 @@ import (
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/deepfabric/busybee/pkg/storage"
 	"github.com/fagongzi/goetty"
+	"github.com/fagongzi/util/protoc"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -16,6 +17,10 @@ func TestNotify(t *testing.T) {
 	buf := goetty.NewByteBuf(256)
 
 	tenantID := uint64(1)
+	s.Set(storage.QueueMetaKey(tenantID, buf), protoc.MustMarshal(&metapb.QueueState{
+		Partitions: 2,
+	}))
+
 	n := NewQueueBasedNotifierWithGroup(s, metapb.DefaultGroup)
 	assert.NoError(t, n.Notify(tenantID, buf, []metapb.Notify{metapb.Notify{
 		UserID: 1,
@@ -29,9 +34,13 @@ func TestNotify(t *testing.T) {
 func TestNotifyWithConditionNotExist(t *testing.T) {
 	s, deferFunc := storage.NewTestStorage(t, true)
 	defer deferFunc()
-	buf := goetty.NewByteBuf(256)
 
+	buf := goetty.NewByteBuf(256)
 	tenantID := uint64(1)
+	s.Set(storage.QueueMetaKey(tenantID, buf), protoc.MustMarshal(&metapb.QueueState{
+		Partitions: 1,
+	}))
+
 	n := NewQueueBasedNotifierWithGroup(s, metapb.DefaultGroup)
 
 	conditionKey := []byte("ckey")
@@ -56,9 +65,12 @@ func TestNotifyWithConditionNotExist(t *testing.T) {
 func TestNotifyWithConditionExist(t *testing.T) {
 	s, deferFunc := storage.NewTestStorage(t, true)
 	defer deferFunc()
-	buf := goetty.NewByteBuf(256)
 
+	buf := goetty.NewByteBuf(256)
 	tenantID := uint64(1)
+	s.Set(storage.QueueMetaKey(tenantID, buf), protoc.MustMarshal(&metapb.QueueState{
+		Partitions: 1,
+	}))
 	n := NewQueueBasedNotifierWithGroup(s, metapb.DefaultGroup)
 
 	conditionKey := []byte("ckey")
@@ -77,9 +89,12 @@ func TestNotifyWithConditionExist(t *testing.T) {
 func TestNotifyWithConditionEqual(t *testing.T) {
 	s, deferFunc := storage.NewTestStorage(t, true)
 	defer deferFunc()
-	buf := goetty.NewByteBuf(256)
 
+	buf := goetty.NewByteBuf(256)
 	tenantID := uint64(1)
+	s.Set(storage.QueueMetaKey(tenantID, buf), protoc.MustMarshal(&metapb.QueueState{
+		Partitions: 1,
+	}))
 	n := NewQueueBasedNotifierWithGroup(s, metapb.DefaultGroup)
 
 	conditionKey := []byte("ckey")
@@ -88,7 +103,7 @@ func TestNotifyWithConditionEqual(t *testing.T) {
 	results := []int{0, 1}
 
 	for i := 0; i < 1; i++ {
-		err := s.Set(storage.PartitionKVKey(tenantID, 0, conditionKey), values[i])
+		err := s.Set(storage.QueueKVKey(tenantID, conditionKey), values[i])
 		assert.NoError(t, err, "TestNotifyWithConditionEqual failed")
 
 		assert.NoError(t, n.Notify(tenantID, buf, []metapb.Notify{metapb.Notify{
@@ -105,9 +120,13 @@ func TestNotifyWithConditionEqual(t *testing.T) {
 func TestNotifyWithConditionGE(t *testing.T) {
 	s, deferFunc := storage.NewTestStorage(t, true)
 	defer deferFunc()
-	buf := goetty.NewByteBuf(256)
 
+	buf := goetty.NewByteBuf(256)
 	tenantID := uint64(1)
+	s.Set(storage.QueueMetaKey(tenantID, buf), protoc.MustMarshal(&metapb.QueueState{
+		Partitions: 1,
+	}))
+
 	n := NewQueueBasedNotifierWithGroup(s, metapb.DefaultGroup)
 
 	conditionKey := []byte("ckey")
@@ -116,7 +135,7 @@ func TestNotifyWithConditionGE(t *testing.T) {
 	results := []int{1, 2, 2}
 
 	for i := 0; i < 2; i++ {
-		err := s.Set(storage.PartitionKVKey(tenantID, 0, conditionKey), values[i])
+		err := s.Set(storage.QueueKVKey(tenantID, conditionKey), values[i])
 		assert.NoError(t, err, "TestNotifyWithConditionGE failed")
 
 		assert.NoError(t, n.Notify(tenantID, buf, []metapb.Notify{metapb.Notify{
@@ -133,9 +152,12 @@ func TestNotifyWithConditionGE(t *testing.T) {
 func TestNotifyWithConditionGT(t *testing.T) {
 	s, deferFunc := storage.NewTestStorage(t, true)
 	defer deferFunc()
-	buf := goetty.NewByteBuf(256)
 
+	buf := goetty.NewByteBuf(256)
 	tenantID := uint64(1)
+	s.Set(storage.QueueMetaKey(tenantID, buf), protoc.MustMarshal(&metapb.QueueState{
+		Partitions: 1,
+	}))
 	n := NewQueueBasedNotifierWithGroup(s, metapb.DefaultGroup)
 
 	conditionKey := []byte("ckey")
@@ -144,7 +166,7 @@ func TestNotifyWithConditionGT(t *testing.T) {
 	results := []int{1, 1, 1}
 
 	for i := 0; i < 2; i++ {
-		err := s.Set(storage.PartitionKVKey(tenantID, 0, conditionKey), values[i])
+		err := s.Set(storage.QueueKVKey(tenantID, conditionKey), values[i])
 		assert.NoError(t, err, "TestNotifyWithConditionGT failed")
 
 		assert.NoError(t, n.Notify(tenantID, buf, []metapb.Notify{metapb.Notify{
@@ -161,9 +183,12 @@ func TestNotifyWithConditionGT(t *testing.T) {
 func TestNotifyWithConditionLE(t *testing.T) {
 	s, deferFunc := storage.NewTestStorage(t, true)
 	defer deferFunc()
-	buf := goetty.NewByteBuf(256)
 
+	buf := goetty.NewByteBuf(256)
 	tenantID := uint64(1)
+	s.Set(storage.QueueMetaKey(tenantID, buf), protoc.MustMarshal(&metapb.QueueState{
+		Partitions: 1,
+	}))
 	n := NewQueueBasedNotifierWithGroup(s, metapb.DefaultGroup)
 
 	conditionKey := []byte("ckey")
@@ -172,7 +197,7 @@ func TestNotifyWithConditionLE(t *testing.T) {
 	results := []int{1, 2, 2}
 
 	for i := 0; i < 2; i++ {
-		err := s.Set(storage.PartitionKVKey(tenantID, 0, conditionKey), values[i])
+		err := s.Set(storage.QueueKVKey(tenantID, conditionKey), values[i])
 		assert.NoError(t, err, "TestNotifyWithConditionLE failed")
 
 		assert.NoError(t, n.Notify(tenantID, buf, []metapb.Notify{metapb.Notify{
@@ -189,9 +214,12 @@ func TestNotifyWithConditionLE(t *testing.T) {
 func TestNotifyWithConditionLT(t *testing.T) {
 	s, deferFunc := storage.NewTestStorage(t, true)
 	defer deferFunc()
-	buf := goetty.NewByteBuf(256)
 
+	buf := goetty.NewByteBuf(256)
 	tenantID := uint64(1)
+	s.Set(storage.QueueMetaKey(tenantID, buf), protoc.MustMarshal(&metapb.QueueState{
+		Partitions: 1,
+	}))
 	n := NewQueueBasedNotifierWithGroup(s, metapb.DefaultGroup)
 
 	conditionKey := []byte("ckey")
@@ -200,7 +228,7 @@ func TestNotifyWithConditionLT(t *testing.T) {
 	results := []int{1, 1, 1}
 
 	for i := 0; i < 2; i++ {
-		err := s.Set(storage.PartitionKVKey(tenantID, 0, conditionKey), values[i])
+		err := s.Set(storage.QueueKVKey(tenantID, conditionKey), values[i])
 		assert.NoError(t, err, "TestNotifyWithConditionLT failed")
 
 		assert.NoError(t, n.Notify(tenantID, buf, []metapb.Notify{metapb.Notify{

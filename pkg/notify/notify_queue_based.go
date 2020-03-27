@@ -46,7 +46,7 @@ func (n *queueNotifier) Notify(id uint64, buf *goetty.ByteBuf, notifies []metapb
 		items = append(items, protoc.MustMarshal(&notifies[idx]))
 	}
 
-	return n.store.PutToQueueWithKVAndCondition(id, 0, n.group, items, cond, kvs...)
+	return n.store.PutToQueueWithAllocAndKVAndCondition(id, n.group, items, cond, kvs...)
 }
 
 func (n *queueNotifier) addTTL(buf *goetty.ByteBuf, nt *metapb.Notify) error {

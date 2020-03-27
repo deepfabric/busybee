@@ -86,7 +86,7 @@ func newStateWorker(key string, state metapb.WorkflowInstanceWorkerState, eng En
 		cond:             &rpcpb.Condition{},
 		conditionKey:     make([]byte, len(queueStateKey)+1, len(queueStateKey)+1),
 		queueStateKey:    queueStateKey,
-		queueGetStateKey: storage.PartitionKVKey(state.TenantID, 0, queueStateKey),
+		queueGetStateKey: storage.QueueKVKey(state.TenantID, queueStateKey),
 	}
 
 	err = w.resetByState()
