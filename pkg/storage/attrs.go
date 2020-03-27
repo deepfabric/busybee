@@ -37,14 +37,14 @@ var (
 	attrRequestWorkflowShardUpdate   = "req.wf.shard.update"
 	attrRequestWorkflowShardRemove   = "req.wf.shard.remove"
 
-	attrResponseBool             = "resp.bool"
-	attrResponseBytes            = "resp.bytes"
-	attrResponseUint64           = "resp.uint64"
-	attrResponseUint32Range      = "resp.uint32.range"
-	attrResponseUint32Slice      = "resp.uint32.slice"
-	attrResponseBytesSlice       = "resp.bytes.slice"
-	attrResponseConcurrencyFetch = "resp.queue.fetch.concurrency"
-	attrResponseQueueJoinGroup   = "resp.queue.join.group"
+	attrResponseBool           = "resp.bool"
+	attrResponseBytes          = "resp.bytes"
+	attrResponseUint64         = "resp.uint64"
+	attrResponseUint32Range    = "resp.uint32.range"
+	attrResponseUint32Slice    = "resp.uint32.slice"
+	attrResponseBytesSlice     = "resp.bytes.slice"
+	attrResponseFetch          = "resp.queue.fetch"
+	attrResponseQueueJoinGroup = "resp.queue.join.group"
 
 	attrTempBM               = "temp.BM"
 	attrTempWorkflowInstance = "temp.wf.instance"
@@ -64,14 +64,14 @@ func getTempWorkflowInstance(attrs map[string]interface{}) *metapb.WorkflowInsta
 	return value
 }
 
-func getQueueConcurrencyFetchResponse(attrs map[string]interface{}) *rpcpb.QueueConcurrencyFetchResponse {
-	var value *rpcpb.QueueConcurrencyFetchResponse
+func getQueueFetchResponse(attrs map[string]interface{}) *rpcpb.QueueFetchResponse {
+	var value *rpcpb.QueueFetchResponse
 
-	if v, ok := attrs[attrResponseConcurrencyFetch]; ok {
-		value = v.(*rpcpb.QueueConcurrencyFetchResponse)
+	if v, ok := attrs[attrResponseFetch]; ok {
+		value = v.(*rpcpb.QueueFetchResponse)
 	} else {
-		value = &rpcpb.QueueConcurrencyFetchResponse{}
-		attrs[attrResponseConcurrencyFetch] = value
+		value = &rpcpb.QueueFetchResponse{}
+		attrs[attrResponseFetch] = value
 	}
 
 	value.Reset()
@@ -492,20 +492,6 @@ func getQueueState(attrs map[string]interface{}) *metapb.QueueState {
 	} else {
 		value = &metapb.QueueState{}
 		attrs[attrRequestQueueState] = value
-	}
-
-	value.Reset()
-	return value
-}
-
-func getQueueConcurrencyFetchRequest(attrs map[string]interface{}) *rpcpb.QueueConcurrencyFetchRequest {
-	var value *rpcpb.QueueConcurrencyFetchRequest
-
-	if v, ok := attrs[attrRequestQueueConcurrencyFetch]; ok {
-		value = v.(*rpcpb.QueueConcurrencyFetchRequest)
-	} else {
-		value = &rpcpb.QueueConcurrencyFetchRequest{}
-		attrs[attrRequestQueueConcurrencyFetch] = value
 	}
 
 	value.Reset()

@@ -33,11 +33,11 @@ docker: ; $(info ======== compiled busybee docker)
 
 .PHONY: test
 test: ; $(info ======== test busybee)
+	env GO111MODULE=off go test -count=1 github.com/deepfabric/busybee/pkg/core
 	env GO111MODULE=off go test -count=1 github.com/deepfabric/busybee/pkg/storage
 	env GO111MODULE=off go test -count=1 github.com/deepfabric/busybee/pkg/queue
 	env GO111MODULE=off go test -count=1 github.com/deepfabric/busybee/pkg/notify
 	env GO111MODULE=off go test -count=1 github.com/deepfabric/busybee/pkg/expr
-	env GO111MODULE=off go test -count=1 github.com/deepfabric/busybee/pkg/core
 	env GO111MODULE=off go test -count=1 github.com/deepfabric/busybee/pkg/api
 	env GO111MODULE=off go test -count=1 github.com/deepfabric/busybee/pkg/util
 .DEFAULT_GOAL := busybee

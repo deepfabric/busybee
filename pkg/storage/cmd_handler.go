@@ -27,9 +27,8 @@ func (h *beeStorage) init() {
 	h.AddWriteFunc("create-state", uint64(rpcpb.CreateInstanceStateShard), h.createInstanceWorker)
 	h.AddWriteFunc("update-state", uint64(rpcpb.UpdateInstanceStateShard), h.updateInstanceWorkerState)
 	h.AddWriteFunc("remove-state", uint64(rpcpb.RemoveInstanceStateShard), h.removeInstanceWorker)
-	h.AddWriteFunc("queue-fetch", uint64(rpcpb.QueueFetch), h.queueFetch)
 	h.AddWriteFunc("queue-join", uint64(rpcpb.QueueJoin), h.queueJoinGroup)
-	h.AddWriteFunc("queue-concurrency-fetch", uint64(rpcpb.QueueConcurrencyFetch), h.queueConcurrencyFetch)
+	h.AddWriteFunc("queue-concurrency-fetch", uint64(rpcpb.QueueFetch), h.queueFetch)
 
 	h.runner.RunCancelableTask(h.handleShardCycle)
 }
@@ -191,21 +190,14 @@ func (h *beeStorage) BuildRequest(req *raftcmdpb.Request, cmd interface{}) error
 		rpcpb.ReleaseQueueAddRequest(msg)
 	case *rpcpb.QueueFetchRequest:
 		msg := cmd.(*rpcpb.QueueFetchRequest)
+		if len(msg.Key) == 0 {
+			msg.Key = PartitionKey(msg.ID, msg.Partition)
+		}
 		req.Key = msg.Key
 		req.CustemType = uint64(rpcpb.QueueFetch)
 		req.Type = raftcmdpb.Write
 		req.Cmd = protoc.MustMarshal(msg)
 		rpcpb.ReleaseQueueFetchRequest(msg)
-	case *rpcpb.QueueConcurrencyFetchRequest:
-		msg := cmd.(*rpcpb.QueueConcurrencyFetchRequest)
-		if len(msg.Key) == 0 {
-			msg.Key = PartitionKey(msg.ID, msg.Partition)
-		}
-		req.Key = msg.Key
-		req.CustemType = uint64(rpcpb.QueueConcurrencyFetch)
-		req.Type = raftcmdpb.Write
-		req.Cmd = protoc.MustMarshal(msg)
-		rpcpb.ReleaseQueueConcurrencyFetchRequest(msg)
 	case *rpcpb.QueueJoinGroupRequest:
 		msg := cmd.(*rpcpb.QueueJoinGroupRequest)
 		if len(msg.Key) == 0 {

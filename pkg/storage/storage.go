@@ -20,7 +20,7 @@ import (
 
 const (
 	defaultRPCTimeout        = time.Second * 10
-	reportGroup       uint64 = 1314
+	reportGroup       uint64 = 13141314131413141314
 )
 
 // Storage storage
@@ -62,14 +62,15 @@ type Storage interface {
 }
 
 type beeStorage struct {
-	reportElector prophet.Elector
-	app           *server.Application
-	store         raftstore.Store
-	eventC        chan Event
-	shardC        chan shardCycle
-	runner        *task.Runner
-
-	scanTaskID uint64
+	reportElector    prophet.Elector
+	app              *server.Application
+	store            raftstore.Store
+	eventC           chan Event
+	shardC           chan shardCycle
+	runner           *task.Runner
+	elector          prophet.Elector
+	reportCancelFunc context.CancelFunc
+	scanTaskID       uint64
 }
 
 // NewStorage returns a beehive request handler
@@ -115,7 +116,10 @@ func (h *beeStorage) Start() error {
 		return err
 	}
 
-	go elector.ElectionLoop(context.Background(),
+	ctx, cancel := context.WithCancel(context.Background())
+	h.elector = elector
+	h.reportCancelFunc = cancel
+	go h.elector.ElectionLoop(ctx,
 		reportGroup,
 		h.store.Meta().ShardAddr,
 		h.becomeReportLeader,
@@ -126,6 +130,11 @@ func (h *beeStorage) Start() error {
 }
 
 func (h *beeStorage) Close() {
+	if h.elector != nil {
+		h.elector.Stop(reportGroup)
+		h.reportCancelFunc()
+	}
+
 	h.runner.Stop()
 	h.app.Stop()
 	close(h.shardC)

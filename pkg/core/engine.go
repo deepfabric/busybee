@@ -208,13 +208,25 @@ func (eng *engine) tenantInitWithReplicas(metadata metapb.Tenant, replicas uint3
 	defer buf.Release()
 
 	var shards []hbmetapb.Shard
-	for i := uint32(0); i < metadata.Input.Partitions; i++ {
-		shards = append(shards, hbmetapb.Shard{
-			Group: uint64(metapb.TenantInputGroup),
-			Start: storage.PartitionKey(metadata.ID, i),
-			End:   storage.PartitionKey(metadata.ID, i+1),
-		})
-	}
+	shards = append(shards, hbmetapb.Shard{
+		Group: uint64(metapb.TenantInputGroup),
+		Start: storage.PartitionKey(metadata.ID, 0),
+		End:   storage.PartitionKey(metadata.ID+1, 0),
+		Data: protoc.MustMarshal(&metapb.CallbackAction{
+			SetKV: &metapb.SetKVAction{
+				KV: metapb.KV{
+					Key: storage.ConcurrencyQueueMetaKey(metadata.ID, buf),
+					Value: protoc.MustMarshal(&metapb.QueueState{
+						Partitions: metadata.Input.Partitions,
+						Timeout:    metadata.Input.ConsumerTimeout,
+						States:     make([]metapb.Partiton, metadata.Input.Partitions, metadata.Input.Partitions),
+					}),
+				},
+				Group: metapb.TenantInputGroup,
+			},
+		}),
+		LeastReplicas: replicas,
+	})
 	shards = append(shards, hbmetapb.Shard{
 		Group: uint64(metapb.TenantOutputGroup),
 		Start: storage.PartitionKey(metadata.ID, 0),

@@ -161,9 +161,10 @@ func (w *stateWorker) matches(uid uint32) bool {
 	return w.totalCrowds.Contains(uid)
 }
 
-func (w *stateWorker) onEvent(maxOffset uint64, items ...[]byte) (uint64, error) {
-	logger.Debugf("worker %s consumer from queue, last offset %d, %d items",
+func (w *stateWorker) onEvent(partition uint32, maxOffset uint64, items ...[]byte) (uint64, error) {
+	logger.Debugf("worker %s consumer from queue partition %d, last offset %d, %d items",
 		w.key,
+		partition,
 		maxOffset,
 		len(items))
 
@@ -331,7 +332,7 @@ func (w *stateWorker) run() {
 		}
 	}()
 
-	w.consumer.Start(uint64(workerBatch), 0, w.onEvent)
+	w.consumer.Start(uint64(workerBatch), w.onEvent)
 	logger.Infof("worker %s started", w.key)
 }
 

@@ -21,66 +21,6 @@ var (
 	emptyJoinBytes = protoc.MustMarshal(&rpcpb.QueueJoinGroupResponse{})
 )
 
-func (h *beeStorage) queueFetch(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs map[string]interface{}) (uint64, int64, *raftcmdpb.Response) {
-	resp := pb.AcquireResponse()
-	queueFetch := getQueueFetchRequest(attrs)
-	protoc.MustUnmarshal(queueFetch, req.Cmd)
-
-	buf := attrs[raftstore.AttrBuf].(*goetty.ByteBuf)
-	key := committedOffsetKey(req.Key, queueFetch.Consumer, buf)
-	store := h.getStore(shard.ID)
-
-	completed := queueFetch.CompletedOffset
-	value, err := store.Get(key)
-	if err != nil {
-		log.Fatalf("fetch queue failed with %+v", err)
-	}
-
-	saveCompleted := queueFetch.CompletedOffset > 0
-	if len(value) > 0 {
-		alreadyCompleted := goetty.Byte2UInt64(value)
-		if completed <= alreadyCompleted {
-			completed = alreadyCompleted
-			saveCompleted = false
-		}
-	}
-
-	if saveCompleted {
-		buf.MarkWrite()
-		buf.WriteUint64(queueFetch.CompletedOffset)
-		err = store.Set(key, buf.WrittenDataAfterMark())
-		if err != nil {
-			log.Fatalf("set consumer committed offset failed with %+v", err)
-		}
-	}
-
-	startKey := itemKey(req.Key, completed+1, buf)
-	endKey := itemKey(req.Key, completed+1+queueFetch.Count, buf)
-
-	start := completed + 1
-	end := start
-	var items [][]byte
-	err = h.getStore(shard.ID).Scan(startKey, endKey, func(key, value []byte) (bool, error) {
-		items = append(items, value)
-		end++
-		return true, nil
-	}, false)
-	if err != nil {
-		log.Fatalf("fetch queue failed with %+v", err)
-	}
-
-	if start == end {
-		resp.Value = rpcpb.EmptyBytesSliceBytes
-		return 0, 0, resp
-	}
-
-	customResp := getBytesSliceResponse(attrs)
-	customResp.Values = items
-	customResp.LastValue = end - 1
-	resp.Value = protoc.MustMarshal(customResp)
-	return 0, 0, resp
-}
-
 func (h *beeStorage) queueJoinGroup(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs map[string]interface{}) (uint64, int64, *raftcmdpb.Response) {
 	resp := pb.AcquireResponse()
 	joinReq := getQueueJoinGroupRequest(attrs)
@@ -130,9 +70,9 @@ func (h *beeStorage) queueJoinGroup(shard bhmetapb.Shard, req *raftcmdpb.Request
 	return 0, 0, resp
 }
 
-func (h *beeStorage) queueConcurrencyFetch(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs map[string]interface{}) (uint64, int64, *raftcmdpb.Response) {
+func (h *beeStorage) queueFetch(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs map[string]interface{}) (uint64, int64, *raftcmdpb.Response) {
 	resp := pb.AcquireResponse()
-	queueFetch := getQueueConcurrencyFetchRequest(attrs)
+	queueFetch := getQueueFetchRequest(attrs)
 	protoc.MustUnmarshal(queueFetch, req.Cmd)
 
 	now := time.Now().Unix()
@@ -141,7 +81,7 @@ func (h *beeStorage) queueConcurrencyFetch(shard bhmetapb.Shard, req *raftcmdpb.
 	metaKey := queueMetaKey(req.Key[:len(req.Key)-4], buf)
 	state := loadQueueState(h.getStore(shard.ID), stateKey, metaKey, attrs)
 
-	fetchResp := getQueueConcurrencyFetchResponse(attrs)
+	fetchResp := getQueueFetchResponse(attrs)
 
 	// consumer removed
 	if nil == state ||
@@ -171,8 +111,8 @@ func (h *beeStorage) queueConcurrencyFetch(shard bhmetapb.Shard, req *raftcmdpb.
 	// do fetch new items
 	if p.Version == queueFetch.Version &&
 		p.State == metapb.PSRunning {
-		startKey := itemKey(req.Key, p.Completed+1, buf)
-		endKey := itemKey(req.Key, p.Completed+1+queueFetch.Count, buf)
+		startKey := QueueItemKey(req.Key, p.Completed+1, buf)
+		endKey := QueueItemKey(req.Key, p.Completed+1+queueFetch.Count, buf)
 
 		c := uint64(0)
 		var items [][]byte
@@ -198,6 +138,7 @@ func (h *beeStorage) queueConcurrencyFetch(shard bhmetapb.Shard, req *raftcmdpb.
 	if changed {
 		buf.MarkWrite()
 		buf.WriteUint64(state.States[queueFetch.Partition].Completed)
+		buf.WriteInt64(now)
 		completed := buf.WrittenDataAfterMark()
 
 		wb := bhutil.NewWriteBatch()
@@ -255,7 +196,7 @@ func rebalanceConsumers(state *metapb.QueueState) {
 	}
 }
 
-func maybeUpdateCompletedOffset(state *metapb.QueueState, now int64, req *rpcpb.QueueConcurrencyFetchRequest) bool {
+func maybeUpdateCompletedOffset(state *metapb.QueueState, now int64, req *rpcpb.QueueFetchRequest) bool {
 	p := state.States[req.Partition]
 
 	// stale consumer

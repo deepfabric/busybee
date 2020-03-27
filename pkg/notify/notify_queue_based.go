@@ -17,12 +17,19 @@ var (
 
 type queueNotifier struct {
 	store storage.Storage
+	group metapb.Group
 }
 
 // NewQueueBasedNotifier create a notify based on raft queue
 func NewQueueBasedNotifier(store storage.Storage) Notifier {
+	return NewQueueBasedNotifierWithGroup(store, metapb.TenantOutputGroup)
+}
+
+// NewQueueBasedNotifierWithGroup create a notify based on raft queue
+func NewQueueBasedNotifierWithGroup(store storage.Storage, group metapb.Group) Notifier {
 	return &queueNotifier{
 		store: store,
+		group: group,
 	}
 }
 
@@ -39,7 +46,7 @@ func (n *queueNotifier) Notify(id uint64, buf *goetty.ByteBuf, notifies []metapb
 		items = append(items, protoc.MustMarshal(&notifies[idx]))
 	}
 
-	return n.store.PutToQueueWithKVAndCondition(id, 0, metapb.TenantOutputGroup, items, cond, kvs...)
+	return n.store.PutToQueueWithKVAndCondition(id, 0, n.group, items, cond, kvs...)
 }
 
 func (n *queueNotifier) addTTL(buf *goetty.ByteBuf, nt *metapb.Notify) error {

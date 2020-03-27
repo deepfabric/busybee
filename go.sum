@@ -53,6 +53,8 @@ github.com/deepfabric/beehive v0.0.0-20200321012008-7dca67410b1c h1:PnSSa759GMST
 github.com/deepfabric/beehive v0.0.0-20200321012008-7dca67410b1c/go.mod h1:CoKM14LFhj1O5+T5tY3s01EPYOX4U2xGnbvINAUSaJg=
 github.com/deepfabric/beehive v0.0.0-20200325103522-ae7879ad3c05 h1:dNh/SD1D3iRembv5gkqIDOMM+iR4YiF724NVZkeVFUI=
 github.com/deepfabric/beehive v0.0.0-20200325103522-ae7879ad3c05/go.mod h1:CoKM14LFhj1O5+T5tY3s01EPYOX4U2xGnbvINAUSaJg=
+github.com/deepfabric/beehive v0.0.0-20200327012041-09bb525461c7 h1:ecboSqF0xMdiVBO2apy6/aNXz9/9fl/itUXmROA9FkM=
+github.com/deepfabric/beehive v0.0.0-20200327012041-09bb525461c7/go.mod h1:0TCBk/vrpR4qIQZOTPbjL7JLm3Oc95bAibYo3bIUSAg=
 github.com/deepfabric/c-nemo v0.0.0-20200217131733-d8d20abdb6f7 h1:ZuOizeGleJvUp8ZTj9TsWyo70X9nJNfM+Lvw0UeMLVw=
 github.com/deepfabric/c-nemo v0.0.0-20200217131733-d8d20abdb6f7/go.mod h1:xHI4efz5VNLAaNzIpEzcWlG03PcKRA+S7J1LkYbCG9Q=
 github.com/deepfabric/etcd v3.3.17+incompatible h1:JDSLn0ZFr4Jtxko12SkJNl+yWRenHPeqlhUQ+PkMwew=
@@ -61,6 +63,8 @@ github.com/deepfabric/go-nemo v0.0.0-20200217132256-1a30b09e0871 h1:ZwveYWFRLL+x
 github.com/deepfabric/go-nemo v0.0.0-20200217132256-1a30b09e0871/go.mod h1:MEkOt020e5MHsdTsvS2LcxndbzwLvGzYH+fCYeHq8R8=
 github.com/deepfabric/prophet v0.0.0-20200217214013-3e0d1fb19e8e h1:czLGlkZy0bSiwJfHXZKmQo78oReRRYLm8/s1OMqpO+U=
 github.com/deepfabric/prophet v0.0.0-20200217214013-3e0d1fb19e8e/go.mod h1:OiX6SYbopP++GWhjoXNxRu/tlS/soy3wu92yS2AtGlU=
+github.com/deepfabric/prophet v0.0.0-20200327011912-ea7d6607d520 h1:SVNM0vDLm/fyz/embOCKUtxRyy/apAC5adFQUjb1kpk=
+github.com/deepfabric/prophet v0.0.0-20200327011912-ea7d6607d520/go.mod h1:OiX6SYbopP++GWhjoXNxRu/tlS/soy3wu92yS2AtGlU=
 github.com/dgraph-io/badger v1.6.0 h1:DshxFxZWXUcO0xX476VJC07Xsr6ZCBVRHKZ93Oh7Evo=
 github.com/dgraph-io/badger v1.6.0/go.mod h1:zwt7syl517jmP8s94KqSxTlM6IMsdhYy6psNgSztDR4=
 github.com/dgrijalva/jwt-go v3.2.0+incompatible h1:7qlOGliEKZXTDg6OTjfoBKDXWrumCAMpl/TFQ4/5kLM=

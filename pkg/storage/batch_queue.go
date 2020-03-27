@@ -93,7 +93,7 @@ func (qb *queueBatch) add(req *rpcpb.QueueAddRequest, b *batch) {
 
 	for _, item := range req.Items {
 		qb.maxOffset++
-		qb.pairs = append(qb.pairs, itemKey(req.Key, qb.maxOffset, qb.buf), item)
+		qb.pairs = append(qb.pairs, QueueItemKey(req.Key, qb.maxOffset, qb.buf), item)
 	}
 
 	n := len(req.KVS) / 2
@@ -159,8 +159,8 @@ func (qb *queueBatch) exec(s bhstorage.DataStorage, b *batch) error {
 			}
 
 			if low > qb.removedOffset {
-				from := itemKey(qb.queueKey, qb.removedOffset, qb.buf)
-				to := itemKey(qb.queueKey, low+1, qb.buf)
+				from := QueueItemKey(qb.queueKey, qb.removedOffset, qb.buf)
+				to := QueueItemKey(qb.queueKey, low+1, qb.buf)
 				err = s.RangeDelete(from, to)
 				if err != nil {
 					log.Fatalf("exec queue add batch failed with %+v", err)

@@ -159,8 +159,8 @@ func maxAndCleanOffsetKey(src []byte, buf *goetty.ByteBuf) []byte {
 	return buf.WrittenDataAfterMark()
 }
 
-// itemKey store the item at the offset in the queue
-func itemKey(src []byte, offset uint64, buf *goetty.ByteBuf) []byte {
+// QueueItemKey store the item at the offset in the queue
+func QueueItemKey(src []byte, offset uint64, buf *goetty.ByteBuf) []byte {
 	buf.MarkWrite()
 	buf.Write(src)
 	buf.WriteByte(queueItemField)

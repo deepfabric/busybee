@@ -400,17 +400,7 @@ func TestPutToQueue(t *testing.T) {
 	store, deferFunc := NewTestStorage(t, true)
 	defer deferFunc()
 
-	err := store.RaftStore().AddShards(bhmetapb.Shard{
-		Start:        goetty.Uint64ToBytes(10),
-		End:          goetty.Uint64ToBytes(11),
-		Group:        uint64(metapb.TenantInputGroup),
-		DisableSplit: true,
-	})
-	assert.NoError(t, err, "TestPutToQueue failed")
-
-	time.Sleep(time.Second * 1)
-
-	err = store.PutToQueue(10, 0, metapb.TenantInputGroup, protoc.MustMarshal(&metapb.Event{
+	err := store.PutToQueue(10, 0, metapb.DefaultGroup, protoc.MustMarshal(&metapb.Event{
 		Type: metapb.UserType,
 		User: &metapb.UserEvent{
 			TenantID: 10000,
@@ -449,54 +439,26 @@ func TestPutToQueue(t *testing.T) {
 	}))
 	assert.NoError(t, err, "TestPutToQueue failed")
 
-	req := rpcpb.AcquireQueueFetchRequest()
-	req.Key = PartitionKey(10, 0)
-	req.Count = 3
-	req.Consumer = []byte("c")
-	data, err := store.ExecCommandWithGroup(req, metapb.TenantInputGroup)
-	assert.NoError(t, err, "TestPutToQueue failed")
+	buf := goetty.NewByteBuf(32)
 
-	resp := rpcpb.AcquireBytesSliceResponse()
-	protoc.MustUnmarshal(resp, data)
-	assert.Equal(t, 3, len(resp.Values), "TestPutToQueue failed")
-	for idx, v := range resp.Values {
+	for i := uint64(1); i < 4; i++ {
+		data, err := store.Get(QueueItemKey(PartitionKey(10, 0), i, buf))
+		assert.NoError(t, err, "TestPutToQueue failed")
+
 		evt := &metapb.Event{}
-		protoc.MustUnmarshal(evt, v)
-
+		protoc.MustUnmarshal(evt, data)
 		assert.Equal(t, metapb.UserType, evt.Type, "TestPutToQueue failed")
-		assert.Equal(t, 1, len(evt.User.Data), "TestPutToQueue failed")
-		assert.Equal(t, fmt.Sprintf("%d", idx+1), string(evt.User.Data[0].Value), "TestPutToQueue failed")
+		assert.Equal(t, fmt.Sprintf("%d", i), string(evt.User.Data[0].Value), "TestPutToQueue failed")
 	}
-
-	req.Reset()
-	req.Key = PartitionKey(10, 0)
-	req.Count = 3
-	req.Consumer = []byte("c")
-	req.CompletedOffset = resp.LastValue
-	data, err = store.ExecCommandWithGroup(req, metapb.TenantInputGroup)
-	assert.NoError(t, err, "TestPutToQueue failed")
-	resp.Reset()
-	protoc.MustUnmarshal(resp, data)
-	assert.Equal(t, 0, len(resp.Values), "TestPutToQueue failed")
 }
 
 func TestPutToQueueWithKV(t *testing.T) {
 	store, deferFunc := NewTestStorage(t, true)
 	defer deferFunc()
 
-	err := store.RaftStore().AddShards(bhmetapb.Shard{
-		Start:        goetty.Uint64ToBytes(10),
-		End:          goetty.Uint64ToBytes(11),
-		Group:        uint64(metapb.TenantOutputGroup),
-		DisableSplit: true,
-	})
-	assert.NoError(t, err, "TestPutToQueueWithKV failed")
-
-	time.Sleep(time.Second * 1)
-
 	key := []byte("key1")
 	value := []byte("value")
-	err = store.PutToQueueWithKV(10, 0, metapb.TenantOutputGroup, [][]byte{
+	err := store.PutToQueueWithKV(10, 0, metapb.DefaultGroup, [][]byte{
 		protoc.MustMarshal(&metapb.Event{
 			Type: metapb.UserType,
 			User: &metapb.UserEvent{
@@ -513,23 +475,16 @@ func TestPutToQueueWithKV(t *testing.T) {
 	}, key, value)
 	assert.NoError(t, err, "TestPutToQueueWithKV failed")
 
-	req := rpcpb.AcquireQueueFetchRequest()
-	req.Key = PartitionKey(10, 0)
-	req.Count = 3
-	req.Consumer = []byte("c")
-	data, err := store.ExecCommandWithGroup(req, metapb.TenantOutputGroup)
+	buf := goetty.NewByteBuf(32)
+	data, err := store.Get(QueueItemKey(PartitionKey(10, 0), 1, buf))
 	assert.NoError(t, err, "TestPutToQueueWithKV failed")
 
-	resp := rpcpb.AcquireBytesSliceResponse()
-	protoc.MustUnmarshal(resp, data)
-	assert.Equal(t, 1, len(resp.Values), "TestPutToQueueWithKV failed")
 	evt := &metapb.Event{}
-	protoc.MustUnmarshal(evt, resp.Values[0])
+	protoc.MustUnmarshal(evt, data)
 	assert.Equal(t, metapb.UserType, evt.Type, "TestPutToQueueWithKV failed")
 	assert.Equal(t, 1, len(evt.User.Data), "TestPutToQueueWithKV failed")
-	assert.Equal(t, "1", string(evt.User.Data[0].Value), "TestPutToQueueWithKV failed")
 
-	v, err := store.GetWithGroup(PartitionKVKey(10, 0, key), metapb.TenantOutputGroup)
+	v, err := store.Get(PartitionKVKey(10, 0, key))
 	assert.NoError(t, err, "TestPutToQueueWithKV failed")
 	assert.NotEmpty(t, v, "TestPutToQueueWithKV failed")
 	assert.Equal(t, string(value), string(v), "TestPutToQueueWithKV failed")
@@ -554,7 +509,7 @@ func TestQueueConcurrencyFetchWithNoConsumers(t *testing.T) {
 	err := store.Set(key, protoc.MustMarshal(state))
 	assert.NoError(t, err, "TestQueueFetchWithNoConsumers failed")
 
-	req := rpcpb.AcquireQueueConcurrencyFetchRequest()
+	req := rpcpb.AcquireQueueFetchRequest()
 	req.ID = tid
 	req.Group = g1
 	resp := getTestConcurrencyResp(t, store, req)
@@ -581,7 +536,7 @@ func TestQueueConcurrencyFetchWithInvalidConsumer(t *testing.T) {
 	err := store.Set(key, protoc.MustMarshal(state))
 	assert.NoError(t, err, "TestQueueFetchWithInvalidConsumer failed")
 
-	req := rpcpb.AcquireQueueConcurrencyFetchRequest()
+	req := rpcpb.AcquireQueueFetchRequest()
 	req.ID = tid
 	req.Group = g1
 	req.Consumer = 1
@@ -609,7 +564,7 @@ func TestQueueConcurrencyFetchWithInvalidPartition(t *testing.T) {
 	err := store.Set(key, protoc.MustMarshal(state))
 	assert.NoError(t, err, "TestQueueFetchWithInvalidPartition failed")
 
-	req := rpcpb.AcquireQueueConcurrencyFetchRequest()
+	req := rpcpb.AcquireQueueFetchRequest()
 	req.ID = tid
 	req.Group = g1
 	req.Consumer = 0
@@ -747,7 +702,7 @@ func TestQueueConcurrencyFetchAfterJoin(t *testing.T) {
 	req.Group = g1
 
 	resp := getTestJoinResp(t, store, req)
-	fetch := rpcpb.AcquireQueueConcurrencyFetchRequest()
+	fetch := rpcpb.AcquireQueueFetchRequest()
 	fetch.ID = tid
 	fetch.Group = g1
 	fetch.Consumer = resp.Index
@@ -799,7 +754,7 @@ func TestQueueFetchWithRebalancing(t *testing.T) {
 	err = store.PutToQueue(tid, 0, metapb.DefaultGroup, []byte("1"))
 	assert.NoError(t, err, "TestQueueFetchWithRebalancing failed")
 
-	req := rpcpb.AcquireQueueConcurrencyFetchRequest()
+	req := rpcpb.AcquireQueueFetchRequest()
 	req.Reset()
 	req.ID = tid
 	req.Group = g1
@@ -860,7 +815,7 @@ func TestQueueConcurrencyFetchWithRemoveTimeoutConsumer(t *testing.T) {
 	err := store.Set(key, protoc.MustMarshal(state))
 	assert.NoError(t, err, "TestQueueConcurrencyFetchWithRemoveTimeoutConsumer failed")
 
-	req := rpcpb.AcquireQueueConcurrencyFetchRequest()
+	req := rpcpb.AcquireQueueFetchRequest()
 	for i := 0; i < 2; i++ {
 		req.Reset()
 		req.ID = tid
@@ -998,7 +953,7 @@ func TestQueueConcurrencyFetchWithCommitOffset(t *testing.T) {
 	err := store.Set(key, protoc.MustMarshal(state))
 	assert.NoError(t, err, "TestQueueConcurrencyFetchWithCommitOffset failed")
 
-	req := rpcpb.AcquireQueueConcurrencyFetchRequest()
+	req := rpcpb.AcquireQueueFetchRequest()
 	req.ID = tid
 	req.Group = g1
 	req.Partition = 0
@@ -1075,7 +1030,7 @@ func TestQueueConcurrencyFetchWithStaleCommitOffset(t *testing.T) {
 	err := store.Set(key, protoc.MustMarshal(state))
 	assert.NoError(t, err, "TestQueueConcurrencyFetchWithStaleCommitOffset failed")
 
-	req := rpcpb.AcquireQueueConcurrencyFetchRequest()
+	req := rpcpb.AcquireQueueFetchRequest()
 	req.ID = tid
 	req.Group = g1
 	req.Partition = 0
@@ -1133,11 +1088,11 @@ func getTestQueueuState(t *testing.T, store Storage, tid uint64, g []byte) *meta
 	return state
 }
 
-func getTestConcurrencyResp(t *testing.T, store Storage, req *rpcpb.QueueConcurrencyFetchRequest) *rpcpb.QueueConcurrencyFetchResponse {
+func getTestConcurrencyResp(t *testing.T, store Storage, req *rpcpb.QueueFetchRequest) *rpcpb.QueueFetchResponse {
 	data, err := store.ExecCommand(req)
 	assert.NoError(t, err, "getTestConcurrencyResp failed")
 
-	resp := &rpcpb.QueueConcurrencyFetchResponse{}
+	resp := &rpcpb.QueueFetchResponse{}
 	protoc.MustUnmarshal(resp, data)
 	return resp
 }

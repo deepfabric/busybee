@@ -40,9 +40,7 @@ enum Type {
     QueueAdd              = 300;
     QueueFetch            = 301;
     QueueJoin             = 302;
-    QueueConcurrencyFetch = 303;
     
-
     TenantInit    = 400;
     UpdateMapping = 401;
     GetMapping    = 402;
@@ -87,7 +85,7 @@ message Request {
     GetProfileRequest            getProfile      = 26 [(gogoproto.nullable) = false];
     AddEventRequest              addEvent        = 27 [(gogoproto.nullable) = false];
     QueueJoinGroupRequest        queueJoin       = 28 [(gogoproto.nullable) = false];
-    QueueConcurrencyFetchRequest queueFetch      = 29 [(gogoproto.nullable) = false];
+    QueueFetchRequest            queueFetch      = 29 [(gogoproto.nullable) = false];
     AllocIDRequest               allocID         = 30 [(gogoproto.nullable) = false];
     ResetIDRequest               resetID         = 31 [(gogoproto.nullable) = false];
     ScanMappingRequest           scanMapping     = 32 [(gogoproto.nullable) = false];
@@ -108,7 +106,7 @@ message Response {
     BytesSliceResponse            bytesSliceResp  = 10 [(gogoproto.nullable) = false];
     StringResponse                stringResp      = 11 [(gogoproto.nullable) = false];
     QueueJoinGroupResponse        joinResp        = 12 [(gogoproto.nullable) = false];
-    QueueConcurrencyFetchResponse fetchResp       = 13 [(gogoproto.nullable) = false];
+    QueueFetchResponse            fetchResp       = 13 [(gogoproto.nullable) = false];
 }
 
 // SetRequest set a key value pair
@@ -265,14 +263,6 @@ message Condition {
     bytes value = 3;
 }
 
-// QueueFetchResponse fetch items from a queue
-message QueueFetchRequest {
-    bytes  key             = 1;
-    bytes  consumer        = 2;
-    uint64 completedOffset = 3;
-    uint64 count           = 4;
-}
-
 // QueueJoinGroupRequest join a group
 message QueueJoinGroupRequest {
     uint64 id    = 1 [(gogoproto.customname) = "ID"];
@@ -287,8 +277,8 @@ message QueueJoinGroupResponse {
     repeated uint64 versions   = 3;
 }
 
-// QueueConcurrencyFetchRequest concurrency fetch items from a queue
-message QueueConcurrencyFetchRequest {
+// QueueFetchRequest concurrency fetch items from a queue
+message QueueFetchRequest {
     uint64 id              = 1 [(gogoproto.customname) = "ID"];
     bytes  key             = 2; 
     bytes  group           = 3;
@@ -299,8 +289,8 @@ message QueueConcurrencyFetchRequest {
     uint64 count           = 8;
 }
 
-// QueueConcurrencyFetchResponse fetch response
-message QueueConcurrencyFetchResponse {
+// QueueFetchResponse fetch response
+message QueueFetchResponse {
     bool            removed    = 1;
     repeated bytes  items      = 2;
     uint64          lastOffset = 3;
