@@ -17,8 +17,8 @@ import (
 	"github.com/fagongzi/util/protoc"
 )
 
-const (
-	countToClean     = uint64(1)
+var (
+	countToClean     = uint64(4096)
 	maxConsumerAlive = int64(7 * 24 * 60 * 60) // 7 day
 )
 
@@ -234,16 +234,17 @@ func (qb *queuePartitionBatch) exec(s bhstorage.DataStorage, b *batch) error {
 
 	if qb.maxOffset > 0 {
 		// clean [last clean offset, minimum committed offset in all consumers]
-		if qb.maxOffset-qb.removedOffset > countToClean {
+		if qb.maxOffset-qb.removedOffset >= countToClean {
 			now := time.Now().Unix()
 			low := uint64(math.MaxUint64)
+			found := false
 			err := s.Scan(qb.consumerStartKey, qb.consumerEndKey, func(key, value []byte) (bool, error) {
 				v := goetty.Byte2UInt64(value)
 				ts := goetty.Byte2Int64(value[8:])
 
-				if (now-ts < maxConsumerAlive) &&
-					v < low {
+				if (now-ts >= maxConsumerAlive) && v < low {
 					low = v
+					found = true
 				}
 
 				return true, nil
@@ -252,7 +253,7 @@ func (qb *queuePartitionBatch) exec(s bhstorage.DataStorage, b *batch) error {
 				log.Fatalf("exec queue add batch failed with %+v", err)
 			}
 
-			if low > qb.removedOffset {
+			if found && low > qb.removedOffset {
 				from := QueueItemKey(qb.queueKey, qb.removedOffset, qb.buf)
 				to := QueueItemKey(qb.queueKey, low+1, qb.buf)
 				err = s.RangeDelete(from, to)
