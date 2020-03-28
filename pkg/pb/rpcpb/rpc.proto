@@ -14,6 +14,8 @@ enum Type {
     Get           = 1;
     Delete        = 2;
     Scan          = 3;
+    SetIf         = 4;
+    DeleteIf      = 5;
    
     BMCreate      = 100;
     BMAdd         = 101;
@@ -90,6 +92,8 @@ message Request {
     ResetIDRequest               resetID         = 31 [(gogoproto.nullable) = false];
     ScanMappingRequest           scanMapping     = 32 [(gogoproto.nullable) = false];
     GetIDSetRequest              getIDSet        = 33 [(gogoproto.nullable) = false];
+    SetIfRequest                 setIf           = 34  [(gogoproto.nullable) = false];
+    DeleteIfRequest              deleteIf        = 35  [(gogoproto.nullable) = false];
 }
 
 // Response the busybee response
@@ -109,11 +113,30 @@ message Response {
     QueueFetchResponse            fetchResp       = 13 [(gogoproto.nullable) = false];
 }
 
+// ConditionGroup condition groups
+message ConditionGroup {
+    repeated Condition conditions = 1 [(gogoproto.nullable) = false];
+}
+
 // SetRequest set a key value pair
 message SetRequest {
     bytes  key         = 1;
     bytes  value       = 2;
     int64  ttl         = 3 [(gogoproto.customname) = "TTL"];
+}
+
+// SetIfRequest set with condition
+message SetIfRequest {
+    bytes     key                       = 1;
+    bytes     value                     = 2;
+    int64     ttl                       = 3 [(gogoproto.customname) = "TTL"];
+    repeated  ConditionGroup conditions = 4 [(gogoproto.nullable) = false];
+}
+
+// DeleteIfRequest delete with condition
+message DeleteIfRequest {
+    bytes     key                       = 1;
+    repeated  ConditionGroup conditions = 2 [(gogoproto.nullable) = false];
 }
 
 // GetRequest get value by key
@@ -251,10 +274,11 @@ enum Cmp {
     Exists    = 0;
     NotExists = 1;
     Equal     = 2;
-    GE        = 3;
-    GT        = 4;
-    LE        = 5;
-    LT        = 6;
+    NotEqual  = 3;
+    GE        = 4;
+    GT        = 5;
+    LE        = 6;
+    LT        = 7;
 }
 
 // Condition condition

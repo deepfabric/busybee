@@ -29,6 +29,71 @@ func TestSetAndGet(t *testing.T) {
 	assert.Equal(t, string(value), string(data), "TestSetAndGet failed")
 }
 
+func TestSetIf(t *testing.T) {
+	store, deferFunc := NewTestStorage(t, true)
+	defer deferFunc()
+
+	key := []byte("key1")
+	value := []byte("value1")
+	value2 := []byte("value2")
+
+	data, err := store.ExecCommand(&rpcpb.SetIfRequest{
+		Key:   key,
+		Value: value,
+		Conditions: []rpcpb.ConditionGroup{
+			rpcpb.ConditionGroup{
+				Conditions: []rpcpb.Condition{
+					rpcpb.Condition{
+						Cmp: rpcpb.Exists,
+					},
+				},
+			},
+			rpcpb.ConditionGroup{
+				Conditions: []rpcpb.Condition{
+					rpcpb.Condition{
+						Cmp: rpcpb.NotExists,
+					},
+					rpcpb.Condition{
+						Cmp:   rpcpb.Equal,
+						Value: value,
+					},
+				},
+			},
+		},
+	})
+
+	assert.NoError(t, err, "TestSetIf failed")
+	result := &rpcpb.BoolResponse{}
+	protoc.MustUnmarshal(result, data)
+	assert.False(t, result.Value, "TestSetIf failed")
+
+	data, err = store.Get(key)
+	assert.NoError(t, err, "TestSetIf failed")
+	assert.Empty(t, data, "TestSetIf failed")
+
+	data, err = store.ExecCommand(&rpcpb.SetIfRequest{
+		Key:   key,
+		Value: value2,
+		Conditions: []rpcpb.ConditionGroup{
+			rpcpb.ConditionGroup{
+				Conditions: []rpcpb.Condition{
+					rpcpb.Condition{
+						Cmp: rpcpb.NotExists,
+					},
+				},
+			},
+		},
+	})
+	assert.NoError(t, err, "TestSetIf failed")
+	result.Reset()
+	protoc.MustUnmarshal(result, data)
+	assert.True(t, result.Value, "TestSetIf failed")
+
+	data, err = store.Get(key)
+	assert.NoError(t, err, "TestSetIf failed")
+	assert.Equal(t, string(value2), string(data), "TestSetIf failed")
+}
+
 func TestDelete(t *testing.T) {
 	store, deferFunc := NewTestStorage(t, true)
 	defer deferFunc()
@@ -45,6 +110,61 @@ func TestDelete(t *testing.T) {
 	data, err := store.Get(key)
 	assert.NoError(t, err, "TestDelete failed")
 	assert.Empty(t, data, "TestDelete failed")
+}
+
+func TestDeleteIf(t *testing.T) {
+	store, deferFunc := NewTestStorage(t, true)
+	defer deferFunc()
+
+	key := []byte("key1")
+	value := []byte("value1")
+	value2 := []byte("value2")
+
+	err := store.Set(key, value)
+	assert.NoError(t, err, "TestDeleteIf failed")
+
+	data, err := store.ExecCommand(&rpcpb.DeleteIfRequest{
+		Key: key,
+		Conditions: []rpcpb.ConditionGroup{
+			rpcpb.ConditionGroup{
+				Conditions: []rpcpb.Condition{
+					rpcpb.Condition{
+						Cmp:   rpcpb.Equal,
+						Value: value2,
+					},
+				},
+			},
+		},
+	})
+	assert.NoError(t, err, "TestDeleteIf failed")
+	result := &rpcpb.BoolResponse{}
+	protoc.MustUnmarshal(result, data)
+	assert.False(t, result.Value, "TestDeleteIf failed")
+
+	data, err = store.Get(key)
+	assert.NoError(t, err, "TestDeleteIf failed")
+	assert.NotEmpty(t, data, "TestDeleteIf failed")
+
+	data, err = store.ExecCommand(&rpcpb.DeleteIfRequest{
+		Key: key,
+		Conditions: []rpcpb.ConditionGroup{
+			rpcpb.ConditionGroup{
+				Conditions: []rpcpb.Condition{
+					rpcpb.Condition{
+						Cmp: rpcpb.Exists,
+					},
+				},
+			},
+		},
+	})
+	assert.NoError(t, err, "TestDeleteIf failed")
+	result.Reset()
+	protoc.MustUnmarshal(result, data)
+	assert.True(t, result.Value, "TestDeleteIf failed")
+
+	data, err = store.Get(key)
+	assert.NoError(t, err, "TestDeleteIf failed")
+	assert.Empty(t, data, "TestDeleteIf failed")
 }
 
 func TestScan(t *testing.T) {

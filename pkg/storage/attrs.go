@@ -14,9 +14,11 @@ var (
 	attrRequestQueueJoinGroup        = "req.queue.join.group"
 	attrRequestQueueState            = "req.queue.state"
 	attrRequestSet                   = "req.kv.set"
+	attrRequestSetIf                 = "req.kv.setif"
 	attrRequestGet                   = "req.kv.get"
 	attrRequestScan                  = "req.kv.scan"
 	attrRequestDelete                = "req.kv.delete"
+	attrRequestDeleteIf              = "req.kv.deleteif"
 	attrRequestUpdateProfile         = "req.profile.update"
 	attrRequestUpdateMapping         = "req.mapping.update"
 	attrRequestBMCreate              = "req.bm.create"
@@ -464,6 +466,34 @@ func getSetRequest(attrs map[string]interface{}) *rpcpb.SetRequest {
 	} else {
 		value = &rpcpb.SetRequest{}
 		attrs[attrRequestSet] = value
+	}
+
+	value.Reset()
+	return value
+}
+
+func getSetIfRequest(attrs map[string]interface{}) *rpcpb.SetIfRequest {
+	var value *rpcpb.SetIfRequest
+
+	if v, ok := attrs[attrRequestSetIf]; ok {
+		value = v.(*rpcpb.SetIfRequest)
+	} else {
+		value = &rpcpb.SetIfRequest{}
+		attrs[attrRequestSetIf] = value
+	}
+
+	value.Reset()
+	return value
+}
+
+func getDeleteIfRequest(attrs map[string]interface{}) *rpcpb.DeleteIfRequest {
+	var value *rpcpb.DeleteIfRequest
+
+	if v, ok := attrs[attrRequestDeleteIf]; ok {
+		value = v.(*rpcpb.DeleteIfRequest)
+	} else {
+		value = &rpcpb.DeleteIfRequest{}
+		attrs[attrRequestDeleteIf] = value
 	}
 
 	value.Reset()

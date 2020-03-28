@@ -23,10 +23,14 @@ func (s *server) onReq(sid interface{}, req *rpcpb.Request) error {
 	switch req.Type {
 	case rpcpb.Set:
 		return s.doSet(ctx)
+	case rpcpb.SetIf:
+		return s.doSetIf(ctx)
 	case rpcpb.Get:
 		return s.doGet(ctx)
 	case rpcpb.Delete:
 		return s.doDelete(ctx)
+	case rpcpb.DeleteIf:
+		return s.doDeleteIf(ctx)
 	case rpcpb.Scan:
 		return s.doScanKey(ctx)
 	case rpcpb.BMCreate:
@@ -93,6 +97,11 @@ func (s *server) doSet(ctx ctx) error {
 	return nil
 }
 
+func (s *server) doSetIf(ctx ctx) error {
+	s.engine.Storage().AsyncExecCommand(&ctx.req.SetIf, s.onResp, ctx)
+	return nil
+}
+
 func (s *server) doGet(ctx ctx) error {
 	s.engine.Storage().AsyncExecCommand(&ctx.req.Get, s.onResp, ctx)
 	return nil
@@ -100,6 +109,11 @@ func (s *server) doGet(ctx ctx) error {
 
 func (s *server) doDelete(ctx ctx) error {
 	s.engine.Storage().AsyncExecCommand(&ctx.req.Delete, s.onResp, ctx)
+	return nil
+}
+
+func (s *server) doDeleteIf(ctx ctx) error {
+	s.engine.Storage().AsyncExecCommand(&ctx.req.DeleteIf, s.onResp, ctx)
 	return nil
 }
 

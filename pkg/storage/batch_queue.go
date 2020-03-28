@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"bytes"
 	"fmt"
 	"math"
 	"time"
@@ -149,24 +148,7 @@ func (qb *queueBatch) matchCondition(req *rpcpb.QueueAddRequest, b *batch, id ui
 		log.Fatalf("load max queue offset failed with %+v", err)
 	}
 
-	switch cond.Cmp {
-	case rpcpb.NotExists:
-		return len(value) == 0
-	case rpcpb.Exists:
-		return len(value) > 0
-	case rpcpb.Equal:
-		return bytes.Compare(cond.Value, value) == 0
-	case rpcpb.GE:
-		return bytes.Compare(cond.Value, value) >= 0
-	case rpcpb.GT:
-		return bytes.Compare(cond.Value, value) > 0
-	case rpcpb.LE:
-		return bytes.Compare(cond.Value, value) <= 0
-	case rpcpb.LT:
-		return bytes.Compare(cond.Value, value) < 0
-	}
-
-	return false
+	return matchCondition(value, *req.Condition)
 }
 
 type queuePartitionBatch struct {

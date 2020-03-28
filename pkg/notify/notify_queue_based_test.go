@@ -131,7 +131,7 @@ func TestNotifyWithConditionGE(t *testing.T) {
 
 	conditionKey := []byte("ckey")
 	conditionValue := goetty.Uint64ToBytes(1)
-	values := [][]byte{goetty.Uint64ToBytes(0), goetty.Uint64ToBytes(1), goetty.Uint64ToBytes(2)}
+	values := [][]byte{goetty.Uint64ToBytes(2), goetty.Uint64ToBytes(1), goetty.Uint64ToBytes(0)}
 	results := []int{1, 2, 2}
 
 	for i := 0; i < 2; i++ {
@@ -162,7 +162,7 @@ func TestNotifyWithConditionGT(t *testing.T) {
 
 	conditionKey := []byte("ckey")
 	conditionValue := goetty.Uint64ToBytes(1)
-	values := [][]byte{goetty.Uint64ToBytes(0), goetty.Uint64ToBytes(1), goetty.Uint64ToBytes(2)}
+	values := [][]byte{goetty.Uint64ToBytes(2), goetty.Uint64ToBytes(1), goetty.Uint64ToBytes(0)}
 	results := []int{1, 1, 1}
 
 	for i := 0; i < 2; i++ {
@@ -193,7 +193,7 @@ func TestNotifyWithConditionLE(t *testing.T) {
 
 	conditionKey := []byte("ckey")
 	conditionValue := goetty.Uint64ToBytes(1)
-	values := [][]byte{goetty.Uint64ToBytes(2), goetty.Uint64ToBytes(1), goetty.Uint64ToBytes(0)}
+	values := [][]byte{goetty.Uint64ToBytes(1), goetty.Uint64ToBytes(1), goetty.Uint64ToBytes(2)}
 	results := []int{1, 2, 2}
 
 	for i := 0; i < 2; i++ {
@@ -224,7 +224,7 @@ func TestNotifyWithConditionLT(t *testing.T) {
 
 	conditionKey := []byte("ckey")
 	conditionValue := goetty.Uint64ToBytes(1)
-	values := [][]byte{goetty.Uint64ToBytes(2), goetty.Uint64ToBytes(1), goetty.Uint64ToBytes(0)}
+	values := [][]byte{goetty.Uint64ToBytes(0), goetty.Uint64ToBytes(1), goetty.Uint64ToBytes(2)}
 	results := []int{1, 1, 1}
 
 	for i := 0; i < 2; i++ {

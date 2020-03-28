@@ -13,12 +13,18 @@ var (
 	EmptyRespBytes = protoc.MustMarshal(&EmptyResp)
 	// EmptyBytesSliceBytes empty bytes slice response
 	EmptyBytesSliceBytes = protoc.MustMarshal(&BytesSliceResponse{})
+	// TrueRespBytes true response
+	TrueRespBytes = protoc.MustMarshal(&BoolResponse{Value: true})
+	// FalseRespBytes true response
+	FalseRespBytes = protoc.MustMarshal(&BoolResponse{})
 )
 
 var (
 	setPool                      sync.Pool
+	setIfPool                    sync.Pool
 	getPool                      sync.Pool
 	deletePool                   sync.Pool
+	deleteIfPool                 sync.Pool
 	scanPool                     sync.Pool
 	allocIDPool                  sync.Pool
 	resetIDPool                  sync.Pool
@@ -251,6 +257,21 @@ func ReleaseSetRequest(value *SetRequest) {
 	setPool.Put(value)
 }
 
+// AcquireSetIfRequest returns value from pool
+func AcquireSetIfRequest() *SetIfRequest {
+	value := setIfPool.Get()
+	if value == nil {
+		return &SetIfRequest{}
+	}
+	return value.(*SetIfRequest)
+}
+
+// ReleaseSetIfRequest returns the value to pool
+func ReleaseSetIfRequest(value *SetIfRequest) {
+	value.Reset()
+	setIfPool.Put(value)
+}
+
 // AcquireGetRequest returns value from pool
 func AcquireGetRequest() *GetRequest {
 	value := getPool.Get()
@@ -279,6 +300,21 @@ func AcquireDeleteRequest() *DeleteRequest {
 func ReleaseDeleteRequest(value *DeleteRequest) {
 	value.Reset()
 	deletePool.Put(value)
+}
+
+// AcquireDeleteIfRequest returns value from pool
+func AcquireDeleteIfRequest() *DeleteIfRequest {
+	value := deleteIfPool.Get()
+	if value == nil {
+		return &DeleteIfRequest{}
+	}
+	return value.(*DeleteIfRequest)
+}
+
+// ReleaseDeleteIfRequest returns the value to pool
+func ReleaseDeleteIfRequest(value *DeleteIfRequest) {
+	value.Reset()
+	deleteIfPool.Put(value)
 }
 
 // AcquireScanRequest returns value from pool

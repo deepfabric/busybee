@@ -15,6 +15,63 @@ import (
 	"github.com/fagongzi/util/protoc"
 )
 
+func (h *beeStorage) setIf(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs map[string]interface{}) (uint64, int64, *raftcmdpb.Response) {
+	resp := pb.AcquireResponse()
+	customReq := getSetIfRequest(attrs)
+	protoc.MustUnmarshal(customReq, req.Cmd)
+
+	value, err := h.getValue(shard.ID, req.Key)
+	if err != nil {
+		log.Fatalf("set id %+v failed with %+v", req.Key, err)
+	}
+
+	if !matchConditionGroups(value, customReq.Conditions) {
+		resp.Value = rpcpb.FalseRespBytes
+		return 0, 0, resp
+	}
+
+	err = h.getStore(shard.ID).SetWithTTL(req.Key, customReq.Value,
+		int32(customReq.TTL))
+	if err != nil {
+		log.Fatalf("set id %+v failed with %+v", req.Key, err)
+	}
+
+	resp.Value = rpcpb.TrueRespBytes
+	written := uint64(0)
+	if len(value) > 0 {
+		written += uint64(len(req.Key) + len(customReq.Value))
+	}
+	return written, int64(written), resp
+}
+
+func (h *beeStorage) deleteIf(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs map[string]interface{}) (uint64, int64, *raftcmdpb.Response) {
+	resp := pb.AcquireResponse()
+	customReq := getDeleteIfRequest(attrs)
+	protoc.MustUnmarshal(customReq, req.Cmd)
+
+	value, err := h.getValue(shard.ID, req.Key)
+	if err != nil {
+		log.Fatalf("delete if %+v failed with %+v", req.Key, err)
+	}
+
+	if !matchConditionGroups(value, customReq.Conditions) {
+		resp.Value = rpcpb.FalseRespBytes
+		return 0, 0, resp
+	}
+
+	err = h.getStore(shard.ID).Delete(req.Key)
+	if err != nil {
+		log.Fatalf("delete id %+v failed with %+v", req.Key, err)
+	}
+
+	resp.Value = rpcpb.TrueRespBytes
+	written := uint64(0)
+	if len(value) > 0 {
+		written += uint64(len(req.Key) + len(value))
+	}
+	return written, -int64(written), resp
+}
+
 func (h *beeStorage) allocID(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs map[string]interface{}) (uint64, int64, *raftcmdpb.Response) {
 	resp := pb.AcquireResponse()
 	customReq := getAllocIDRequest(attrs)

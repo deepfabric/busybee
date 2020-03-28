@@ -10,6 +10,8 @@ import (
 )
 
 func (h *beeStorage) init() {
+	h.AddWriteFunc("setif", uint64(rpcpb.SetIf), h.setIf)
+	h.AddWriteFunc("deleteif", uint64(rpcpb.DeleteIf), h.deleteIf)
 	h.AddReadFunc("get", uint64(rpcpb.Get), h.get)
 	h.AddReadFunc("scan", uint64(rpcpb.Scan), h.scan)
 	h.AddWriteFunc("allocid", uint64(rpcpb.AllocID), h.allocID)
@@ -42,6 +44,13 @@ func (h *beeStorage) BuildRequest(req *raftcmdpb.Request, cmd interface{}) error
 		req.Type = raftcmdpb.Write
 		req.Cmd = protoc.MustMarshal(msg)
 		rpcpb.ReleaseSetRequest(msg)
+	case *rpcpb.SetIfRequest:
+		msg := cmd.(*rpcpb.SetIfRequest)
+		req.Key = msg.Key
+		req.CustemType = uint64(rpcpb.SetIf)
+		req.Type = raftcmdpb.Write
+		req.Cmd = protoc.MustMarshal(msg)
+		rpcpb.ReleaseSetIfRequest(msg)
 	case *rpcpb.GetRequest:
 		msg := cmd.(*rpcpb.GetRequest)
 		req.Key = msg.Key
@@ -56,6 +65,13 @@ func (h *beeStorage) BuildRequest(req *raftcmdpb.Request, cmd interface{}) error
 		req.Type = raftcmdpb.Write
 		req.Cmd = protoc.MustMarshal(msg)
 		rpcpb.ReleaseDeleteRequest(msg)
+	case *rpcpb.DeleteIfRequest:
+		msg := cmd.(*rpcpb.DeleteIfRequest)
+		req.Key = msg.Key
+		req.CustemType = uint64(rpcpb.DeleteIf)
+		req.Type = raftcmdpb.Write
+		req.Cmd = protoc.MustMarshal(msg)
+		rpcpb.ReleaseDeleteIfRequest(msg)
 	case *rpcpb.ScanRequest:
 		msg := cmd.(*rpcpb.ScanRequest)
 		req.Key = msg.Start
