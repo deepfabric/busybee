@@ -662,6 +662,7 @@ func (eng *engine) buildSnapshot(instance *metapb.WorkflowInstance, buf *goetty.
 
 		snapshot.States = append(snapshot.States, metapb.StepState{
 			Step:       step,
+			TotalCrowd: value[step.Name].GetCardinality(),
 			Loader:     loader,
 			LoaderMeta: loadMeta,
 		})

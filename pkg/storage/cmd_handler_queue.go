@@ -34,13 +34,20 @@ func (h *beeStorage) queueJoinGroup(shard bhmetapb.Shard, req *raftcmdpb.Request
 	joinResp := getQueueJoinGroupResponse(attrs)
 
 	// wait
-	if state == nil ||
-		state.Consumers >= state.Partitions {
+	if state == nil {
 		resp.Value = emptyJoinBytes
 		return 0, 0, resp
 	}
 
 	now := time.Now().Unix()
+
+	if state.Consumers >= state.Partitions {
+		if !maybeRemoveTimeoutConsumers(state, now) {
+			resp.Value = emptyJoinBytes
+			return 0, 0, resp
+		}
+	}
+
 	index := state.Consumers
 	state.Consumers++
 
@@ -105,12 +112,9 @@ func (h *beeStorage) queueFetch(shard bhmetapb.Shard, req *raftcmdpb.Request, at
 	if p.Consumer != queueFetch.Consumer ||
 		p.Version != queueFetch.Version {
 		fetchResp.Removed = true
-		resp.Value = protoc.MustMarshal(fetchResp)
-	}
-
-	// do fetch new items
-	if p.Version == queueFetch.Version &&
+	} else if p.Version == queueFetch.Version &&
 		p.State == metapb.PSRunning {
+		// do fetch new items
 		startKey := QueueItemKey(req.Key, p.Completed+1, buf)
 		endKey := QueueItemKey(req.Key, p.Completed+1+queueFetch.Count, buf)
 

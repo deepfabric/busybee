@@ -437,7 +437,7 @@ func (w *stateWorker) execNotify(tran *transaction) error {
 	w.cond.Reset()
 	w.cond.Key = w.conditionKey
 	w.cond.Value = condValue
-	w.cond.Cmp = rpcpb.GT
+	w.cond.Cmp = rpcpb.LT
 	return w.eng.Notifier().Notify(w.state.TenantID, w.buf, notifies, w.cond,
 		w.conditionKey, condValue,
 		w.queueStateKey, protoc.MustMarshal(&w.state))
