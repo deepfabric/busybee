@@ -942,6 +942,10 @@ func TestQueueFetchAfterJoin(t *testing.T) {
 	err := store.Set(key, protoc.MustMarshal(state))
 	assert.NoError(t, err, "TestQueueFetchAfterJoin failed")
 
+	values := [][]byte{[]byte("1"), []byte("2"), []byte("3")}
+	err = store.PutToQueue(tid, 0, metapb.DefaultGroup, values...)
+	assert.NoError(t, err, "TestQueueFetchAfterJoin failed")
+
 	req := rpcpb.AcquireQueueJoinGroupRequest()
 	req.ID = tid
 	req.Group = g1
@@ -952,21 +956,25 @@ func TestQueueFetchAfterJoin(t *testing.T) {
 	fetch.Group = g1
 	fetch.Consumer = resp.Index
 	fetch.Partition = resp.Partitions[0]
+	fetch.Count = 3
+	fetch.MaxBytes = 2
 	fetchResp := getTestFetchResp(t, store, fetch)
 	assert.False(t, fetchResp.Removed, "TestQueueFetchAfterJoin failed")
+	assert.Equal(t, 2, len(fetchResp.Items), "TestQueueFetchAfterJoin failed")
 
 	state = getTestQueueuState(t, store, tid, g1)
 	assert.Equal(t, uint32(1), state.Consumers, "TestQueueFetchAfterJoin failed")
 
 	versionValues := []uint64{0, 0}
 	consumerValues := []uint32{0, 0}
+	countValues := []uint64{2, 0}
 	stateValues := []metapb.PartitonState{metapb.PSRunning, metapb.PSRebalancing}
 	for i := 0; i < 2; i++ {
 		assert.Equal(t, versionValues[i], state.States[i].Version, "TestQueueFetchAfterJoin failed")
 		assert.Equal(t, consumerValues[i], state.States[i].Consumer, "TestQueueFetchAfterJoin failed")
 		assert.Equal(t, stateValues[i], state.States[i].State, "TestQueueFetchAfterJoin failed")
 		assert.Equal(t, uint64(0), state.States[i].Completed, "TestQueueFetchAfterJoin failed")
-		assert.Equal(t, uint64(0), state.States[i].LastFetchCount, "TestQueueFetchAfterJoin failed")
+		assert.Equal(t, countValues[i], state.States[i].LastFetchCount, "TestQueueFetchAfterJoin failed")
 		assert.True(t, state.States[i].LastFetchTS > 0, "TestQueueFetchAfterJoin failed")
 	}
 }

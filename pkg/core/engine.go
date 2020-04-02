@@ -225,6 +225,7 @@ func (eng *engine) tenantInitWithReplicas(metadata metapb.Tenant, replicas uint3
 				Group: metapb.TenantInputGroup,
 			},
 		}),
+		DisableSplit:  true,
 		LeastReplicas: replicas,
 	})
 	shards = append(shards, hbmetapb.Shard{
@@ -244,6 +245,7 @@ func (eng *engine) tenantInitWithReplicas(metadata metapb.Tenant, replicas uint3
 				Group: metapb.TenantOutputGroup,
 			},
 		}),
+		DisableSplit:  true,
 		LeastReplicas: replicas,
 	})
 
