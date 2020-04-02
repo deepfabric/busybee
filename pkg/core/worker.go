@@ -409,16 +409,16 @@ func (w *stateWorker) execNotify(tran *transaction) error {
 	notifies := make([]metapb.Notify, 0, len(tran.changes))
 	for _, changed := range tran.changes {
 		nt := metapb.Notify{
-			TenantID:   w.state.TenantID,
-			WorkflowID: w.state.WorkflowID,
-			InstanceID: w.state.InstanceID,
-			UserID:     changed.user(),
-			Crowd:      changed.crowd(),
-			FromStep:   changed.from,
-			ToStep:     changed.to,
-			TTL:        changed.ttl,
-			FromAction: w.leaveActions[changed.from],
-			ToAction:   w.entryActions[changed.to],
+			TenantID:       w.state.TenantID,
+			WorkflowID:     w.state.WorkflowID,
+			InstanceID:     w.state.InstanceID,
+			UserID:         changed.user(),
+			Crowd:          changed.crowd(),
+			FromStep:       changed.from,
+			ToStep:         changed.to,
+			ToStepCycleTTL: changed.ttl,
+			FromAction:     w.leaveActions[changed.from],
+			ToAction:       w.entryActions[changed.to],
 		}
 		notifies = append(notifies, nt)
 

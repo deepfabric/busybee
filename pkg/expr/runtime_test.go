@@ -789,3 +789,17 @@ func TestDynamicVarWithKV(t *testing.T) {
 	assert.Nil(t, value, "TestDynamicVarWithKV failed")
 	assert.True(t, ok, "TestDynamicVarWithKV failed")
 }
+
+func TestEmptyWithKV(t *testing.T) {
+	ctx := newTestCtx()
+
+	rt, err := NewRuntime(metapb.Expr{
+		Value: []byte(`{kv.key1} == ""`),
+	})
+	assert.NoError(t, err, "TestEmptyWithKV failed")
+
+	ok, value, err := rt.Exec(ctx)
+	assert.NoError(t, err, "TestEmptyWithKV failed")
+	assert.Nil(t, value, "TestEmptyWithKV failed")
+	assert.True(t, ok, "TestEmptyWithKV failed")
+}

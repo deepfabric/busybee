@@ -34,12 +34,12 @@ func newFuncVar(name string, valueType engine.VarType) (engine.Expr, error) {
 		expr.dynaFunc = dateFunc
 	case "datetime":
 		expr.dynaFunc = datetimeFunc
+	case "timestamp":
+		expr.dynaFunc = timestampFunc
 	case "wf_crowd":
 		expr.dynaFunc = totalCrowdFunc
 	case "wf_step_crowd":
 		expr.dynaFunc = stepCrowdFunc
-	case "wf_step_ttl":
-		expr.dynaFunc = stepTTLFunc
 	default:
 		return nil, fmt.Errorf("func %s not support", name)
 	}
@@ -73,6 +73,10 @@ func datetimeFunc(ctx Ctx) (interface{}, error) {
 	return time.Now().Format("20060102150405"), nil
 }
 
+func timestampFunc(ctx Ctx) (interface{}, error) {
+	return time.Now().Unix(), nil
+}
+
 func dateFunc(ctx Ctx) (interface{}, error) {
 	return time.Now().Format("20060102"), nil
 }
@@ -95,8 +99,4 @@ func stepCrowdFunc(ctx Ctx) (interface{}, error) {
 
 func totalCrowdFunc(ctx Ctx) (interface{}, error) {
 	return ctx.TotalCrowd(), nil
-}
-
-func stepTTLFunc(ctx Ctx) (interface{}, error) {
-	return ctx.StepTTL()
 }

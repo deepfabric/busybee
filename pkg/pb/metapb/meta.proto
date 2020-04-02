@@ -106,16 +106,16 @@ message KV {
 
 // Notify notify message
 message Notify {
-    uint32 userID     = 1;
-    bytes  crowd      = 2;
-    uint64 tenantID   = 3;
-    uint64 workflowID = 4;
-    uint64 instanceID = 5;
-    string fromStep   = 6;
-    string fromAction = 7;
-    string toStep     = 8;
-    string toAction   = 9;
-    int32  ttl        = 10 [(gogoproto.customname) = "TTL"];
+    uint32 userID         = 1;
+    bytes  crowd          = 2;
+    uint64 tenantID       = 3;
+    uint64 workflowID     = 4;
+    uint64 instanceID     = 5;
+    string fromStep       = 6;
+    string fromAction     = 7;
+    string toStep         = 8;
+    string toAction       = 9;
+    int32  toStepCycleTTL = 10;
 }
 
 // Group shard group
