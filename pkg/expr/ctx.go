@@ -7,10 +7,9 @@ import (
 
 // Ctx expr excution ctx
 type Ctx interface {
-	Event() metapb.UserEvent
+	Event() *metapb.UserEvent
 	Profile([]byte) ([]byte, error)
 	KV([]byte) ([]byte, error)
 	TotalCrowd() *roaring.Bitmap
 	StepCrowd() *roaring.Bitmap
-	StepTTL() ([]byte, error)
 }

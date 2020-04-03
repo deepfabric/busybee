@@ -7,7 +7,12 @@ import (
 
 	engine "github.com/fagongzi/expr"
 	"github.com/fagongzi/log"
+	"github.com/fagongzi/util/format"
 	"github.com/fagongzi/util/hack"
+)
+
+var (
+	uid = []byte("uid")
 )
 
 // dyna.xxx%+vxxx.year
@@ -89,6 +94,10 @@ func (v *dynamicKVVar) getCurrentDayKey(ctx Ctx) ([]byte, error) {
 }
 
 func (v *dynamicKVVar) getFromEvent(ctx Ctx) ([]byte, error) {
+	if bytes.Compare(uid, v.attr) == 0 {
+		return format.Uint32ToBytes(ctx.Event().UserID), nil
+	}
+
 	for _, kv := range ctx.Event().Data {
 		if bytes.Compare(kv.Key, v.attr) == 0 {
 			return hack.StringToSlice(fmt.Sprintf(v.pattern, hack.SliceToString(kv.Value))), nil

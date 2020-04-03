@@ -8,6 +8,8 @@ import (
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/util"
 	bbutil "github.com/deepfabric/busybee/pkg/util"
+	"github.com/fagongzi/goetty"
+	"github.com/fagongzi/util/hack"
 )
 
 var (
@@ -34,14 +36,38 @@ type transaction struct {
 	changes    []changedCtx
 	cbs        []*stepCB
 	restart    bool
+
+	event   *metapb.UserEvent
+	index   int
+	buf     *goetty.ByteBuf
+	kvCache map[string][]byte
 }
 
 func newTransaction() *transaction {
-	return &transaction{}
+	return &transaction{
+		buf:     goetty.NewByteBuf(32),
+		kvCache: make(map[string][]byte),
+		event:   &metapb.UserEvent{},
+	}
+}
+
+func (tran *transaction) resetExprCtx() {
+	tran.index = 0
+	tran.event.UserID = 0
+	tran.event.Data = nil
+	tran.event.TenantID = tran.w.state.TenantID
+	tran.event.WorkflowID = tran.w.state.WorkflowID
+	tran.event.InstanceID = tran.w.state.InstanceID
+
+	tran.buf.Clear()
+	for key := range tran.kvCache {
+		delete(tran.kvCache, key)
+	}
 }
 
 func (tran *transaction) start(w *stateWorker) {
 	tran.w = w
+	tran.resetExprCtx()
 
 	for _, crowd := range w.stepCrowds {
 		v := acquireBM()
@@ -61,11 +87,8 @@ func (tran *transaction) doStepTimerEvent(item item) {
 		return
 	}
 
-	ctx := newExprCtx(metapb.UserEvent{
-		TenantID:   tran.w.state.TenantID,
-		WorkflowID: tran.w.state.WorkflowID,
-		InstanceID: tran.w.state.InstanceID,
-	}, tran.w, idx)
+	tran.resetExprCtx()
+	tran.index = idx
 
 	target := who{}
 	if step.Step.Execution.Timer.UseStepCrowdToDrive {
@@ -75,7 +98,7 @@ func (tran *transaction) doStepTimerEvent(item item) {
 		target.users = tran.stepCrowds[idx].Clone()
 	}
 
-	err := tran.w.steps[step.Step.Name].Execute(ctx, tran, target)
+	err := tran.w.steps[step.Step.Name].Execute(tran, tran, target)
 	if err != nil {
 		metric.IncWorkflowWorkerFailed()
 		logger.Errorf("worker %s trigger timer failed with %+v",
@@ -95,25 +118,32 @@ func (tran *transaction) doStepUserEvents(item item) {
 	}
 
 	events := item.value.([]metapb.UserEvent)
-	for _, event := range events {
-		logger.Debugf("worker %s step event %+v", tran.w.key, event)
+	for idx := range events {
+		tran.doUserEvent(&events[idx])
+	}
+}
 
-		for idx, crowd := range tran.stepCrowds {
-			if crowd.Contains(event.UserID) {
-				ctx := newExprCtx(event, tran.w, idx)
-				err := tran.w.steps[tran.w.state.States[idx].Step.Name].Execute(ctx, tran, who{event.UserID, nil})
-				if err != nil {
-					metric.IncWorkflowWorkerFailed()
-					logger.Errorf("worker %s step event %+v failed with %+v",
-						tran.w.key,
-						event,
-						err)
-					tran.err = err
-					return
-				}
+func (tran *transaction) doUserEvent(event *metapb.UserEvent) {
+	logger.Debugf("worker %s step event %+v", tran.w.key, event)
+	for idx, crowd := range tran.stepCrowds {
+		if crowd.Contains(event.UserID) {
+			tran.resetExprCtx()
+			tran.index = idx
+			tran.event.UserID = event.UserID
+			tran.event.Data = event.Data
 
-				break
+			err := tran.w.steps[tran.w.state.States[idx].Step.Name].Execute(tran, tran, who{event.UserID, nil})
+			if err != nil {
+				metric.IncWorkflowWorkerFailed()
+				logger.Errorf("worker %s step event %+v failed with %+v",
+					tran.w.key,
+					event,
+					err)
+				tran.err = err
+				return
 			}
+
+			return
 		}
 	}
 }
@@ -232,4 +262,61 @@ func (tran *transaction) reset() {
 	tran.cbs = tran.cbs[:0]
 	tran.err = nil
 	tran.restart = false
+}
+
+func (tran *transaction) Event() *metapb.UserEvent {
+	return tran.event
+}
+
+func (tran *transaction) Profile(key []byte) ([]byte, error) {
+	attr := tran.profileKey(key, tran.event.UserID)
+	if value, ok := tran.kvCache[attr]; ok {
+		return value, nil
+	}
+
+	value, err := tran.w.eng.Service().GetProfileField(tran.event.TenantID, tran.event.UserID, hack.SliceToString(key))
+	if err != nil {
+		return nil, err
+	}
+
+	tran.kvCache[attr] = value
+	return value, nil
+}
+
+func (tran *transaction) KV(key []byte) ([]byte, error) {
+	attr := tran.kvKey(key)
+	if value, ok := tran.kvCache[attr]; ok {
+		return value, nil
+	}
+
+	value, err := tran.w.eng.Storage().Get(key)
+	if err != nil {
+		return nil, err
+	}
+
+	tran.kvCache[attr] = value
+	return value, nil
+}
+
+func (tran *transaction) TotalCrowd() *roaring.Bitmap {
+	return tran.w.totalCrowds
+}
+
+func (tran *transaction) StepCrowd() *roaring.Bitmap {
+	return tran.w.stepCrowds[tran.index]
+}
+
+func (tran *transaction) profileKey(key []byte, id uint32) string {
+	tran.buf.MarkWrite()
+	tran.buf.WriteByte(0)
+	tran.buf.WriteUInt32(id)
+	tran.buf.Write(key)
+	return hack.SliceToString(tran.buf.WrittenDataAfterMark())
+}
+
+func (tran *transaction) kvKey(key []byte) string {
+	tran.buf.MarkWrite()
+	tran.buf.WriteByte(1)
+	tran.buf.Write(key)
+	return hack.SliceToString(tran.buf.WrittenDataAfterMark())
 }

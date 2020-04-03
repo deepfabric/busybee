@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/RoaringBitmap/roaring"
-	"github.com/deepfabric/busybee/pkg/expr"
+	"github.com/deepfabric/beehive/util"
 	"github.com/deepfabric/busybee/pkg/metric"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
@@ -14,14 +14,15 @@ import (
 	bbutil "github.com/deepfabric/busybee/pkg/util"
 	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/util/format"
-	"github.com/fagongzi/util/hack"
 	"github.com/fagongzi/util/protoc"
 	"github.com/fagongzi/util/task"
 	"github.com/robfig/cron/v3"
 )
 
 var (
-	workerBatch = int64(16)
+	workerBatch        = int64(16)
+	maxTriggerCount    = 256
+	ttlTriggerInterval = time.Minute
 )
 
 const (
@@ -30,6 +31,7 @@ const (
 	userEventAction
 	updateCrowdEventAction
 	updateWorkflowEventAction
+	checkTTLEventAction
 )
 
 type directCtx struct {
@@ -41,26 +43,47 @@ type item struct {
 	cb     *stepCB
 }
 
+type triggerInfo struct {
+	firstTS   int64
+	alreadyBM *roaring.Bitmap
+}
+
+func (info *triggerInfo) maybeReset(ttl int32) {
+	now := time.Now().Unix()
+	if info.firstTS == 0 {
+		info.firstTS = now
+	}
+
+	if now-info.firstTS > int64(ttl) {
+		info.firstTS = now
+		info.alreadyBM.Clear()
+	}
+}
+
 type stateWorker struct {
-	stopped          uint32
-	key              string
-	eng              Engine
-	buf              *goetty.ByteBuf
-	state            metapb.WorkflowInstanceWorkerState
-	totalCrowds      *roaring.Bitmap
-	stepCrowds       []*roaring.Bitmap
-	directSteps      map[string]string
-	steps            map[string]excution
-	entryActions     map[string]string
-	leaveActions     map[string]string
-	queue            *task.Queue
-	cronIDs          []cron.EntryID
-	consumer         queue.Consumer
-	tenant           string
-	cond             *rpcpb.Condition
-	conditionKey     []byte
-	queueStateKey    []byte
-	queueGetStateKey []byte
+	stopped                  uint32
+	key                      string
+	eng                      Engine
+	buf                      *goetty.ByteBuf
+	state                    metapb.WorkflowInstanceWorkerState
+	totalCrowds              *roaring.Bitmap
+	stepCrowds               []*roaring.Bitmap
+	directSteps              map[string]string
+	steps                    map[string]excution
+	entryActions             map[string]string
+	leaveActions             map[string]string
+	alreadyTriggerTTLTimeout map[string]*triggerInfo
+	queue                    *task.Queue
+	cronIDs                  []cron.EntryID
+	consumer                 queue.Consumer
+	tenant                   string
+	cond                     *rpcpb.Condition
+	conditionKey             []byte
+	queueStateKey            []byte
+	queueGetStateKey         []byte
+
+	tempBM        *roaring.Bitmap
+	tempUserEvent *metapb.UserEvent
 }
 
 func newStateWorker(key string, state metapb.WorkflowInstanceWorkerState, eng Engine) (*stateWorker, error) {
@@ -87,6 +110,12 @@ func newStateWorker(key string, state metapb.WorkflowInstanceWorkerState, eng En
 		conditionKey:     make([]byte, len(queueStateKey)+1, len(queueStateKey)+1),
 		queueStateKey:    queueStateKey,
 		queueGetStateKey: storage.QueueKVKey(state.TenantID, queueStateKey),
+		tempBM:           acquireBM(),
+		tempUserEvent: &metapb.UserEvent{
+			TenantID:   state.TenantID,
+			WorkflowID: state.WorkflowID,
+			InstanceID: state.InstanceID,
+		},
 	}
 
 	err = w.resetByState()
@@ -98,6 +127,17 @@ func newStateWorker(key string, state metapb.WorkflowInstanceWorkerState, eng En
 	return w, nil
 }
 
+func (w *stateWorker) resetTTLTimeout() {
+	if w.alreadyTriggerTTLTimeout == nil {
+		w.alreadyTriggerTTLTimeout = make(map[string]*triggerInfo)
+	}
+
+	for key, value := range w.alreadyTriggerTTLTimeout {
+		delete(w.alreadyTriggerTTLTimeout, key)
+		releaseBM(value.alreadyBM)
+	}
+}
+
 func (w *stateWorker) resetByState() error {
 	w.totalCrowds.Clear()
 	w.stepCrowds = w.stepCrowds[:0]
@@ -105,6 +145,8 @@ func (w *stateWorker) resetByState() error {
 	w.steps = make(map[string]excution)
 	w.entryActions = make(map[string]string)
 	w.leaveActions = make(map[string]string)
+
+	w.resetTTLTimeout()
 
 	for idx, stepState := range w.state.States {
 		bm := acquireBM()
@@ -141,6 +183,16 @@ func (w *stateWorker) resetByState() error {
 			stepState.Step.Execution.Direct.NextStep != "" {
 			w.directSteps[stepState.Step.Name] = stepState.Step.Execution.Direct.NextStep
 		}
+
+		if stepState.Step.TTL > 0 {
+			w.alreadyTriggerTTLTimeout[stepState.Step.Name] = &triggerInfo{
+				alreadyBM: acquireBM(),
+			}
+			err := w.checkTTLTimeoutLater(idx)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil
@@ -159,6 +211,13 @@ func (w *stateWorker) isStopped() bool {
 
 func (w *stateWorker) matches(uid uint32) bool {
 	return w.totalCrowds.Contains(uid)
+}
+
+func (w *stateWorker) checkTTLTimeout(arg interface{}) {
+	w.queue.Put(item{
+		action: checkTTLEventAction,
+		value:  arg,
+	})
 }
 
 func (w *stateWorker) onEvent(partition uint32, maxOffset uint64, items ...[]byte) (uint64, error) {
@@ -278,6 +337,8 @@ func (w *stateWorker) run() {
 			for i := int64(0); i < n; i++ {
 				value := items[i].(item)
 				if value.action == stopAction {
+					w.resetTTLTimeout()
+
 					w.consumer.Stop()
 
 					for _, v := range w.queue.Dispose() {
@@ -292,6 +353,8 @@ func (w *stateWorker) run() {
 						releaseBM(bm)
 					}
 					releaseBM(w.totalCrowds)
+
+					releaseBM(w.tempBM)
 					logger.Infof("worker %s stopped", w.key)
 					return
 				}
@@ -321,6 +384,8 @@ func (w *stateWorker) run() {
 					}
 
 					tran.start(w)
+				case checkTTLEventAction:
+					w.doCheckStepTTLTimeout(tran, value.value.(int))
 				}
 
 				if err != nil {
@@ -472,6 +537,8 @@ func (w *stateWorker) doUpdateWorkflow(workflow metapb.Workflow) error {
 	w.entryActions = make(map[string]string)
 	w.leaveActions = make(map[string]string)
 
+	w.resetTTLTimeout()
+
 	var newCrowds []*roaring.Bitmap
 	var newStates []metapb.StepState
 	for idx, step := range workflow.Steps {
@@ -513,6 +580,17 @@ func (w *stateWorker) doUpdateWorkflow(workflow metapb.Workflow) error {
 		newStates = append(newStates, metapb.StepState{
 			Step: step,
 		})
+
+		if step.TTL > 0 {
+			w.alreadyTriggerTTLTimeout[step.Name] = &triggerInfo{
+				alreadyBM: acquireBM(),
+			}
+
+			err := w.checkTTLTimeoutLater(idx)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	for _, bm := range w.stepCrowds {
@@ -553,6 +631,61 @@ func (w *stateWorker) doUpdateCrowd(crowd []byte) error {
 	return nil
 }
 
+func (w *stateWorker) doCheckStepTTLTimeout(tran *transaction, idx int) {
+	if tran.err != nil {
+		return
+	}
+
+	if idx >= len(w.state.States) {
+		return
+	}
+
+	if w.state.States[idx].Step.TTL <= 0 {
+		return
+	}
+
+	defer w.checkTTLTimeoutLater(idx)
+
+	currentBM := w.stepCrowds[idx]
+	if currentBM.GetCardinality() == 0 {
+		return
+	}
+
+	info := w.alreadyTriggerTTLTimeout[w.state.States[idx].Step.Name]
+	if info == nil {
+		logger.Fatalf("BUG: missing already trigger info")
+	}
+
+	info.maybeReset(w.state.States[idx].Step.TTL)
+	alreadyBM := info.alreadyBM
+
+	// current - (current and already)
+	w.tempBM.Clear()
+	w.tempBM.Or(currentBM)
+	w.tempBM.AndNot(alreadyBM)
+
+	if w.tempBM.GetCardinality() == 0 {
+		return
+	}
+
+	count := 0
+	itr := w.tempBM.Iterator()
+	for {
+		if !itr.HasNext() {
+			break
+		}
+
+		value := itr.Next()
+		w.tempUserEvent.UserID = value
+		alreadyBM.Add(value)
+		tran.doUserEvent(w.tempUserEvent)
+
+		if count >= maxTriggerCount {
+			break
+		}
+	}
+}
+
 func (w *stateWorker) isDirectStep(name string) bool {
 	_, ok := w.directSteps[name]
 	return ok
@@ -590,52 +723,7 @@ func (w *stateWorker) retryDo(thing string, tran *transaction, fn func(*transact
 	}
 }
 
-type exprCtx struct {
-	event metapb.UserEvent
-	w     *stateWorker
-	idx   int
-}
-
-func newExprCtx(event metapb.UserEvent, w *stateWorker, idx int) expr.Ctx {
-	return &exprCtx{
-		w:     w,
-		idx:   idx,
-		event: event,
-	}
-}
-
-func (c *exprCtx) Event() metapb.UserEvent {
-	return c.event
-}
-
-func (c *exprCtx) Profile(key []byte) ([]byte, error) {
-	value, err := c.w.eng.Service().GetProfileField(c.event.TenantID, c.event.UserID, hack.SliceToString(key))
-	if err != nil {
-		return nil, err
-	}
-
-	return value, nil
-}
-
-func (c *exprCtx) KV(key []byte) ([]byte, error) {
-	return c.w.eng.Storage().Get(key)
-}
-
-func (c *exprCtx) TotalCrowd() *roaring.Bitmap {
-	return c.w.totalCrowds
-}
-
-func (c *exprCtx) StepCrowd() *roaring.Bitmap {
-	return c.w.stepCrowds[c.idx]
-}
-
-func (c *exprCtx) StepTTL() ([]byte, error) {
-	name := c.w.state.States[c.idx].Step.Name
-	key := storage.WorkflowStepTTLKey(c.event.WorkflowID, c.event.UserID, name, c.w.buf)
-	v, err := c.w.eng.Storage().Get(key)
-	if err != nil {
-		return nil, err
-	}
-
-	return v, nil
+func (w *stateWorker) checkTTLTimeoutLater(idx int) error {
+	_, err := util.DefaultTimeoutWheel().Schedule(ttlTriggerInterval, w.checkTTLTimeout, idx)
+	return err
 }

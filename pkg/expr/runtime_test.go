@@ -12,13 +12,14 @@ import (
 )
 
 type testCtx struct {
-	event metapb.UserEvent
+	event *metapb.UserEvent
 	kvs   map[string]string
 }
 
 func newTestCtx() *testCtx {
 	return &testCtx{
-		kvs: make(map[string]string),
+		kvs:   make(map[string]string),
+		event: &metapb.UserEvent{},
 	}
 }
 
@@ -36,7 +37,7 @@ func (c *testCtx) setEventKV(key, value string) {
 	})
 }
 
-func (c *testCtx) Event() metapb.UserEvent {
+func (c *testCtx) Event() *metapb.UserEvent {
 	return c.event
 }
 
@@ -58,10 +59,6 @@ func (c *testCtx) TotalCrowd() *roaring.Bitmap {
 
 func (c *testCtx) StepCrowd() *roaring.Bitmap {
 	return nil
-}
-
-func (c *testCtx) StepTTL() ([]byte, error) {
-	return nil, nil
 }
 
 func TestFetchFromEvent(t *testing.T) {

@@ -1364,6 +1364,116 @@ func TestLastTransactionCompleted(t *testing.T) {
 	assert.Equal(t, uint64(0), m["step_end"], "TestLastTransactionCompleted failed")
 }
 
+func TestTriggerTTLTimeout(t *testing.T) {
+	store, deferFunc := storage.NewTestStorage(t, false)
+	defer deferFunc()
+
+	ng, err := NewEngine(store, notify.NewQueueBasedNotifier(store))
+	assert.NoError(t, err, "TestTriggerTTLTimeout failed")
+	assert.NoError(t, ng.Start(), "TestTriggerTTLTimeout failed")
+	defer ng.Stop()
+
+	ttlTriggerInterval = time.Millisecond * 100
+
+	err = ng.(*engine).tenantInitWithReplicas(metapb.Tenant{
+		ID: 10001,
+		Input: metapb.TenantQueue{
+			Partitions:      1,
+			ConsumerTimeout: 60,
+		},
+		Output: metapb.TenantQueue{
+			Partitions:      1,
+			ConsumerTimeout: 60,
+		},
+	}, 1)
+	assert.NoError(t, err, "TestTriggerTTLTimeout failed")
+	time.Sleep(time.Second * 12)
+
+	bm := roaring.BitmapOf(1, 2, 3, 4)
+	_, err = ng.StartInstance(metapb.Workflow{
+		ID:       10000,
+		TenantID: 10001,
+		Name:     "test_wf",
+		Steps: []metapb.Step{
+			metapb.Step{
+				Name: "step_start",
+				TTL:  1,
+				Execution: metapb.Execution{
+					Type: metapb.Branch,
+					Branches: []metapb.ConditionExecution{
+						metapb.ConditionExecution{
+							Condition: metapb.Expr{
+								Value: []byte("{num: event.uid} == 1"),
+							},
+							NextStep: "step_end_1",
+						},
+						metapb.ConditionExecution{
+							Condition: metapb.Expr{
+								Value: []byte(`{str: kv.ttl}  != ""`),
+							},
+							NextStep: "step_end_else",
+						},
+					},
+				},
+			},
+			metapb.Step{
+				Name: "step_end_1",
+				Execution: metapb.Execution{
+					Type:   metapb.Direct,
+					Direct: &metapb.DirectExecution{},
+				},
+			},
+			metapb.Step{
+				Name: "step_end_else",
+				Execution: metapb.Execution{
+					Type:   metapb.Direct,
+					Direct: &metapb.DirectExecution{},
+				},
+			},
+		},
+	}, metapb.RawLoader, util.MustMarshalBM(bm), 3)
+	assert.NoError(t, err, "TestTriggerTTLTimeout failed")
+
+	assert.NoError(t, waitTestWorkflow(ng, 10000, metapb.Running), "TestTriggerTTLTimeout failed")
+
+	c := 0
+	ng.(*engine).workers.Range(func(key, value interface{}) bool {
+		c++
+		return true
+	})
+	assert.Equal(t, 3, c, "TestTriggerTTLTimeout failed")
+
+	err = ng.Storage().PutToQueue(10001, 0, metapb.TenantInputGroup, protoc.MustMarshal(&metapb.Event{
+		Type: metapb.UserType,
+		User: &metapb.UserEvent{
+			TenantID: 10001,
+			UserID:   1,
+			Data: []metapb.KV{
+				metapb.KV{
+					Key:   []byte("uid"),
+					Value: []byte("1"),
+				},
+			},
+		},
+	}))
+	assert.NoError(t, err, "TestTriggerTTLTimeout failed")
+
+	time.Sleep(time.Second * 2)
+	err = ng.Storage().Set([]byte("ttl"), []byte("1"))
+	assert.NoError(t, err, "TestTriggerTTLTimeout failed")
+	time.Sleep(time.Second * 2)
+
+	states, err := ng.InstanceCountState(10000)
+	assert.NoError(t, err, "TestTriggerTTLTimeout failed")
+	m := make(map[string]uint64)
+	for _, state := range states.States {
+		m[state.Step] = state.Count
+	}
+	assert.Equal(t, uint64(0), m["step_start"], "TestTriggerTTLTimeout failed")
+	assert.Equal(t, uint64(1), m["step_end_1"], "TestTriggerTTLTimeout failed")
+	assert.Equal(t, uint64(3), m["step_end_else"], "TestTriggerTTLTimeout failed")
+}
+
 type errorNotify struct {
 	times    int
 	max      int

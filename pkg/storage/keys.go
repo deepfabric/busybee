@@ -16,9 +16,8 @@ const (
 	workflowCurrentPrefix byte = 4
 	workflowWorkerPrefix  byte = 5
 	workflowHistoryPrefix byte = 6
-	workflowStepTTLPrefix byte = 7
-	workflowCrowdPrefix   byte = 8
-	tempPrefix            byte = 9
+	workflowCrowdPrefix   byte = 7
+	tempPrefix            byte = 8
 
 	queueOffsetField    byte = 0
 	queueItemField      byte = 1
@@ -34,16 +33,6 @@ func TempKey(key []byte, buf *goetty.ByteBuf) []byte {
 	buf.WriteByte(tempPrefix)
 	buf.WriteInt64(time.Now().Unix())
 	buf.Write(key)
-	return buf.WrittenDataAfterMark()
-}
-
-// WorkflowStepTTLKey returns the ttl key for user on the step
-func WorkflowStepTTLKey(wid uint64, uid uint32, name string, buf *goetty.ByteBuf) []byte {
-	buf.MarkWrite()
-	buf.WriteByte(workflowStepTTLPrefix)
-	buf.WriteUInt64(wid)
-	buf.WriteUInt32(uid)
-	buf.WriteString(name)
 	return buf.WrittenDataAfterMark()
 }
 
