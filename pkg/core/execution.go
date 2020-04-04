@@ -14,6 +14,30 @@ type who struct {
 	users *roaring.Bitmap
 }
 
+func (w who) appendTo(bm *roaring.Bitmap) bool {
+	old := bm.GetCardinality()
+
+	if w.users != nil {
+		bm.Or(w.users)
+	} else {
+		bm.Add(w.user)
+	}
+
+	return old != bm.GetCardinality()
+}
+
+func (w who) removeFrom(bm *roaring.Bitmap) bool {
+	old := bm.GetCardinality()
+
+	if w.users != nil {
+		bm.AndNot(w.users)
+	} else {
+		bm.Remove(w.user)
+	}
+
+	return old != bm.GetCardinality()
+}
+
 type changedCtx struct {
 	from string
 	to   string
@@ -35,14 +59,6 @@ func (ctx changedCtx) crowd() []byte {
 	}
 
 	return util.MustMarshalBM(ctx.who.users)
-}
-
-func (ctx *changedCtx) add(changed changedCtx) {
-	if changed.who.user > 0 {
-		ctx.who.users.Add(changed.who.user)
-	} else {
-		ctx.who.users.Or(changed.who.users)
-	}
 }
 
 type excution interface {

@@ -68,8 +68,9 @@ type stateWorker struct {
 	state                    metapb.WorkflowInstanceWorkerState
 	totalCrowds              *roaring.Bitmap
 	stepCrowds               []*roaring.Bitmap
-	directSteps              map[string]string
+	directNexts              map[string]string
 	steps                    map[string]excution
+	stepIndexs               map[string]int
 	entryActions             map[string]string
 	leaveActions             map[string]string
 	alreadyTriggerTTLTimeout map[string]*triggerInfo
@@ -141,8 +142,9 @@ func (w *stateWorker) resetTTLTimeout() {
 func (w *stateWorker) resetByState() error {
 	w.totalCrowds.Clear()
 	w.stepCrowds = w.stepCrowds[:0]
-	w.directSteps = make(map[string]string)
+	w.directNexts = make(map[string]string)
 	w.steps = make(map[string]excution)
+	w.stepIndexs = make(map[string]int)
 	w.entryActions = make(map[string]string)
 	w.leaveActions = make(map[string]string)
 
@@ -176,12 +178,13 @@ func (w *stateWorker) resetByState() error {
 		}
 
 		w.steps[stepState.Step.Name] = exec
+		w.stepIndexs[stepState.Step.Name] = idx
 		w.entryActions[stepState.Step.Name] = stepState.Step.EnterAction
 		w.leaveActions[stepState.Step.Name] = stepState.Step.LeaveAction
 
 		if stepState.Step.Execution.Type == metapb.Direct &&
 			stepState.Step.Execution.Direct.NextStep != "" {
-			w.directSteps[stepState.Step.Name] = stepState.Step.Execution.Direct.NextStep
+			w.directNexts[stepState.Step.Name] = stepState.Step.Execution.Direct.NextStep
 		}
 
 		if stepState.Step.TTL > 0 {
@@ -532,8 +535,9 @@ func (w *stateWorker) doUpdateWorkflow(workflow metapb.Workflow) error {
 		oldCrowds[step.Step.Name] = w.stepCrowds[idx]
 	}
 
-	w.directSteps = make(map[string]string)
+	w.directNexts = make(map[string]string)
 	w.steps = make(map[string]excution)
+	w.stepIndexs = make(map[string]int)
 	w.entryActions = make(map[string]string)
 	w.leaveActions = make(map[string]string)
 
@@ -563,12 +567,13 @@ func (w *stateWorker) doUpdateWorkflow(workflow metapb.Workflow) error {
 		}
 
 		w.steps[step.Name] = exec
+		w.stepIndexs[step.Name] = idx
 		w.entryActions[step.Name] = step.EnterAction
 		w.leaveActions[step.Name] = step.LeaveAction
 
 		if step.Execution.Type == metapb.Direct &&
 			step.Execution.Direct.NextStep != "" {
-			w.directSteps[step.Name] = step.Execution.Direct.NextStep
+			w.directNexts[step.Name] = step.Execution.Direct.NextStep
 		}
 
 		newBM := acquireBM()
@@ -687,7 +692,7 @@ func (w *stateWorker) doCheckStepTTLTimeout(tran *transaction, idx int) {
 }
 
 func (w *stateWorker) isDirectStep(name string) bool {
-	_, ok := w.directSteps[name]
+	_, ok := w.directNexts[name]
 	return ok
 }
 

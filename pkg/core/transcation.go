@@ -7,7 +7,6 @@ import (
 	"github.com/deepfabric/busybee/pkg/metric"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/util"
-	bbutil "github.com/deepfabric/busybee/pkg/util"
 	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/util/hack"
 )
@@ -158,89 +157,56 @@ func (tran *transaction) stepChanged(ctx changedCtx) {
 		ctx.who.users.And(tran.w.totalCrowds)
 	}
 
-	for idx := range tran.w.state.States {
-		changed := false
-		if tran.w.state.States[idx].Step.Name == ctx.from {
-			changed = tran.removeFromStep(idx, ctx.who)
-		} else if tran.w.state.States[idx].Step.Name == ctx.to {
-			changed = tran.moveToStep(idx, ctx.who)
-			ctx.ttl = tran.w.state.States[idx].Step.TTL
-			if changed {
-				tran.addChanged(ctx)
-				tran.maybeTriggerDirectSteps(idx, ctx)
-			}
-		}
+	from := tran.w.stepIndexs[ctx.from]
+	to := tran.w.stepIndexs[ctx.to]
+
+	tran.removeFromStep(from, ctx.who)
+	if tran.moveToStep(to, ctx.who) {
+		ctx.ttl = tran.w.state.States[to].Step.TTL
+		tran.addChanged(ctx)
+		tran.maybeTriggerDirectSteps(to, ctx)
 	}
 }
 
-func (tran *transaction) maybeTriggerDirectSteps(idx int, ctx changedCtx) {
+func (tran *transaction) maybeTriggerDirectSteps(current int, ctx changedCtx) {
 	if !tran.w.isDirectStep(ctx.to) {
 		return
 	}
 
 	from := ctx.to
-	to := tran.w.directSteps[from]
+	to := tran.w.directNexts[ctx.to]
 	for {
 		tran.addChanged(changedCtx{from, to, ctx.who, 0})
-
 		if !tran.w.isDirectStep(to) {
 			break
 		}
 		from = to
-		to = tran.w.directSteps[from]
+		to = tran.w.directNexts[to]
 	}
 
-	tran.removeFromStep(idx, ctx.who)
-	for idx := range tran.w.state.States {
-		if tran.w.state.States[idx].Step.Name == to {
-			tran.moveToStep(idx, ctx.who)
-			return
-		}
-	}
+	tran.removeFromStep(current, ctx.who)
+	tran.moveToStep(tran.w.stepIndexs[to], ctx.who)
 }
 
 func (tran *transaction) removeFromStep(idx int, target who) bool {
-	changed := false
-	if nil != target.users {
-		afterChanged := bbutil.BMAndnot(tran.stepCrowds[idx], target.users)
-		if tran.stepCrowds[idx].GetCardinality() == afterChanged.GetCardinality() {
-			changed = false
-		} else {
-			tran.stepCrowds[idx] = afterChanged
-		}
-	} else {
-		tran.stepCrowds[idx].Remove(target.user)
-	}
-	return changed
+	return target.removeFrom(tran.stepCrowds[idx])
 }
 
 func (tran *transaction) moveToStep(idx int, target who) bool {
-	changed := true
-	if nil != target.users {
-		afterChanged := bbutil.BMOr(tran.stepCrowds[idx], target.users)
-		if tran.stepCrowds[idx].GetCardinality() == afterChanged.GetCardinality() {
-			changed = false
-		} else {
-			tran.stepCrowds[idx] = afterChanged
-		}
-	} else {
-		tran.stepCrowds[idx].Add(target.user)
-	}
-
-	return changed
+	return target.appendTo(tran.stepCrowds[idx])
 }
 
 func (tran *transaction) addChanged(changed changedCtx) {
 	for idx := range tran.changes {
 		if tran.changes[idx].from == changed.from &&
 			tran.changes[idx].to == changed.to {
-			tran.changes[idx].add(changed)
+			changed.who.appendTo(tran.changes[idx].who.users)
 			return
 		}
 	}
 
 	ctx := changedCtx{changed.from, changed.to, who{0, acquireBM()}, changed.ttl}
-	ctx.add(changed)
+	changed.who.appendTo(ctx.who.users)
 	tran.changes = append(tran.changes, ctx)
 }
 
@@ -255,6 +221,7 @@ func (tran *transaction) reset() {
 	for idx := range tran.changes {
 		releaseBM(tran.changes[idx].who.users)
 		tran.changes[idx].who.users = nil
+		tran.changes[idx].who.user = 0
 	}
 
 	tran.stepCrowds = tran.stepCrowds[:0]
