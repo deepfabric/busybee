@@ -43,6 +43,8 @@ type Storage interface {
 	Delete([]byte) error
 	// Scan scan [start,end) data
 	Scan([]byte, []byte, uint64) ([][]byte, [][]byte, error)
+	// Scan scan [start,end) data
+	ScanWithGroup([]byte, []byte, uint64, metapb.Group) ([][]byte, [][]byte, error)
 	// PutToQueue put data to queue
 	PutToQueue(id uint64, partition uint32, group metapb.Group, data ...[]byte) error
 	// PutToQueueAndKV put data to queue and put a kv
@@ -188,12 +190,16 @@ func (h *beeStorage) Delete(key []byte) error {
 }
 
 func (h *beeStorage) Scan(start []byte, end []byte, limit uint64) ([][]byte, [][]byte, error) {
+	return h.ScanWithGroup(start, end, limit, metapb.DefaultGroup)
+}
+
+func (h *beeStorage) ScanWithGroup(start []byte, end []byte, limit uint64, group metapb.Group) ([][]byte, [][]byte, error) {
 	req := rpcpb.AcquireScanRequest()
 	req.Start = start
 	req.End = end
 	req.Limit = limit
 
-	data, err := h.ExecCommand(req)
+	data, err := h.ExecCommandWithGroup(req, group)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -13,6 +13,7 @@ import (
 	"github.com/deepfabric/busybee/pkg/storage"
 	bbutil "github.com/deepfabric/busybee/pkg/util"
 	"github.com/fagongzi/goetty"
+	"github.com/fagongzi/log"
 	"github.com/fagongzi/util/format"
 	"github.com/fagongzi/util/protoc"
 	"github.com/fagongzi/util/task"
@@ -85,6 +86,7 @@ type stateWorker struct {
 
 	tempBM        *roaring.Bitmap
 	tempUserEvent *metapb.UserEvent
+	tempNotifies  []metapb.Notify
 }
 
 func newStateWorker(key string, state metapb.WorkflowInstanceWorkerState, eng Engine) (*stateWorker, error) {
@@ -98,6 +100,10 @@ func newStateWorker(key string, state metapb.WorkflowInstanceWorkerState, eng En
 	goetty.Uint64ToBytesTo(state.InstanceID, queueStateKey)
 	goetty.Uint32ToBytesTo(state.Index, queueStateKey[8:])
 
+	conditionKey := make([]byte, 13, 13)
+	copy(conditionKey, queueStateKey)
+	conditionKey[12] = 0
+
 	w := &stateWorker{
 		key:              key,
 		state:            state,
@@ -108,7 +114,7 @@ func newStateWorker(key string, state metapb.WorkflowInstanceWorkerState, eng En
 		consumer:         consumer,
 		tenant:           string(format.UInt64ToString(state.TenantID)),
 		cond:             &rpcpb.Condition{},
-		conditionKey:     make([]byte, len(queueStateKey)+1, len(queueStateKey)+1),
+		conditionKey:     conditionKey,
 		queueStateKey:    queueStateKey,
 		queueGetStateKey: storage.QueueKVKey(state.TenantID, queueStateKey),
 		tempBM:           acquireBM(),
@@ -474,7 +480,7 @@ func (w *stateWorker) checkLastTranscation() {
 }
 
 func (w *stateWorker) execNotify(tran *transaction) error {
-	notifies := make([]metapb.Notify, 0, len(tran.changes))
+	w.tempNotifies = w.tempNotifies[:0]
 	for _, changed := range tran.changes {
 		nt := metapb.Notify{
 			TenantID:       w.state.TenantID,
@@ -488,13 +494,21 @@ func (w *stateWorker) execNotify(tran *transaction) error {
 			FromAction:     w.leaveActions[changed.from],
 			ToAction:       w.entryActions[changed.to],
 		}
-		notifies = append(notifies, nt)
+		w.tempNotifies = append(w.tempNotifies, nt)
 
 		if logger.DebugEnabled() {
-			logger.Debugf("worker %s notify to %d users, notify %+v",
-				w.key,
-				changed.who.users.GetCardinality(),
-				nt)
+			iter := changed.who.users.Iterator()
+			for {
+				if !iter.HasNext() {
+					break
+				}
+
+				log.Debugf("worker %s move %d from %s to %s",
+					w.key,
+					iter.Next(),
+					changed.from,
+					changed.to)
+			}
 		}
 	}
 
@@ -506,7 +520,7 @@ func (w *stateWorker) execNotify(tran *transaction) error {
 	w.cond.Key = w.conditionKey
 	w.cond.Value = condValue
 	w.cond.Cmp = rpcpb.LT
-	return w.eng.Notifier().Notify(w.state.TenantID, w.buf, notifies, w.cond,
+	return w.eng.Notifier().Notify(w.state.TenantID, w.buf, w.tempNotifies, w.cond,
 		w.conditionKey, condValue,
 		w.queueStateKey, protoc.MustMarshal(&w.state))
 }

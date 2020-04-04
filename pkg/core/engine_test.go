@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"math"
 	"testing"
 	"time"
 
@@ -1472,6 +1473,167 @@ func TestTriggerTTLTimeout(t *testing.T) {
 	assert.Equal(t, uint64(0), m["step_start"], "TestTriggerTTLTimeout failed")
 	assert.Equal(t, uint64(1), m["step_end_1"], "TestTriggerTTLTimeout failed")
 	assert.Equal(t, uint64(3), m["step_end_else"], "TestTriggerTTLTimeout failed")
+}
+
+func TestStepCountAndNotiesMatched(t *testing.T) {
+	store, deferFunc := storage.NewTestStorage(t, false)
+	defer deferFunc()
+
+	ng, err := NewEngine(store, notify.NewQueueBasedNotifier(store))
+	assert.NoError(t, err, "TestStepCountAndNotiesMatched failed")
+	assert.NoError(t, ng.Start(), "TestStepCountAndNotiesMatched failed")
+	defer ng.Stop()
+
+	tid := uint64(10001)
+	wid := uint64(10000)
+	err = ng.(*engine).tenantInitWithReplicas(metapb.Tenant{
+		ID: tid,
+		Input: metapb.TenantQueue{
+			Partitions:      1,
+			ConsumerTimeout: 60,
+		},
+		Output: metapb.TenantQueue{
+			Partitions:      1,
+			ConsumerTimeout: 60,
+		},
+	}, 1)
+	assert.NoError(t, err, "TestStepCountAndNotiesMatched failed")
+	time.Sleep(time.Second * 12)
+
+	bm := roaring.BitmapOf()
+	for i := uint32(1); i <= 10000; i++ {
+		bm.Add(i)
+	}
+	_, err = ng.StartInstance(metapb.Workflow{
+		ID:       wid,
+		TenantID: tid,
+		Name:     "test_wf",
+		Steps: []metapb.Step{
+			metapb.Step{
+				Name: "step_start_matched",
+				Execution: metapb.Execution{
+					Type: metapb.Branch,
+					Branches: []metapb.ConditionExecution{
+						metapb.ConditionExecution{
+							Condition: metapb.Expr{
+								Value: []byte("{num: event.data} == 1"),
+							},
+							NextStep: "step_direct_matched",
+						},
+						metapb.ConditionExecution{
+							Condition: metapb.Expr{
+								Value: []byte(`1 == 1`),
+							},
+							NextStep: "step_end_matched",
+						},
+					},
+				},
+			},
+			metapb.Step{
+				Name: "step_direct_matched",
+				Execution: metapb.Execution{
+					Type: metapb.Direct,
+					Direct: &metapb.DirectExecution{
+						NextStep: "step_end_matched",
+					},
+				},
+			},
+			metapb.Step{
+				Name: "step_end_matched",
+				Execution: metapb.Execution{
+					Type:   metapb.Direct,
+					Direct: &metapb.DirectExecution{},
+				},
+			},
+		},
+	}, metapb.RawLoader, util.MustMarshalBM(bm), 16)
+	assert.NoError(t, err, "TestStepCountAndNotiesMatched failed")
+
+	assert.NoError(t, waitTestWorkflow(ng, 10000, metapb.Running), "TestStepCountAndNotiesMatched failed")
+
+	var events [][]byte
+	for i := uint32(1); i <= 10000; i++ {
+		events = append(events, protoc.MustMarshal(&metapb.Event{
+			Type: metapb.UserType,
+			User: &metapb.UserEvent{
+				TenantID: tid,
+				UserID:   i,
+				Data: []metapb.KV{
+					metapb.KV{
+						Key:   []byte("data"),
+						Value: []byte("1"),
+					},
+				},
+			},
+		}))
+
+		if len(events) == 256 {
+			err = ng.Storage().PutToQueueWithAlloc(tid, metapb.TenantInputGroup, events...)
+			assert.NoError(t, err, "TestStepCountAndNotiesMatched failed")
+			events = events[:0]
+		}
+	}
+
+	if len(events) > 0 {
+		err = ng.Storage().PutToQueueWithAlloc(tid, metapb.TenantInputGroup, events...)
+		assert.NoError(t, err, "TestStepCountAndNotiesMatched failed")
+	}
+
+	time.Sleep(time.Second * 10)
+
+	states, err := ng.InstanceCountState(wid)
+	assert.NoError(t, err, "TestStepCountAndNotiesMatched failed")
+	m := make(map[string]int)
+	for _, state := range states.States {
+		m[state.Step] = int(state.Count)
+	}
+	assert.Equal(t, 0, m["step_start_matched"], "TestStepCountAndNotiesMatched failed")
+	assert.Equal(t, 0, m["step_direct_matched"], "TestStepCountAndNotiesMatched failed")
+	assert.Equal(t, 10000, m["step_end_matched"], "TestStepCountAndNotiesMatched failed")
+
+	bmDirect := acquireBM()
+	bmEnd := acquireBM()
+	nt := &metapb.Notify{}
+	buf := goetty.NewByteBuf(32)
+	partitionKey := storage.PartitionKey(tid, 0)
+	from := uint64(0)
+	endKey := storage.QueueItemKey(partitionKey, math.MaxUint32, buf)
+	for {
+		keys, values, err := ng.Storage().ScanWithGroup(storage.QueueItemKey(partitionKey, from, buf), endKey, 256, metapb.TenantOutputGroup)
+		assert.NoError(t, err, "TestStepCountAndNotiesMatched failed")
+		if err != nil {
+			break
+		}
+
+		if len(values) == 0 {
+			break
+		}
+
+		for _, value := range values {
+			nt.Reset()
+			protoc.MustUnmarshal(nt, value)
+
+			if nt.ToStep == "step_direct_matched" {
+				if nt.UserID > 0 {
+					bmDirect.Add(nt.UserID)
+				} else {
+					bmDirect.Or(util.MustParseBM(nt.Crowd))
+				}
+			} else if nt.ToStep == "step_end_matched" {
+				if nt.UserID > 0 {
+					bmEnd.Add(nt.UserID)
+				} else {
+					bmEnd.Or(util.MustParseBM(nt.Crowd))
+				}
+			}
+		}
+
+		last := keys[len(keys)-1]
+		from = goetty.Byte2UInt64(last[len(last)-8:]) + 1
+	}
+
+	assert.Equal(t, 10000, int(bmDirect.GetCardinality()), "TestStepCountAndNotiesMatched failed")
+	assert.Equal(t, 10000, int(bmEnd.GetCardinality()), "TestStepCountAndNotiesMatched failed")
 }
 
 type errorNotify struct {

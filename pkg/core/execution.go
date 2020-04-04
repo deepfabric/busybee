@@ -58,6 +58,10 @@ func (ctx changedCtx) crowd() []byte {
 		return nil
 	}
 
+	if ctx.who.users.GetCardinality() == 1 {
+		return nil
+	}
+
 	return util.MustMarshalBM(ctx.who.users)
 }
 
