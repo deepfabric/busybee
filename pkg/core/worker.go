@@ -13,7 +13,6 @@ import (
 	"github.com/deepfabric/busybee/pkg/storage"
 	bbutil "github.com/deepfabric/busybee/pkg/util"
 	"github.com/fagongzi/goetty"
-	"github.com/fagongzi/log"
 	"github.com/fagongzi/util/format"
 	"github.com/fagongzi/util/protoc"
 	"github.com/fagongzi/util/task"
@@ -505,7 +504,7 @@ func (w *stateWorker) execNotify(tran *transaction) error {
 					break
 				}
 
-				log.Debugf("worker %s move %d from %s to %s",
+				logger.Debugf("worker %s move %d from %s to %s",
 					w.key,
 					iter.Next(),
 					changed.from,
@@ -529,7 +528,7 @@ func (w *stateWorker) execNotify(tran *transaction) error {
 		return err
 	}
 
-	log.Infof("worker %s moved %d",
+	logger.Infof("worker %s moved %d",
 		w.key,
 		totalMoved)
 	return nil
