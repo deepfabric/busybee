@@ -1070,7 +1070,9 @@ func (eng *engine) addToInstanceStop(id interface{}) {
 }
 
 func workerKey(state metapb.WorkflowInstanceWorkerState) string {
-	return fmt.Sprintf("%d/%d",
+	return fmt.Sprintf("%d:%d:%d:%d",
+		state.TenantID,
 		state.WorkflowID,
+		state.InstanceID,
 		state.Index)
 }
