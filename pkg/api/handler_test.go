@@ -420,9 +420,9 @@ func TestUpdateAndScanMapping(t *testing.T) {
 	req.UpdateMapping.ID = tid
 	req.UpdateMapping.UserID = userID
 	req.UpdateMapping.Set.Values = []metapb.IDValue{
-		metapb.IDValue{Value: "v1", Type: "1"},
-		metapb.IDValue{Value: "v2", Type: "2"},
-		metapb.IDValue{Value: "v3", Type: "3"},
+		{Value: "v1", Type: "1"},
+		{Value: "v2", Type: "2"},
+		{Value: "v3", Type: "3"},
 	}
 	assert.NoError(t, conn.WriteAndFlush(req), "TestMapping failed")
 	data, err := conn.ReadTimeout(time.Second * 10)
@@ -472,9 +472,9 @@ func TestUpdateAndScanMapping(t *testing.T) {
 	req.UpdateMapping.ID = tid
 	req.UpdateMapping.UserID = userID
 	req.UpdateMapping.Set.Values = []metapb.IDValue{
-		metapb.IDValue{Value: "v11", Type: "1"},
-		metapb.IDValue{Value: "v22", Type: "2"},
-		metapb.IDValue{Value: "v33", Type: "3"},
+		{Value: "v11", Type: "1"},
+		{Value: "v22", Type: "2"},
+		{Value: "v33", Type: "3"},
 	}
 	assert.NoError(t, conn.WriteAndFlush(req), "TestMapping failed")
 	data, err = conn.ReadTimeout(time.Second * 10)
