@@ -115,40 +115,44 @@ func (h *beeStorage) queueFetch(shard bhmetapb.Shard, req *raftcmdpb.Request, at
 		fetchResp.Removed = true
 	} else if p.Version == queueFetch.Version &&
 		p.State == metapb.PSRunning {
-		// do fetch new items
-		startKey := QueueItemKey(req.Key, p.Completed+1, buf)
-		endKey := QueueItemKey(req.Key, p.Completed+1+queueFetch.Count, buf)
 
-		max := queueFetch.MaxBytes
-		if max == 0 {
-			max = defaultMaxBytes
-		}
+		if queueFetch.Count >= 0 {
+			// do fetch new items
+			startKey := QueueItemKey(req.Key, p.Completed+1, buf)
+			endKey := QueueItemKey(req.Key, p.Completed+1+queueFetch.Count, buf)
 
-		size := uint64(0)
-		c := uint64(0)
-		var items [][]byte
-		err := h.getStore(shard.ID).Scan(startKey, endKey, func(key, value []byte) (bool, error) {
-			buf.MarkWrite()
-			buf.Write(value)
-			items = append(items, buf.WrittenDataAfterMark())
-			c++
-			size += uint64(len(value))
-
-			if size >= max {
-				return false, nil
+			max := queueFetch.MaxBytes
+			if max == 0 {
+				max = defaultMaxBytes
 			}
-			return true, nil
-		}, false)
-		if err != nil {
-			log.Fatalf("fetch queue failed with %+v", err)
+
+			size := uint64(0)
+			c := uint64(0)
+			var items [][]byte
+			err := h.getStore(shard.ID).Scan(startKey, endKey, func(key, value []byte) (bool, error) {
+				buf.MarkWrite()
+				buf.Write(value)
+				items = append(items, buf.WrittenDataAfterMark())
+				c++
+				size += uint64(len(value))
+
+				if size >= max {
+					return false, nil
+				}
+				return true, nil
+			}, false)
+			if err != nil {
+				log.Fatalf("fetch queue failed with %+v", err)
+			}
+
+			if c > 0 {
+				fetchResp.LastOffset = p.Completed + c
+				fetchResp.Items = items
+			}
+
+			state.States[queueFetch.Partition].LastFetchCount = c
 		}
 
-		if c > 0 {
-			fetchResp.LastOffset = p.Completed + c
-			fetchResp.Items = items
-		}
-
-		state.States[queueFetch.Partition].LastFetchCount = c
 		state.States[queueFetch.Partition].LastFetchTS = now
 		changed = true
 	}
