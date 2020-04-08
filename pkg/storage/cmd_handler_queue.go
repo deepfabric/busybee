@@ -9,11 +9,12 @@ import (
 	"github.com/deepfabric/beehive/pb/raftcmdpb"
 	"github.com/deepfabric/beehive/raftstore"
 	bhstorage "github.com/deepfabric/beehive/storage"
-	bhutil "github.com/deepfabric/beehive/util"
+	"github.com/deepfabric/beehive/util"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/log"
+	"github.com/fagongzi/util/hack"
 	"github.com/fagongzi/util/protoc"
 )
 
@@ -27,12 +28,18 @@ func (h *beeStorage) queueJoinGroup(shard bhmetapb.Shard, req *raftcmdpb.Request
 	joinReq := getQueueJoinGroupRequest(attrs)
 	protoc.MustUnmarshal(joinReq, req.Cmd)
 
+	store := h.getStore(shard.ID)
+	defer writeWriteBatch(store, attrs)
+
 	buf := attrs[raftstore.AttrBuf].(*goetty.ByteBuf)
 	stateKey := queueStateKey(req.Key[:len(req.Key)-4], joinReq.Group, buf)
+	stateAttrKey := hack.SliceToString(stateKey)
 	metaKey := queueMetaKey(req.Key[:len(req.Key)-4], buf)
-	state := loadQueueState(h.getStore(shard.ID), stateKey, metaKey, attrs)
 
 	joinResp := getQueueJoinGroupResponse(attrs)
+
+	state := loadQueueState(store, stateAttrKey, stateKey, metaKey, attrs)
+	defer addStateToAttr(stateAttrKey, state, attrs)
 
 	// wait
 	if state == nil {
@@ -41,7 +48,6 @@ func (h *beeStorage) queueJoinGroup(shard bhmetapb.Shard, req *raftcmdpb.Request
 	}
 
 	now := time.Now().Unix()
-
 	if state.Consumers >= state.Partitions {
 		if !maybeRemoveTimeoutConsumers(state, now) {
 			resp.Value = emptyJoinBytes
@@ -51,7 +57,6 @@ func (h *beeStorage) queueJoinGroup(shard bhmetapb.Shard, req *raftcmdpb.Request
 
 	index := state.Consumers
 	state.Consumers++
-
 	rebalanceConsumers(state)
 
 	for idx := range state.States {
@@ -68,11 +73,7 @@ func (h *beeStorage) queueJoinGroup(shard bhmetapb.Shard, req *raftcmdpb.Request
 		}
 	}
 
-	err := h.getStore(shard.ID).Set(stateKey, protoc.MustMarshal(state))
-	if err != nil {
-		log.Fatalf("save queue state failed with %+v",
-			err)
-	}
+	addToWriteBatch(stateKey, protoc.MustMarshal(state), attrs)
 
 	resp.Value = protoc.MustMarshal(joinResp)
 	return 0, 0, resp
@@ -83,13 +84,19 @@ func (h *beeStorage) queueFetch(shard bhmetapb.Shard, req *raftcmdpb.Request, at
 	queueFetch := getQueueFetchRequest(attrs)
 	protoc.MustUnmarshal(queueFetch, req.Cmd)
 
+	store := h.getStore(shard.ID)
+	defer writeWriteBatch(store, attrs)
+
 	now := time.Now().Unix()
 	buf := attrs[raftstore.AttrBuf].(*goetty.ByteBuf)
 	stateKey := queueStateKey(req.Key[:len(req.Key)-4], queueFetch.Group, buf)
+	stateAttrKey := hack.SliceToString(stateKey)
 	metaKey := queueMetaKey(req.Key[:len(req.Key)-4], buf)
-	state := loadQueueState(h.getStore(shard.ID), stateKey, metaKey, attrs)
 
 	fetchResp := getQueueFetchResponse(attrs)
+
+	state := loadQueueState(store, stateAttrKey, stateKey, metaKey, attrs)
+	defer addStateToAttr(stateAttrKey, state, attrs)
 
 	// consumer removed
 	if nil == state ||
@@ -163,15 +170,8 @@ func (h *beeStorage) queueFetch(shard bhmetapb.Shard, req *raftcmdpb.Request, at
 		buf.WriteInt64(now)
 		completed := buf.WrittenDataAfterMark()
 
-		wb := bhutil.NewWriteBatch()
-		wb.Set(stateKey, protoc.MustMarshal(state))
-		wb.Set(committedOffsetKey(req.Key, queueFetch.Group, buf), completed)
-
-		err := h.getStore(shard.ID).Write(wb, false)
-		if err != nil {
-			log.Fatalf("save concurrency queue state failed with %+v",
-				err)
-		}
+		addToWriteBatch(stateKey, protoc.MustMarshal(state), attrs)
+		addToWriteBatch(committedOffsetKey(req.Key, queueFetch.Group, buf), completed, attrs)
 	}
 
 	resp.Value = protoc.MustMarshal(fetchResp)
@@ -201,12 +201,16 @@ func clearConsumers(state *metapb.QueueState) {
 }
 
 func rebalanceConsumers(state *metapb.QueueState) {
+	max := state.Consumers - 1
 	a := float64(state.Partitions) / float64(state.Consumers)
 	m := uint32(math.Ceil(a))
 
 	for consumer := uint32(0); consumer < state.Consumers; consumer++ {
 		from := m * consumer
 		to := (consumer+1)*m - 1
+		if to > max {
+			to = max
+		}
 
 		for i := from; i <= to; i++ {
 			if state.States[i].Consumer != consumer {
@@ -280,7 +284,14 @@ func maybeUpdateCompletedOffset(state *metapb.QueueState, now int64, req *rpcpb.
 	return true
 }
 
-func loadQueueState(store bhstorage.DataStorage, stateKey, metaKey []byte, attrs map[string]interface{}) *metapb.QueueState {
+func loadQueueState(store bhstorage.DataStorage, attrStateKey string, stateKey, metaKey []byte, attrs map[string]interface{}) *metapb.QueueState {
+	if value, ok := attrs[attrQueueStates]; ok {
+		states := value.(map[string]*metapb.QueueState)
+		if state, ok := states[attrStateKey]; ok {
+			return state
+		}
+	}
+
 	value, err := store.Get(stateKey)
 	if err != nil {
 		log.Fatalf("load queue state failed with %+v", err)
@@ -298,7 +309,69 @@ func loadQueueState(store bhstorage.DataStorage, stateKey, metaKey []byte, attrs
 		}
 	}
 
-	state := getQueueState(attrs)
+	state := getQueueState(attrStateKey, attrs)
 	protoc.MustUnmarshal(state, value)
 	return state
+}
+
+func addStateToAttr(key string, state *metapb.QueueState, attrs map[string]interface{}) {
+	if state == nil {
+		return
+	}
+
+	var states map[string]*metapb.QueueState
+	if value, ok := attrs[attrQueueStates]; ok {
+		states = value.(map[string]*metapb.QueueState)
+	} else {
+		states = make(map[string]*metapb.QueueState)
+	}
+
+	states[key] = state
+	attrs[attrQueueStates] = states
+}
+
+func addToWriteBatch(key, value []byte, attrs map[string]interface{}) {
+	if _, ok := attrs[attrQueueWriteBatchKey]; !ok {
+		attrs[attrQueueWriteBatchKey] = util.NewWriteBatch()
+	}
+
+	wb := attrs[attrQueueWriteBatchKey].(*util.WriteBatch)
+	wb.Set(key, value)
+}
+
+func writeWriteBatch(store bhstorage.DataStorage, attrs map[string]interface{}) {
+	if !raftstore.IsLastApplyRequest(attrs) {
+		return
+	}
+
+	if value, ok := attrs[attrQueueWriteBatchKey]; ok {
+		wb := value.(*util.WriteBatch)
+		err := store.Write(wb, false)
+		if err != nil {
+			log.Fatalf("save queue state failed with %+v", err)
+		}
+
+		wb.Reset()
+	}
+
+	if value, ok := attrs[attrQueueStates]; ok {
+		states := value.(map[string]*metapb.QueueState)
+		for key := range states {
+			delete(states, key)
+		}
+	}
+}
+
+func getQueueState(key string, attrs map[string]interface{}) *metapb.QueueState {
+	var value *metapb.QueueState
+
+	if v, ok := attrs[key]; ok {
+		value = v.(*metapb.QueueState)
+	} else {
+		value = &metapb.QueueState{}
+		attrs[key] = value
+	}
+
+	value.Reset()
+	return value
 }

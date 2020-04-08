@@ -12,7 +12,6 @@ var (
 	attrRequestQueueFetch            = "req.queue.fetch"
 	attrRequestQueueConcurrencyFetch = "req.queue.fetch.concurrency"
 	attrRequestQueueJoinGroup        = "req.queue.join.group"
-	attrRequestQueueState            = "req.queue.state"
 	attrRequestSet                   = "req.kv.set"
 	attrRequestSetIf                 = "req.kv.setif"
 	attrRequestGet                   = "req.kv.get"
@@ -50,6 +49,9 @@ var (
 
 	attrTempBM               = "temp.BM"
 	attrTempWorkflowInstance = "temp.wf.instance"
+
+	attrQueueWriteBatchKey = "queue.wb"
+	attrQueueStates        = "queue.states"
 )
 
 func getTempWorkflowInstance(attrs map[string]interface{}) *metapb.WorkflowInstance {
@@ -508,20 +510,6 @@ func getDeleteRequest(attrs map[string]interface{}) *rpcpb.DeleteRequest {
 	} else {
 		value = &rpcpb.DeleteRequest{}
 		attrs[attrRequestDelete] = value
-	}
-
-	value.Reset()
-	return value
-}
-
-func getQueueState(attrs map[string]interface{}) *metapb.QueueState {
-	var value *metapb.QueueState
-
-	if v, ok := attrs[attrRequestQueueState]; ok {
-		value = v.(*metapb.QueueState)
-	} else {
-		value = &metapb.QueueState{}
-		attrs[attrRequestQueueState] = value
 	}
 
 	value.Reset()
