@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	defaultRPCTimeout        = time.Second * 10
+	defaultRPCTimeout        = time.Second * 60
 	reportGroup       uint64 = 13141314131413141314
 )
 

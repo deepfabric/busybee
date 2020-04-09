@@ -133,7 +133,9 @@ func (l *kvShardLoader) Set(meta []byte, data []byte) (uint64, uint32, error) {
 
 	key := hex.EncodeToString(putMeta.Key)
 	l.cache.Add(key, bbutil.MustParseBM(data), uint64(n))
-	logger.Infof("put bitmap %s completed", key)
+	logger.Infof("put bitmap %s completed with %d shards",
+		key,
+		index)
 	return uint64(n), index, nil
 }
 
@@ -181,7 +183,6 @@ func (l *kvShardLoader) doPut(value putCtx, buf *goetty.ByteBuf) {
 			value.index,
 			err)
 		util.DefaultTimeoutWheel().Schedule(l.retry, l.addToRetry, value)
-		l.addToRetry(value)
 		return
 	}
 
@@ -205,13 +206,13 @@ func (l *kvShardLoader) doLoad(value loadCtx, buf *goetty.ByteBuf) {
 			value.index,
 			err)
 		util.DefaultTimeoutWheel().Schedule(l.retry, l.addToRetry, value)
-		l.addToRetry(value)
 		return
 	}
 
-	logger.Infof("load bitmap shard %s/%d completed",
+	logger.Infof("load bitmap shard %s/%d completed with %d bytes",
 		hex.EncodeToString(value.key),
-		value.index)
+		value.index,
+		len(data))
 	value.cb.add(int(value.index), data)
 }
 
