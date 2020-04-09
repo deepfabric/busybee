@@ -480,6 +480,7 @@ func (w *stateWorker) checkLastTranscation() {
 }
 
 func (w *stateWorker) execNotify(tran *transaction) error {
+	totalMoved := uint64(0)
 	w.tempNotifies = w.tempNotifies[:0]
 	for _, changed := range tran.changes {
 		nt := metapb.Notify{
@@ -495,6 +496,7 @@ func (w *stateWorker) execNotify(tran *transaction) error {
 			ToAction:       w.entryActions[changed.to],
 		}
 		w.tempNotifies = append(w.tempNotifies, nt)
+		totalMoved += changed.who.users.GetCardinality()
 
 		if logger.DebugEnabled() {
 			iter := changed.who.users.Iterator()
@@ -520,9 +522,17 @@ func (w *stateWorker) execNotify(tran *transaction) error {
 	w.cond.Key = w.conditionKey
 	w.cond.Value = condValue
 	w.cond.Cmp = rpcpb.LT
-	return w.eng.Notifier().Notify(w.state.TenantID, w.buf, w.tempNotifies, w.cond,
+	err := w.eng.Notifier().Notify(w.state.TenantID, w.buf, w.tempNotifies, w.cond,
 		w.conditionKey, condValue,
 		w.queueStateKey, protoc.MustMarshal(&w.state))
+	if err != nil {
+		return err
+	}
+
+	log.Infof("worker %s moved %d",
+		w.key,
+		totalMoved)
+	return nil
 }
 
 func (w *stateWorker) execUpdate(batch *transaction) error {
