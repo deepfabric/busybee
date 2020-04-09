@@ -109,7 +109,7 @@ func TestStopInstanceAndRestart(t *testing.T) {
 			TenantID: 10001,
 			Name:     "test_wf",
 			Steps: []metapb.Step{
-				metapb.Step{
+				{
 					Name: "step_end_1",
 					Execution: metapb.Execution{
 						Type:   metapb.Direct,
@@ -194,18 +194,18 @@ func TestStartInstance(t *testing.T) {
 		StopAt:   time.Now().Add(time.Second * 10).Unix(),
 		Name:     "test_wf",
 		Steps: []metapb.Step{
-			metapb.Step{
+			{
 				Name: "step_start",
 				Execution: metapb.Execution{
 					Type: metapb.Branch,
 					Branches: []metapb.ConditionExecution{
-						metapb.ConditionExecution{
+						{
 							Condition: metapb.Expr{
 								Value: []byte("{num: event.uid} == 1"),
 							},
 							NextStep: "step_end_1",
 						},
-						metapb.ConditionExecution{
+						{
 							Condition: metapb.Expr{
 								Value: []byte("1 == 1"),
 							},
@@ -214,14 +214,14 @@ func TestStartInstance(t *testing.T) {
 					},
 				},
 			},
-			metapb.Step{
+			{
 				Name: "step_end_1",
 				Execution: metapb.Execution{
 					Type:   metapb.Direct,
 					Direct: &metapb.DirectExecution{},
 				},
 			},
-			metapb.Step{
+			{
 				Name: "step_end_else",
 				Execution: metapb.Execution{
 					Type:   metapb.Direct,
@@ -247,7 +247,7 @@ func TestStartInstance(t *testing.T) {
 			TenantID: 10001,
 			UserID:   1,
 			Data: []metapb.KV{
-				metapb.KV{
+				{
 					Key:   []byte("uid"),
 					Value: []byte("1"),
 				},
@@ -325,18 +325,18 @@ func TestTriggerDirect(t *testing.T) {
 		StopAt:   time.Now().Add(time.Second * 10).Unix(),
 		Name:     "test_wf",
 		Steps: []metapb.Step{
-			metapb.Step{
+			{
 				Name: "step_start",
 				Execution: metapb.Execution{
 					Type: metapb.Branch,
 					Branches: []metapb.ConditionExecution{
-						metapb.ConditionExecution{
+						{
 							Condition: metapb.Expr{
 								Value: []byte("{num: event.move} == 1"),
 							},
 							NextStep: "next_1",
 						},
-						metapb.ConditionExecution{
+						{
 							Condition: metapb.Expr{
 								Value: []byte("1 == 1"),
 							},
@@ -345,7 +345,7 @@ func TestTriggerDirect(t *testing.T) {
 					},
 				},
 			},
-			metapb.Step{
+			{
 				Name: "next_1",
 				Execution: metapb.Execution{
 					Type: metapb.Direct,
@@ -354,7 +354,7 @@ func TestTriggerDirect(t *testing.T) {
 					},
 				},
 			},
-			metapb.Step{
+			{
 				Name: "next_2",
 				Execution: metapb.Execution{
 					Type: metapb.Direct,
@@ -363,7 +363,7 @@ func TestTriggerDirect(t *testing.T) {
 					},
 				},
 			},
-			metapb.Step{
+			{
 				Name: "end",
 				Execution: metapb.Execution{
 					Type:   metapb.Direct,
@@ -389,7 +389,7 @@ func TestTriggerDirect(t *testing.T) {
 			TenantID: 10001,
 			UserID:   1,
 			Data: []metapb.KV{
-				metapb.KV{
+				{
 					Key:   []byte("move"),
 					Value: []byte("1"),
 				},
@@ -478,18 +478,18 @@ func TestUpdateCrowd(t *testing.T) {
 		TenantID: tid,
 		Name:     "test_wf",
 		Steps: []metapb.Step{
-			metapb.Step{
+			{
 				Name: "step_start",
 				Execution: metapb.Execution{
 					Type: metapb.Branch,
 					Branches: []metapb.ConditionExecution{
-						metapb.ConditionExecution{
+						{
 							Condition: metapb.Expr{
 								Value: []byte("{num: event.uid} == 1"),
 							},
 							NextStep: "step_end_1",
 						},
-						metapb.ConditionExecution{
+						{
 							Condition: metapb.Expr{
 								Value: []byte("1 == 1"),
 							},
@@ -498,14 +498,14 @@ func TestUpdateCrowd(t *testing.T) {
 					},
 				},
 			},
-			metapb.Step{
+			{
 				Name: "step_end_1",
 				Execution: metapb.Execution{
 					Type:   metapb.Direct,
 					Direct: &metapb.DirectExecution{},
 				},
 			},
-			metapb.Step{
+			{
 				Name: "step_end_else",
 				Execution: metapb.Execution{
 					Type:   metapb.Direct,
@@ -531,7 +531,7 @@ func TestUpdateCrowd(t *testing.T) {
 			TenantID: tid,
 			UserID:   2,
 			Data: []metapb.KV{
-				metapb.KV{
+				{
 					Key:   []byte("uid"),
 					Value: []byte("2"),
 				},
@@ -543,7 +543,7 @@ func TestUpdateCrowd(t *testing.T) {
 			TenantID: tid,
 			UserID:   3,
 			Data: []metapb.KV{
-				metapb.KV{
+				{
 					Key:   []byte("uid"),
 					Value: []byte("3"),
 				},
@@ -555,7 +555,7 @@ func TestUpdateCrowd(t *testing.T) {
 			TenantID: tid,
 			UserID:   4,
 			Data: []metapb.KV{
-				metapb.KV{
+				{
 					Key:   []byte("uid"),
 					Value: []byte("4"),
 				},
@@ -586,7 +586,7 @@ func TestUpdateCrowd(t *testing.T) {
 			TenantID: tid,
 			UserID:   1,
 			Data: []metapb.KV{
-				metapb.KV{
+				{
 					Key:   []byte("uid"),
 					Value: []byte("1"),
 				},
@@ -640,36 +640,36 @@ func TestUpdateWorkflow(t *testing.T) {
 		TenantID: tid,
 		Name:     "test_wf",
 		Steps: []metapb.Step{
-			metapb.Step{
+			{
 				Name: "step_start",
 				Execution: metapb.Execution{
 					Type: metapb.Branch,
 					Branches: []metapb.ConditionExecution{
-						metapb.ConditionExecution{
+						{
 							Condition: metapb.Expr{
 								Value: []byte("{num: event.uid} == 1"),
 							},
 							NextStep: "step_end_1",
 						},
-						metapb.ConditionExecution{
+						{
 							Condition: metapb.Expr{
 								Value: []byte("{num: event.uid} == 2"),
 							},
 							NextStep: "step_end_2",
 						},
-						metapb.ConditionExecution{
+						{
 							Condition: metapb.Expr{
 								Value: []byte("{num: event.uid} == 3"),
 							},
 							NextStep: "step_end_3",
 						},
-						metapb.ConditionExecution{
+						{
 							Condition: metapb.Expr{
 								Value: []byte("{num: event.uid} == 4"),
 							},
 							NextStep: "step_end_4",
 						},
-						metapb.ConditionExecution{
+						{
 							Condition: metapb.Expr{
 								Value: []byte("1 == 1"),
 							},
@@ -678,35 +678,35 @@ func TestUpdateWorkflow(t *testing.T) {
 					},
 				},
 			},
-			metapb.Step{
+			{
 				Name: "step_end_1",
 				Execution: metapb.Execution{
 					Type:   metapb.Direct,
 					Direct: &metapb.DirectExecution{},
 				},
 			},
-			metapb.Step{
+			{
 				Name: "step_end_2",
 				Execution: metapb.Execution{
 					Type:   metapb.Direct,
 					Direct: &metapb.DirectExecution{},
 				},
 			},
-			metapb.Step{
+			{
 				Name: "step_end_3",
 				Execution: metapb.Execution{
 					Type:   metapb.Direct,
 					Direct: &metapb.DirectExecution{},
 				},
 			},
-			metapb.Step{
+			{
 				Name: "step_end_4",
 				Execution: metapb.Execution{
 					Type:   metapb.Direct,
 					Direct: &metapb.DirectExecution{},
 				},
 			},
-			metapb.Step{
+			{
 				Name: "step_end_else",
 				Execution: metapb.Execution{
 					Type:   metapb.Direct,
@@ -731,7 +731,7 @@ func TestUpdateWorkflow(t *testing.T) {
 			TenantID: tid,
 			UserID:   1,
 			Data: []metapb.KV{
-				metapb.KV{
+				{
 					Key:   []byte("uid"),
 					Value: []byte("1"),
 				},
@@ -743,7 +743,7 @@ func TestUpdateWorkflow(t *testing.T) {
 			TenantID: tid,
 			UserID:   2,
 			Data: []metapb.KV{
-				metapb.KV{
+				{
 					Key:   []byte("uid"),
 					Value: []byte("2"),
 				},
@@ -755,7 +755,7 @@ func TestUpdateWorkflow(t *testing.T) {
 			TenantID: tid,
 			UserID:   3,
 			Data: []metapb.KV{
-				metapb.KV{
+				{
 					Key:   []byte("uid"),
 					Value: []byte("3"),
 				},
@@ -787,36 +787,36 @@ func TestUpdateWorkflow(t *testing.T) {
 		TenantID: tid,
 		Name:     "test_wf",
 		Steps: []metapb.Step{
-			metapb.Step{
+			{
 				Name: "step_start",
 				Execution: metapb.Execution{
 					Type: metapb.Branch,
 					Branches: []metapb.ConditionExecution{
-						metapb.ConditionExecution{
+						{
 							Condition: metapb.Expr{
 								Value: []byte("{num: event.uid} == 1"),
 							},
 							NextStep: "step_end_1",
 						},
-						metapb.ConditionExecution{
+						{
 							Condition: metapb.Expr{
 								Value: []byte("{num: event.uid} == 5"),
 							},
 							NextStep: "step_end_5",
 						},
-						metapb.ConditionExecution{
+						{
 							Condition: metapb.Expr{
 								Value: []byte("{num: event.uid} == 3"),
 							},
 							NextStep: "step_end_3",
 						},
-						metapb.ConditionExecution{
+						{
 							Condition: metapb.Expr{
 								Value: []byte("{num: event.uid} == 4"),
 							},
 							NextStep: "step_end_4",
 						},
-						metapb.ConditionExecution{
+						{
 							Condition: metapb.Expr{
 								Value: []byte("1 == 1"),
 							},
@@ -825,35 +825,35 @@ func TestUpdateWorkflow(t *testing.T) {
 					},
 				},
 			},
-			metapb.Step{
+			{
 				Name: "step_end_1",
 				Execution: metapb.Execution{
 					Type:   metapb.Direct,
 					Direct: &metapb.DirectExecution{},
 				},
 			},
-			metapb.Step{
+			{
 				Name: "step_end_5",
 				Execution: metapb.Execution{
 					Type:   metapb.Direct,
 					Direct: &metapb.DirectExecution{},
 				},
 			},
-			metapb.Step{
+			{
 				Name: "step_end_3",
 				Execution: metapb.Execution{
 					Type:   metapb.Direct,
 					Direct: &metapb.DirectExecution{},
 				},
 			},
-			metapb.Step{
+			{
 				Name: "step_end_4",
 				Execution: metapb.Execution{
 					Type:   metapb.Direct,
 					Direct: &metapb.DirectExecution{},
 				},
 			},
-			metapb.Step{
+			{
 				Name: "step_end_else",
 				Execution: metapb.Execution{
 					Type:   metapb.Direct,
@@ -913,24 +913,24 @@ func TestTransaction(t *testing.T) {
 		TenantID: tid,
 		Name:     "test_wf",
 		Steps: []metapb.Step{
-			metapb.Step{
+			{
 				Name: "step_start",
 				Execution: metapb.Execution{
 					Type: metapb.Branch,
 					Branches: []metapb.ConditionExecution{
-						metapb.ConditionExecution{
+						{
 							Condition: metapb.Expr{
 								Value: []byte("{num: event.uid} == 1"),
 							},
 							NextStep: "step_end_1",
 						},
-						metapb.ConditionExecution{
+						{
 							Condition: metapb.Expr{
 								Value: []byte("{num: kv.uid} == 2"),
 							},
 							NextStep: "step_end_2",
 						},
-						metapb.ConditionExecution{
+						{
 							Condition: metapb.Expr{
 								Value: []byte("1 == 1"),
 							},
@@ -939,21 +939,21 @@ func TestTransaction(t *testing.T) {
 					},
 				},
 			},
-			metapb.Step{
+			{
 				Name: "step_end_1",
 				Execution: metapb.Execution{
 					Type:   metapb.Direct,
 					Direct: &metapb.DirectExecution{},
 				},
 			},
-			metapb.Step{
+			{
 				Name: "step_end_2",
 				Execution: metapb.Execution{
 					Type:   metapb.Direct,
 					Direct: &metapb.DirectExecution{},
 				},
 			},
-			metapb.Step{
+			{
 				Name: "step_end_else",
 				Execution: metapb.Execution{
 					Type:   metapb.Direct,
@@ -979,7 +979,7 @@ func TestTransaction(t *testing.T) {
 			TenantID: tid,
 			UserID:   1,
 			Data: []metapb.KV{
-				metapb.KV{
+				{
 					Key:   []byte("uid"),
 					Value: []byte("1"),
 				},
@@ -1073,7 +1073,7 @@ func TestTimerWithUseStepCrowdToDrive(t *testing.T) {
 		TenantID: tid,
 		Name:     "test_wf",
 		Steps: []metapb.Step{
-			metapb.Step{
+			{
 				Name: "step_start",
 				Execution: metapb.Execution{
 					Type: metapb.Timer,
@@ -1084,7 +1084,7 @@ func TestTimerWithUseStepCrowdToDrive(t *testing.T) {
 					},
 				},
 			},
-			metapb.Step{
+			{
 				Name: "step_end",
 				Execution: metapb.Execution{
 					Type:   metapb.Direct,
@@ -1139,18 +1139,18 @@ func TestLastTransactionNotCompleted(t *testing.T) {
 		TenantID: tid,
 		Name:     "test_wf",
 		Steps: []metapb.Step{
-			metapb.Step{
+			{
 				Name: "step_start",
 				Execution: metapb.Execution{
 					Type: metapb.Branch,
 					Branches: []metapb.ConditionExecution{
-						metapb.ConditionExecution{
+						{
 							Condition: metapb.Expr{
 								Value: []byte("{num: event.uid} == 1"),
 							},
 							NextStep: "step_end",
 						},
-						metapb.ConditionExecution{
+						{
 							Condition: metapb.Expr{
 								Value: []byte("1 == 1"),
 							},
@@ -1159,7 +1159,7 @@ func TestLastTransactionNotCompleted(t *testing.T) {
 					},
 				},
 			},
-			metapb.Step{
+			{
 				Name: "step_end",
 				Execution: metapb.Execution{
 					Type:   metapb.Direct,
@@ -1182,19 +1182,19 @@ func TestLastTransactionNotCompleted(t *testing.T) {
 			InstanceID: instanceID,
 			Index:      0,
 			States: []metapb.StepState{
-				metapb.StepState{
+				{
 					Step: metapb.Step{
 						Name: "step_start",
 						Execution: metapb.Execution{
 							Type: metapb.Branch,
 							Branches: []metapb.ConditionExecution{
-								metapb.ConditionExecution{
+								{
 									Condition: metapb.Expr{
 										Value: []byte("{num: event.uid} == 1"),
 									},
 									NextStep: "step_end",
 								},
-								metapb.ConditionExecution{
+								{
 									Condition: metapb.Expr{
 										Value: []byte("1 == 1"),
 									},
@@ -1207,7 +1207,7 @@ func TestLastTransactionNotCompleted(t *testing.T) {
 					Loader:     metapb.RawLoader,
 					LoaderMeta: emptyBMData.Bytes(),
 				},
-				metapb.StepState{
+				{
 					Step: metapb.Step{
 						Name: "step_end",
 						Execution: metapb.Execution{
@@ -1268,18 +1268,18 @@ func TestLastTransactionCompleted(t *testing.T) {
 		TenantID: tid,
 		Name:     "test_wf",
 		Steps: []metapb.Step{
-			metapb.Step{
+			{
 				Name: "step_start",
 				Execution: metapb.Execution{
 					Type: metapb.Branch,
 					Branches: []metapb.ConditionExecution{
-						metapb.ConditionExecution{
+						{
 							Condition: metapb.Expr{
 								Value: []byte("{num: event.uid} == 1"),
 							},
 							NextStep: "step_end",
 						},
-						metapb.ConditionExecution{
+						{
 							Condition: metapb.Expr{
 								Value: []byte("1 == 1"),
 							},
@@ -1288,7 +1288,7 @@ func TestLastTransactionCompleted(t *testing.T) {
 					},
 				},
 			},
-			metapb.Step{
+			{
 				Name: "step_end",
 				Execution: metapb.Execution{
 					Type:   metapb.Direct,
@@ -1311,19 +1311,19 @@ func TestLastTransactionCompleted(t *testing.T) {
 			InstanceID: instanceID,
 			Index:      0,
 			States: []metapb.StepState{
-				metapb.StepState{
+				{
 					Step: metapb.Step{
 						Name: "step_start",
 						Execution: metapb.Execution{
 							Type: metapb.Branch,
 							Branches: []metapb.ConditionExecution{
-								metapb.ConditionExecution{
+								{
 									Condition: metapb.Expr{
 										Value: []byte("{num: event.uid} == 1"),
 									},
 									NextStep: "step_end",
 								},
-								metapb.ConditionExecution{
+								{
 									Condition: metapb.Expr{
 										Value: []byte("1 == 1"),
 									},
@@ -1336,7 +1336,7 @@ func TestLastTransactionCompleted(t *testing.T) {
 					Loader:     metapb.RawLoader,
 					LoaderMeta: emptyBMData.Bytes(),
 				},
-				metapb.StepState{
+				{
 					Step: metapb.Step{
 						Name: "step_end",
 						Execution: metapb.Execution{
@@ -1396,19 +1396,19 @@ func TestTriggerTTLTimeout(t *testing.T) {
 		TenantID: 10001,
 		Name:     "test_wf",
 		Steps: []metapb.Step{
-			metapb.Step{
+			{
 				Name: "step_start",
 				TTL:  1,
 				Execution: metapb.Execution{
 					Type: metapb.Branch,
 					Branches: []metapb.ConditionExecution{
-						metapb.ConditionExecution{
+						{
 							Condition: metapb.Expr{
 								Value: []byte("{num: event.uid} == 1"),
 							},
 							NextStep: "step_end_1",
 						},
-						metapb.ConditionExecution{
+						{
 							Condition: metapb.Expr{
 								Value: []byte(`{str: kv.ttl}  != ""`),
 							},
@@ -1417,14 +1417,14 @@ func TestTriggerTTLTimeout(t *testing.T) {
 					},
 				},
 			},
-			metapb.Step{
+			{
 				Name: "step_end_1",
 				Execution: metapb.Execution{
 					Type:   metapb.Direct,
 					Direct: &metapb.DirectExecution{},
 				},
 			},
-			metapb.Step{
+			{
 				Name: "step_end_else",
 				Execution: metapb.Execution{
 					Type:   metapb.Direct,
@@ -1450,7 +1450,7 @@ func TestTriggerTTLTimeout(t *testing.T) {
 			TenantID: 10001,
 			UserID:   1,
 			Data: []metapb.KV{
-				metapb.KV{
+				{
 					Key:   []byte("uid"),
 					Value: []byte("1"),
 				},
@@ -1509,18 +1509,18 @@ func TestStepCountAndNotiesMatched(t *testing.T) {
 		TenantID: tid,
 		Name:     "test_wf",
 		Steps: []metapb.Step{
-			metapb.Step{
+			{
 				Name: "step_start_matched",
 				Execution: metapb.Execution{
 					Type: metapb.Branch,
 					Branches: []metapb.ConditionExecution{
-						metapb.ConditionExecution{
+						{
 							Condition: metapb.Expr{
 								Value: []byte("{num: event.data} == 1"),
 							},
 							NextStep: "step_direct_matched",
 						},
-						metapb.ConditionExecution{
+						{
 							Condition: metapb.Expr{
 								Value: []byte(`1 == 1`),
 							},
@@ -1529,7 +1529,7 @@ func TestStepCountAndNotiesMatched(t *testing.T) {
 					},
 				},
 			},
-			metapb.Step{
+			{
 				Name: "step_direct_matched",
 				Execution: metapb.Execution{
 					Type: metapb.Direct,
@@ -1538,7 +1538,7 @@ func TestStepCountAndNotiesMatched(t *testing.T) {
 					},
 				},
 			},
-			metapb.Step{
+			{
 				Name: "step_end_matched",
 				Execution: metapb.Execution{
 					Type:   metapb.Direct,
@@ -1559,7 +1559,7 @@ func TestStepCountAndNotiesMatched(t *testing.T) {
 				TenantID: tid,
 				UserID:   i,
 				Data: []metapb.KV{
-					metapb.KV{
+					{
 						Key:   []byte("data"),
 						Value: []byte("1"),
 					},
@@ -1689,18 +1689,18 @@ func TestNotifyWithErrorRetry(t *testing.T) {
 		TenantID: 10001,
 		Name:     "test_wf",
 		Steps: []metapb.Step{
-			metapb.Step{
+			{
 				Name: "step_start",
 				Execution: metapb.Execution{
 					Type: metapb.Branch,
 					Branches: []metapb.ConditionExecution{
-						metapb.ConditionExecution{
+						{
 							Condition: metapb.Expr{
 								Value: []byte("{num: event.uid} == 1"),
 							},
 							NextStep: "step_end",
 						},
-						metapb.ConditionExecution{
+						{
 							Condition: metapb.Expr{
 								Value: []byte("1 == 1"),
 							},
@@ -1709,7 +1709,7 @@ func TestNotifyWithErrorRetry(t *testing.T) {
 					},
 				},
 			},
-			metapb.Step{
+			{
 				Name: "step_end",
 				Execution: metapb.Execution{
 					Type:   metapb.Direct,
@@ -1734,7 +1734,7 @@ func TestNotifyWithErrorRetry(t *testing.T) {
 			TenantID: 10001,
 			UserID:   1,
 			Data: []metapb.KV{
-				metapb.KV{
+				{
 					Key:   []byte("uid"),
 					Value: []byte("1"),
 				},

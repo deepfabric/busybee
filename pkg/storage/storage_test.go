@@ -41,19 +41,19 @@ func TestSetIf(t *testing.T) {
 		Key:   key,
 		Value: value,
 		Conditions: []rpcpb.ConditionGroup{
-			rpcpb.ConditionGroup{
+			{
 				Conditions: []rpcpb.Condition{
-					rpcpb.Condition{
+					{
 						Cmp: rpcpb.Exists,
 					},
 				},
 			},
-			rpcpb.ConditionGroup{
+			{
 				Conditions: []rpcpb.Condition{
-					rpcpb.Condition{
+					{
 						Cmp: rpcpb.NotExists,
 					},
-					rpcpb.Condition{
+					{
 						Cmp:   rpcpb.Equal,
 						Value: value,
 					},
@@ -75,9 +75,9 @@ func TestSetIf(t *testing.T) {
 		Key:   key,
 		Value: value2,
 		Conditions: []rpcpb.ConditionGroup{
-			rpcpb.ConditionGroup{
+			{
 				Conditions: []rpcpb.Condition{
-					rpcpb.Condition{
+					{
 						Cmp: rpcpb.NotExists,
 					},
 				},
@@ -126,9 +126,9 @@ func TestDeleteIf(t *testing.T) {
 	data, err := store.ExecCommand(&rpcpb.DeleteIfRequest{
 		Key: key,
 		Conditions: []rpcpb.ConditionGroup{
-			rpcpb.ConditionGroup{
+			{
 				Conditions: []rpcpb.Condition{
-					rpcpb.Condition{
+					{
 						Cmp:   rpcpb.Equal,
 						Value: value2,
 					},
@@ -148,9 +148,9 @@ func TestDeleteIf(t *testing.T) {
 	data, err = store.ExecCommand(&rpcpb.DeleteIfRequest{
 		Key: key,
 		Conditions: []rpcpb.ConditionGroup{
-			rpcpb.ConditionGroup{
+			{
 				Conditions: []rpcpb.Condition{
-					rpcpb.Condition{
+					{
 						Cmp: rpcpb.Exists,
 					},
 				},
@@ -602,7 +602,7 @@ func TestPutToQueue(t *testing.T) {
 			TenantID: 10000,
 			UserID:   1,
 			Data: []metapb.KV{
-				metapb.KV{
+				{
 					Key:   []byte("uid"),
 					Value: []byte("1"),
 				},
@@ -614,7 +614,7 @@ func TestPutToQueue(t *testing.T) {
 			TenantID: 10000,
 			UserID:   2,
 			Data: []metapb.KV{
-				metapb.KV{
+				{
 					Key:   []byte("uid"),
 					Value: []byte("2"),
 				},
@@ -626,7 +626,7 @@ func TestPutToQueue(t *testing.T) {
 			TenantID: 10000,
 			UserID:   3,
 			Data: []metapb.KV{
-				metapb.KV{
+				{
 					Key:   []byte("uid"),
 					Value: []byte("3"),
 				},
@@ -685,7 +685,7 @@ func TestPutToQueueWithKV(t *testing.T) {
 				TenantID: 10,
 				UserID:   1,
 				Data: []metapb.KV{
-					metapb.KV{
+					{
 						Key:   []byte("uid"),
 						Value: []byte("1"),
 					},
@@ -744,8 +744,7 @@ func TestQueueFetchWithNoConsumers(t *testing.T) {
 	state := &metapb.QueueState{
 		Partitions: 2,
 		States: []metapb.Partiton{
-			metapb.Partiton{},
-			metapb.Partiton{},
+			{}, {},
 		},
 		Timeout: 60,
 	}
@@ -771,8 +770,7 @@ func TestQueueFetchWithInvalidConsumer(t *testing.T) {
 		Consumers:  1,
 		Partitions: 2,
 		States: []metapb.Partiton{
-			metapb.Partiton{},
-			metapb.Partiton{},
+			{}, {},
 		},
 		Timeout: 60,
 	}
@@ -799,8 +797,7 @@ func TestQueueFetchWithInvalidPartition(t *testing.T) {
 		Consumers:  1,
 		Partitions: 2,
 		States: []metapb.Partiton{
-			metapb.Partiton{},
-			metapb.Partiton{},
+			{}, {},
 		},
 		Timeout: 60,
 	}
@@ -827,8 +824,7 @@ func TestQueueJoin(t *testing.T) {
 	state := &metapb.QueueState{
 		Partitions: 2,
 		States: []metapb.Partiton{
-			metapb.Partiton{},
-			metapb.Partiton{},
+			{}, {},
 		},
 		Timeout: 60,
 	}
@@ -932,8 +928,7 @@ func TestQueueFetchAfterJoin(t *testing.T) {
 	state := &metapb.QueueState{
 		Partitions: 2,
 		States: []metapb.Partiton{
-			metapb.Partiton{},
-			metapb.Partiton{},
+			{}, {},
 		},
 		Timeout: 60,
 	}
@@ -989,7 +984,7 @@ func TestQueueFetchWithRebalancing(t *testing.T) {
 		Consumers:  1,
 		Partitions: 1,
 		States: []metapb.Partiton{
-			metapb.Partiton{
+			{
 				Consumer:       0,
 				Version:        1,
 				State:          metapb.PSRebalancing,
@@ -1050,13 +1045,13 @@ func TestQueueFetchWithRemoveTimeoutConsumer(t *testing.T) {
 		Consumers:  2,
 		Partitions: 2,
 		States: []metapb.Partiton{
-			metapb.Partiton{
+			{
 				Consumer:    0,
 				Version:     0,
 				State:       metapb.PSRunning,
 				LastFetchTS: time.Now().Unix() - 60 - 1,
 			},
-			metapb.Partiton{
+			{
 				Consumer:    1,
 				Version:     1,
 				State:       metapb.PSRunning,
@@ -1126,13 +1121,13 @@ func TestQueueJoinAfterClearConsumers(t *testing.T) {
 		Consumers:  0,
 		Partitions: 2,
 		States: []metapb.Partiton{
-			metapb.Partiton{
+			{
 				Consumer:    0,
 				Version:     1,
 				State:       metapb.PSRebalancing,
 				LastFetchTS: now - 60 - 1,
 			},
-			metapb.Partiton{
+			{
 				Consumer:    0,
 				Version:     2,
 				State:       metapb.PSRebalancing,
@@ -1188,13 +1183,13 @@ func TestQueueFetchWithCommitOffset(t *testing.T) {
 		Consumers:  2,
 		Partitions: 2,
 		States: []metapb.Partiton{
-			metapb.Partiton{
+			{
 				Consumer:    0,
 				Version:     0,
 				State:       metapb.PSRunning,
 				LastFetchTS: time.Now().Unix(),
 			},
-			metapb.Partiton{
+			{
 				Consumer:    1,
 				Version:     1,
 				State:       metapb.PSRunning,
@@ -1256,21 +1251,21 @@ func TestQueueFetchWithStaleCommitOffset(t *testing.T) {
 		Consumers:  3,
 		Partitions: 3,
 		States: []metapb.Partiton{
-			metapb.Partiton{
+			{
 				Consumer:       0,
 				Version:        1,
 				State:          metapb.PSRunning,
 				LastFetchCount: 0,
 				LastFetchTS:    time.Now().Unix(),
 			},
-			metapb.Partiton{
+			{
 				Consumer:       1,
 				Version:        1,
 				State:          metapb.PSRebalancing,
 				LastFetchCount: 0,
 				LastFetchTS:    time.Now().Unix(),
 			},
-			metapb.Partiton{
+			{
 				Consumer:       2,
 				Version:        1,
 				State:          metapb.PSRebalancing,

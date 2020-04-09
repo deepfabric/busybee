@@ -57,13 +57,13 @@ func TestCondition(t *testing.T) {
 		Execution: metapb.Execution{
 			Type: metapb.Branch,
 			Branches: []metapb.ConditionExecution{
-				metapb.ConditionExecution{
+				{
 					Condition: metapb.Expr{
 						Value: []byte("1 == 1"),
 					},
 					NextStep: "end",
 				},
-				metapb.ConditionExecution{
+				{
 					Condition: metapb.Expr{
 						Value: []byte("1 == 1"),
 					},
@@ -94,7 +94,7 @@ func TestCondition(t *testing.T) {
 		Execution: metapb.Execution{
 			Type: metapb.Branch,
 			Branches: []metapb.ConditionExecution{
-				metapb.ConditionExecution{
+				{
 					Condition: metapb.Expr{
 						Value: []byte("1 == 1"),
 					},
