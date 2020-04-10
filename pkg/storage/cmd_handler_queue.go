@@ -259,7 +259,8 @@ func maybeUpdateCompletedOffset(state *metapb.QueueState, now int64, req *rpcpb.
 	}
 
 	if req.CompletedOffset > p.Completed {
-		log.Fatalf("BUG: the newest consumer in rebalancing, but completed offset %d > prev completed %d",
+		log.Fatalf("BUG: %s the newest consumer in rebalancing, but completed offset %d > prev completed %d",
+			string(req.Group),
 			req.CompletedOffset,
 			p.Completed)
 	}

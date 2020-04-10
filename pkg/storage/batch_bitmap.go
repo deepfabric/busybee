@@ -38,7 +38,8 @@ func (rb *bitmapBatch) addReq(req *raftcmdpb.Request, resp *raftcmdpb.Response, 
 		protoc.MustUnmarshal(msg, req.Cmd)
 
 		msg.Key = req.Key
-		rb.add(req.Key, msg.Value...)
+
+		rb.add(req.Key, msg.Mod, msg.Value...)
 
 		resp.Value = rpcpb.EmptyRespBytes
 	case rpcpb.BMAdd:
@@ -46,7 +47,7 @@ func (rb *bitmapBatch) addReq(req *raftcmdpb.Request, resp *raftcmdpb.Response, 
 		protoc.MustUnmarshal(msg, req.Cmd)
 
 		msg.Key = req.Key
-		rb.add(msg.Key, msg.Value...)
+		rb.add(msg.Key, msg.Mod, msg.Value...)
 
 		resp.Value = rpcpb.EmptyRespBytes
 	case rpcpb.BMRemove:
@@ -70,17 +71,17 @@ func (rb *bitmapBatch) addReq(req *raftcmdpb.Request, resp *raftcmdpb.Response, 
 	}
 }
 
-func (rb *bitmapBatch) add(bm []byte, values ...uint32) {
+func (rb *bitmapBatch) add(bm []byte, mod uint32, values ...uint32) {
 	for idx, key := range rb.bitmaps {
 		if bytes.Compare(key, bm) == 0 {
 			rb.ops[idx] = append(rb.ops[idx], opAdd)
-			rb.appendAdds(idx, values...)
+			rb.appendAdds(idx, mod, values...)
 			return
 		}
 	}
 
 	value := util.AcquireBitmap()
-	value.AddMany(values)
+	rb.doAdd(value, mod, values...)
 
 	rb.ops = append(rb.ops, []int{opAdd})
 	rb.bitmaps = append(rb.bitmaps, bm)
@@ -114,12 +115,26 @@ func (rb *bitmapBatch) del(bm []byte) {
 	rb.clean(bm, opDel)
 }
 
-func (rb *bitmapBatch) appendAdds(idx int, values ...uint32) {
+func (rb *bitmapBatch) appendAdds(idx int, mod uint32, values ...uint32) {
 	if rb.bitmapAdds[idx] == nil {
 		rb.bitmapAdds[idx] = util.AcquireBitmap()
 	}
 
-	rb.bitmapAdds[idx].AddMany(values)
+	rb.doAdd(rb.bitmapAdds[idx], mod, values...)
+}
+
+func (rb *bitmapBatch) doAdd(bm *roaring.Bitmap, mod uint32, values ...uint32) {
+	if mod == 0 {
+		bm.AddMany(values)
+		return
+	}
+
+	end := values[1]
+	for i := values[0]; i <= end; i++ {
+		if i%mod == 0 {
+			bm.Add(i)
+		}
+	}
 }
 
 func (rb *bitmapBatch) appendRemoves(idx int, values ...uint32) {

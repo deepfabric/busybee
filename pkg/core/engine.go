@@ -252,25 +252,34 @@ func (eng *engine) tenantInitWithReplicas(metadata metapb.Tenant, replicas uint3
 	return eng.store.RaftStore().AddShards(shards...)
 }
 
-func (eng *engine) StartInstance(workflow metapb.Workflow, loader metapb.BMLoader, crowdMeta []byte, workers uint64) (uint64, error) {
-	if err := checkExcution(workflow); err != nil {
-		return 0, err
-	}
-
-	value, err := eng.store.Get(storage.TenantMetadataKey(workflow.TenantID))
+func (eng *engine) doCheckTenant(tid uint64) error {
+	value, err := eng.store.Get(storage.TenantMetadataKey(tid))
 	if err != nil {
 		metric.IncStorageFailed()
-		return 0, err
+		return err
 	}
 	if len(value) == 0 {
-		return 0, fmt.Errorf("%d not created", workflow.TenantID)
+		return fmt.Errorf("%d not created", tid)
 	}
 
-	logger.Infof("workflow-%d start load bitmap crowd",
-		workflow.ID)
-	bm, err := eng.loadBM(loader, crowdMeta)
-	if err != nil {
-		logger.Errorf("start workflow-%d failed with %+v",
+	return nil
+}
+
+func (eng *engine) StartInstance(workflow metapb.Workflow, loader metapb.BMLoader, crowdMeta []byte, workers uint64) (uint64, error) {
+	t := time.Now().Unix()
+	logger.Infof("workflow-%d start instance with %s",
+		workflow.ID,
+		workflow.String())
+
+	if err := checkExcution(workflow); err != nil {
+		logger.Errorf("workflow-%d start instance failed with %+v",
+			workflow.ID,
+			err)
+		return 0, err
+	}
+
+	if err := eng.doCheckTenant(workflow.TenantID); err != nil {
+		logger.Errorf("workflow-%d start instance failed with %+v",
 			workflow.ID,
 			err)
 		return 0, err
@@ -278,30 +287,58 @@ func (eng *engine) StartInstance(workflow metapb.Workflow, loader metapb.BMLoade
 
 	old, err := eng.loadInstance(workflow.ID)
 	if err != nil {
+		logger.Errorf("workflow-%d start instance failed with %+v",
+			workflow.ID,
+			err)
 		return 0, err
 	}
+
+	start := time.Now().Unix()
+	logger.Infof("workflow-%d start instance, do load bitmap crowd",
+		workflow.ID)
+	bm, err := eng.loadBM(loader, crowdMeta)
+	if err != nil {
+		logger.Errorf("workflow-%d start instance failed with %+v",
+			workflow.ID,
+			err)
+		return 0, err
+	}
+	end := time.Now().Unix()
+
+	logger.Infof("workflow-%d start instance, do load bitmap crowd completed in %d secs",
+		workflow.ID,
+		end-start)
+
 	if old != nil {
 		if old.State != metapb.Stopped {
-			logger.Warningf("workflow-%d last instance is not stopped",
+			logger.Warningf("workflow-%d start instance skipped, last instance is not stopped",
 				workflow.ID)
 			return 0, nil
 		}
 
+		start = time.Now().Unix()
+		logger.Infof("workflow-%d start instance, do load old bitmap crowd",
+			workflow.ID)
 		oldBM, err := eng.loadBM(old.Loader, old.LoaderMeta)
 		if err != nil {
-			logger.Errorf("start workflow-%d failed with %+v",
+			logger.Errorf("workflow-%d start instance failed with %+v",
 				workflow.ID,
 				err)
 			return 0, err
 		}
 
+		end = time.Now().Unix()
+		logger.Infof("workflow-%d start instance, do load old bitmap crowd completed in %d secs",
+			workflow.ID,
+			end-start)
+
 		bm.AndNot(oldBM)
-		logger.Infof("start workflow-%d with new instance, crow changed to %d, workers %d",
+		logger.Infof("workflow-%d start instance with new instance, crow changed to %d, workers %d",
 			workflow.ID,
 			bm.GetCardinality(),
 			workers)
 	} else {
-		logger.Infof("start workflow-%d with first instance, crow %d, workers %d",
+		logger.Infof("workflow-%d start instance with first instance, crow %d, workers %d",
 			workflow.ID,
 			bm.GetCardinality(),
 			workers)
@@ -309,7 +346,7 @@ func (eng *engine) StartInstance(workflow metapb.Workflow, loader metapb.BMLoade
 
 	id, err := eng.Storage().RaftStore().Prophet().GetRPC().AllocID()
 	if err != nil {
-		logger.Errorf("start workflow-%d failed with %+v",
+		logger.Errorf("workflow-%d start instance failed with %+v",
 			workflow.ID,
 			err)
 		return 0, err
@@ -319,10 +356,21 @@ func (eng *engine) StartInstance(workflow metapb.Workflow, loader metapb.BMLoade
 	defer buf.Release()
 	key := storage.WorkflowCrowdShardKey(workflow.ID, id, 0, buf)
 
+	start = time.Now().Unix()
+	logger.Infof("workflow-%d start instance, do put bitmap crowd",
+		workflow.ID)
 	loader, loaderMeta, err := eng.putBM(bm, key, 0)
 	if err != nil {
+		logger.Errorf("workflow-%d start instance failed with %+v",
+			workflow.ID,
+			err)
 		return 0, err
 	}
+
+	end = time.Now().Unix()
+	logger.Infof("workflow-%d start instance, do put bitmap crowd completed in %d secs",
+		workflow.ID,
+		end-start)
 
 	instance := metapb.WorkflowInstance{
 		Snapshot:   workflow,
@@ -338,12 +386,16 @@ func (eng *engine) StartInstance(workflow metapb.Workflow, loader metapb.BMLoade
 	_, err = eng.store.ExecCommand(req)
 	if err != nil {
 		metric.IncStorageFailed()
-		logger.Errorf("start workflow-%d failed with %+v",
+		logger.Errorf("workflow-%d start instance failed with %+v",
 			workflow.ID,
 			err)
 	}
 
-	return id, err
+	end = time.Now().Unix()
+	logger.Infof("workflow-%d start instance completed in %d secs",
+		workflow.ID,
+		(end - t))
+	return id, nil
 }
 
 func (eng *engine) LastInstance(id uint64) (*metapb.WorkflowInstance, error) {

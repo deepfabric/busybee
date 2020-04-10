@@ -26,6 +26,10 @@ var (
 	version = flag.Bool("version", false, "Show version info")
 )
 
+var (
+	stopping = false
+)
+
 func main() {
 	flag.Parse()
 	if *version {
@@ -70,24 +74,36 @@ func main() {
 
 	go apiServer.Start()
 
-	sc := make(chan os.Signal, 1)
+	sc := make(chan os.Signal, 2)
 	signal.Notify(sc,
 		syscall.SIGHUP,
 		syscall.SIGINT,
 		syscall.SIGTERM,
 		syscall.SIGQUIT)
 
-	sig := <-sc
-	apiServer.Stop()
-	engine.Stop()
-	store.Close()
-	log.Infof("exit: signal=<%d>.", sig)
-	switch sig {
-	case syscall.SIGTERM:
+	for {
+		sig := <-sc
+
+		if !stopping {
+			stopping = true
+			go func() {
+				apiServer.Stop()
+				engine.Stop()
+				store.Close()
+				log.Infof("exit: signal=<%d>.", sig)
+				switch sig {
+				case syscall.SIGTERM:
+					log.Infof("exit: bye :-).")
+					os.Exit(0)
+				default:
+					log.Infof("exit: bye :-(.")
+					os.Exit(1)
+				}
+			}()
+			continue
+		}
+
 		log.Infof("exit: bye :-).")
 		os.Exit(0)
-	default:
-		log.Infof("exit: bye :-(.")
-		os.Exit(1)
 	}
 }
