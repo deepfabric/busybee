@@ -1,9 +1,12 @@
 package storage
 
 import (
+	"bytes"
 	"context"
+	"math"
 
 	bhmetapb "github.com/deepfabric/beehive/pb/metapb"
+	"github.com/deepfabric/beehive/raftstore"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/fagongzi/log"
@@ -13,6 +16,11 @@ import (
 const (
 	becomeLeader = iota
 	becomeFollower
+)
+
+var (
+	from = raftstore.EncodeDataKey(0, WorkflowCurrentInstanceKey(0))
+	end  = raftstore.EncodeDataKey(0, InstanceShardKey(math.MaxUint64, math.MaxUint32))
 )
 
 type shardCycle struct {
@@ -89,18 +97,20 @@ func (h *beeStorage) handleShardCycle(ctx context.Context) {
 }
 
 func (h *beeStorage) doLoadEvent(shard bhmetapb.Shard, leader bool) {
-	err := h.getStore(shard.ID).Scan(shard.Start, shard.End, func(key, value []byte) (bool, error) {
-		if len(value) == 0 {
-			return true, nil
-		}
+	err := h.getStore(shard.ID).Scan(from, end, func(key, value []byte) (bool, error) {
+		decodedKey := raftstore.DecodeDataKey(key)
 
-		switch key[0] {
-		case workflowCurrentPrefix:
-			if leader {
-				h.doWorkflowEvent(value)
+		if bytes.Compare(decodedKey, shard.Start) >= 0 &&
+			(len(shard.End) == 0 || bytes.Compare(decodedKey, shard.End) < 0) {
+			switch decodedKey[0] {
+			case workflowCurrentPrefix:
+				if leader {
+					h.doWorkflowEvent(value)
+				}
+			case workflowWorkerPrefix:
+				h.doWorkflowWorkerEvent(value, leader)
 			}
-		case workflowWorkerPrefix:
-			h.doWorkflowWorkerEvent(value, leader)
+
 		}
 
 		return true, nil

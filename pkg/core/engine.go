@@ -27,6 +27,13 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
+const (
+	// InputQueuePartitionCount input queue partition count
+	InputQueuePartitionCount = 1
+	// InputQueueTimeout input queue consumer timeout
+	InputQueueTimeout = 60
+)
+
 var (
 	emptyBMData = bytes.NewBuffer(nil)
 	initBM      = roaring.NewBitmap()
@@ -217,9 +224,9 @@ func (eng *engine) tenantInitWithReplicas(metadata metapb.Tenant, replicas uint3
 				KV: metapb.KV{
 					Key: storage.QueueMetaKey(metadata.ID, buf),
 					Value: protoc.MustMarshal(&metapb.QueueState{
-						Partitions: metadata.Input.Partitions,
-						Timeout:    metadata.Input.ConsumerTimeout,
-						States:     make([]metapb.Partiton, metadata.Input.Partitions, metadata.Input.Partitions),
+						Partitions: InputQueuePartitionCount,
+						Timeout:    InputQueueTimeout,
+						States:     make([]metapb.Partiton, 1, 1),
 					}),
 				},
 				Group: metapb.TenantInputGroup,
@@ -882,7 +889,7 @@ func (eng *engine) doStartInstanceEvent(instance *metapb.WorkflowInstance) {
 		logger.Errorf("start workflow-%d failed with %+v, retry later",
 			instance.Snapshot.ID, err)
 		util.DefaultTimeoutWheel().Schedule(eng.opts.retryInterval,
-			eng.addToRetryCompleteInstance, instance.Snapshot.ID)
+			eng.addToRetryNewInstance, instance)
 		return
 	}
 	logger.Infof("starting workflow-%d load bitmap completed",
@@ -1122,7 +1129,7 @@ func (eng *engine) addToInstanceStop(id interface{}) {
 }
 
 func workerKey(state metapb.WorkflowInstanceWorkerState) string {
-	return fmt.Sprintf("%d:%d:%d:%d",
+	return fmt.Sprintf("%d:%d-%d:%d",
 		state.TenantID,
 		state.WorkflowID,
 		state.InstanceID,

@@ -259,10 +259,11 @@ func maybeUpdateCompletedOffset(state *metapb.QueueState, now int64, req *rpcpb.
 	}
 
 	if req.CompletedOffset > p.Completed {
-		log.Fatalf("BUG: %s the newest consumer in rebalancing, but completed offset %d > prev completed %d",
+		log.Warningf("%s the newest consumer in rebalancing, but completed offset %d > prev completed %d",
 			string(req.Group),
 			req.CompletedOffset,
 			p.Completed)
+		state.States[req.Partition].Completed = req.CompletedOffset
 	}
 
 	// in rebalancing, has no last fetch items
@@ -315,6 +316,20 @@ func loadQueueState(store bhstorage.DataStorage, attrStateKey string, stateKey, 
 	return state
 }
 
+func getQueueState(key string, attrs map[string]interface{}) *metapb.QueueState {
+	var value *metapb.QueueState
+
+	if v, ok := attrs[key]; ok {
+		value = v.(*metapb.QueueState)
+	} else {
+		value = &metapb.QueueState{}
+		attrs[key] = value
+	}
+
+	value.Reset()
+	return value
+}
+
 func addStateToAttr(key string, state *metapb.QueueState, attrs map[string]interface{}) {
 	if state == nil {
 		return
@@ -359,20 +374,7 @@ func writeWriteBatch(store bhstorage.DataStorage, attrs map[string]interface{}) 
 		states := value.(map[string]*metapb.QueueState)
 		for key := range states {
 			delete(states, key)
+			delete(attrs, key)
 		}
 	}
-}
-
-func getQueueState(key string, attrs map[string]interface{}) *metapb.QueueState {
-	var value *metapb.QueueState
-
-	if v, ok := attrs[key]; ok {
-		value = v.(*metapb.QueueState)
-	} else {
-		value = &metapb.QueueState{}
-		attrs[key] = value
-	}
-
-	value.Reset()
-	return value
 }

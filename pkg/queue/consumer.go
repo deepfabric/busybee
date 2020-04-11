@@ -165,11 +165,14 @@ func (c *consumer) retryJoin() {
 }
 
 func (c *consumer) startPartition(consumerIndex, partition uint32, version uint64) {
-	logger.Infof("%d/%s/%d/%s started",
+	tag := fmt.Sprintf("%d/%s/p(%d)/g(%s)",
 		c.id,
-		string(c.consumerGroup),
+		c.group.String(),
 		partition,
-		c.group.String())
+		string(c.consumerGroup),
+	)
+
+	logger.Infof("%s started", tag)
 
 	offset := uint64(0)
 	key := storage.PartitionKey(c.id, partition)
@@ -179,11 +182,7 @@ func (c *consumer) startPartition(consumerIndex, partition uint32, version uint6
 			if c.stopped() {
 				c.removed(partition)
 
-				logger.Infof("%d/%s/%d/%s stopped",
-					c.id,
-					string(c.consumerGroup),
-					partition,
-					c.group.String())
+				logger.Infof("%s stopped", tag)
 				return
 			}
 
@@ -200,11 +199,8 @@ func (c *consumer) startPartition(consumerIndex, partition uint32, version uint6
 			value, err := c.store.ExecCommandWithGroup(req, c.group)
 			if err != nil {
 				metric.IncStorageFailed()
-				logger.Errorf("%d/%s/%d/%s failed with %+v, retry after 10s",
-					c.id,
-					string(c.consumerGroup),
-					partition,
-					c.group.String(),
+				logger.Errorf("%s failed with %+v, retry after 10s",
+					tag,
 					err)
 				time.Sleep(time.Second * 10)
 				continue
@@ -216,11 +212,7 @@ func (c *consumer) startPartition(consumerIndex, partition uint32, version uint6
 			if resp.Removed {
 				c.removed(partition)
 
-				logger.Infof("%d/%s/%d/%s stopped with stale version",
-					c.id,
-					string(c.consumerGroup),
-					partition,
-					c.group.String())
+				logger.Infof("%s stopped with stale version", tag)
 				return
 			}
 
@@ -234,11 +226,8 @@ func (c *consumer) startPartition(consumerIndex, partition uint32, version uint6
 				offset = completedOffset
 			}
 			if err != nil {
-				logger.Errorf("%d/%s/%d/%s handle completed at %d, failed with %+v",
-					c.id,
-					string(c.consumerGroup),
-					partition,
-					c.group.String(),
+				logger.Errorf("%s handle completed at %d, failed with %+v",
+					tag,
 					completedOffset,
 					err)
 				continue

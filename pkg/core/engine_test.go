@@ -52,10 +52,6 @@ func TestTenantInit(t *testing.T) {
 	tid := uint64(10001)
 	err = ng.(*engine).tenantInitWithReplicas(metapb.Tenant{
 		ID: tid,
-		Input: metapb.TenantQueue{
-			Partitions:      1,
-			ConsumerTimeout: 60,
-		},
 		Output: metapb.TenantQueue{
 			Partitions:      2,
 			ConsumerTimeout: 60,
@@ -86,10 +82,6 @@ func TestStopInstanceAndRestart(t *testing.T) {
 
 	err = ng.(*engine).tenantInitWithReplicas(metapb.Tenant{
 		ID: 10001,
-		Input: metapb.TenantQueue{
-			Partitions:      1,
-			ConsumerTimeout: 60,
-		},
 		Output: metapb.TenantQueue{
 			Partitions:      1,
 			ConsumerTimeout: 60,
@@ -175,10 +167,6 @@ func TestStartInstance(t *testing.T) {
 
 	err = ng.(*engine).tenantInitWithReplicas(metapb.Tenant{
 		ID: 10001,
-		Input: metapb.TenantQueue{
-			Partitions:      1,
-			ConsumerTimeout: 60,
-		},
 		Output: metapb.TenantQueue{
 			Partitions:      1,
 			ConsumerTimeout: 60,
@@ -306,10 +294,6 @@ func TestTriggerDirect(t *testing.T) {
 
 	err = ng.(*engine).tenantInitWithReplicas(metapb.Tenant{
 		ID: 10001,
-		Input: metapb.TenantQueue{
-			Partitions:      1,
-			ConsumerTimeout: 60,
-		},
 		Output: metapb.TenantQueue{
 			Partitions:      1,
 			ConsumerTimeout: 60,
@@ -460,10 +444,6 @@ func TestUpdateCrowd(t *testing.T) {
 
 	err = ng.(*engine).tenantInitWithReplicas(metapb.Tenant{
 		ID: tid,
-		Input: metapb.TenantQueue{
-			Partitions:      1,
-			ConsumerTimeout: 60,
-		},
 		Output: metapb.TenantQueue{
 			Partitions:      1,
 			ConsumerTimeout: 60,
@@ -622,10 +602,6 @@ func TestUpdateWorkflow(t *testing.T) {
 
 	err = ng.(*engine).tenantInitWithReplicas(metapb.Tenant{
 		ID: tid,
-		Input: metapb.TenantQueue{
-			Partitions:      1,
-			ConsumerTimeout: 60,
-		},
 		Output: metapb.TenantQueue{
 			Partitions:      1,
 			ConsumerTimeout: 60,
@@ -895,10 +871,6 @@ func TestTransaction(t *testing.T) {
 
 	err = ng.(*engine).tenantInitWithReplicas(metapb.Tenant{
 		ID: tid,
-		Input: metapb.TenantQueue{
-			Partitions:      1,
-			ConsumerTimeout: 60,
-		},
 		Output: metapb.TenantQueue{
 			Partitions:      1,
 			ConsumerTimeout: 60,
@@ -1055,10 +1027,6 @@ func TestTimerWithUseStepCrowdToDrive(t *testing.T) {
 
 	err = ng.(*engine).tenantInitWithReplicas(metapb.Tenant{
 		ID: tid,
-		Input: metapb.TenantQueue{
-			Partitions:      1,
-			ConsumerTimeout: 60,
-		},
 		Output: metapb.TenantQueue{
 			Partitions:      1,
 			ConsumerTimeout: 60,
@@ -1121,10 +1089,6 @@ func TestLastTransactionNotCompleted(t *testing.T) {
 
 	err = ng.(*engine).tenantInitWithReplicas(metapb.Tenant{
 		ID: tid,
-		Input: metapb.TenantQueue{
-			Partitions:      1,
-			ConsumerTimeout: 60,
-		},
 		Output: metapb.TenantQueue{
 			Partitions:      1,
 			ConsumerTimeout: 60,
@@ -1250,10 +1214,6 @@ func TestLastTransactionCompleted(t *testing.T) {
 
 	err = ng.(*engine).tenantInitWithReplicas(metapb.Tenant{
 		ID: tid,
-		Input: metapb.TenantQueue{
-			Partitions:      1,
-			ConsumerTimeout: 60,
-		},
 		Output: metapb.TenantQueue{
 			Partitions:      1,
 			ConsumerTimeout: 60,
@@ -1378,10 +1338,6 @@ func TestTriggerTTLTimeout(t *testing.T) {
 
 	err = ng.(*engine).tenantInitWithReplicas(metapb.Tenant{
 		ID: 10001,
-		Input: metapb.TenantQueue{
-			Partitions:      1,
-			ConsumerTimeout: 60,
-		},
 		Output: metapb.TenantQueue{
 			Partitions:      1,
 			ConsumerTimeout: 60,
@@ -1488,10 +1444,6 @@ func TestStepCountAndNotiesMatched(t *testing.T) {
 	wid := uint64(10000)
 	err = ng.(*engine).tenantInitWithReplicas(metapb.Tenant{
 		ID: tid,
-		Input: metapb.TenantQueue{
-			Partitions:      1,
-			ConsumerTimeout: 60,
-		},
 		Output: metapb.TenantQueue{
 			Partitions:      1,
 			ConsumerTimeout: 60,
@@ -1671,10 +1623,6 @@ func TestNotifyWithErrorRetry(t *testing.T) {
 
 	err = ng.(*engine).tenantInitWithReplicas(metapb.Tenant{
 		ID: 10001,
-		Input: metapb.TenantQueue{
-			Partitions:      1,
-			ConsumerTimeout: 60,
-		},
 		Output: metapb.TenantQueue{
 			Partitions:      1,
 			ConsumerTimeout: 60,

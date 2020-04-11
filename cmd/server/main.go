@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -20,10 +21,11 @@ import (
 )
 
 var (
-	addr    = flag.String("addr", "127.0.0.1:8081", "beehive api address")
-	data    = flag.String("data", "", "data path")
-	wait    = flag.Int("wait", 0, "wait")
-	version = flag.Bool("version", false, "Show version info")
+	addr      = flag.String("addr", "127.0.0.1:8081", "beehive api address")
+	addrPPROF = flag.String("addr-pprof", "", "pprof")
+	data      = flag.String("data", "", "data path")
+	wait      = flag.Int("wait", 0, "wait")
+	version   = flag.Bool("version", false, "Show version info")
 )
 
 var (
@@ -42,6 +44,13 @@ func main() {
 
 	if *wait > 0 {
 		time.Sleep(time.Second * time.Duration(*wait))
+	}
+
+	if *addrPPROF != "" {
+		go func() {
+			log.Errorf("start pprof failed, errors:\n%+v",
+				http.ListenAndServe(*addrPPROF, nil))
+		}()
 	}
 
 	nemoStorage, err := nemo.NewStorage(filepath.Join(*data, "nemo"))

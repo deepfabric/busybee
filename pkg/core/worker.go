@@ -345,9 +345,8 @@ func (w *stateWorker) run() {
 			for i := int64(0); i < n; i++ {
 				value := items[i].(item)
 				if value.action == stopAction {
-					w.resetTTLTimeout()
-
 					w.consumer.Stop()
+					w.resetTTLTimeout()
 
 					for _, v := range w.queue.Dispose() {
 						(v.(item).cb).complete(task.ErrDisposed)
