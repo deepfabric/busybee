@@ -21,11 +21,14 @@ import (
 )
 
 var (
-	addr      = flag.String("addr", "127.0.0.1:8081", "beehive api address")
-	addrPPROF = flag.String("addr-pprof", "", "pprof")
-	data      = flag.String("data", "", "data path")
-	wait      = flag.Int("wait", 0, "wait")
-	version   = flag.Bool("version", false, "Show version info")
+	addr       = flag.String("addr", "127.0.0.1:8081", "beehive api address")
+	addrPPROF  = flag.String("addr-pprof", "", "pprof")
+	ck         = flag.String("addr-ck", "", "ck address")
+	ckUser     = flag.String("ck-user", "", "ck user")
+	ckPassword = flag.String("ck-pass", "", "ck pass")
+	data       = flag.String("data", "", "data path")
+	wait       = flag.Int("wait", 0, "wait")
+	version    = flag.Bool("version", false, "Show version info")
 )
 
 var (
@@ -66,7 +69,8 @@ func main() {
 	}
 
 	notifier := notify.NewQueueBasedNotifier(store)
-	engine, err := core.NewEngine(store, notifier)
+	engine, err := core.NewEngine(store, notifier,
+		core.WithClickhouse(*ck, *ckUser, *ckPassword))
 	if err != nil {
 		log.Fatalf("create core engine failed with %+v", err)
 	}
