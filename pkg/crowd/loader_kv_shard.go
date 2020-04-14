@@ -189,7 +189,7 @@ func (l *kvShardLoader) doPut(value putCtx, buf *goetty.ByteBuf) {
 	logger.Infof("put bitmap shard %s/%d completed with %d bytes",
 		hex.EncodeToString(value.key),
 		value.index,
-		value.data)
+		len(value.data))
 	value.wg.Done()
 }
 
