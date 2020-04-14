@@ -15,7 +15,10 @@ func acquireCB() *stepCB {
 			c: make(chan error),
 		}
 	}
-	return value.(*stepCB)
+
+	cb := value.(*stepCB)
+	cb.c = make(chan error)
+	return cb
 }
 
 func releaseCB(value *stepCB) {
@@ -31,7 +34,6 @@ func (cb *stepCB) reset() {
 	if cb.c != nil {
 		close(cb.c)
 	}
-	cb.c = make(chan error)
 }
 
 func (cb *stepCB) wait() error {
@@ -39,5 +41,7 @@ func (cb *stepCB) wait() error {
 }
 
 func (cb *stepCB) complete(err error) {
-	cb.c <- err
+	if cb.c != nil {
+		cb.c <- err
+	}
 }

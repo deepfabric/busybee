@@ -349,7 +349,9 @@ func (w *stateWorker) run() {
 					w.resetTTLTimeout()
 
 					for _, v := range w.queue.Dispose() {
-						(v.(item).cb).complete(task.ErrDisposed)
+						cb := (v.(item).cb)
+						cb.complete(task.ErrDisposed)
+						cb.reset()
 					}
 
 					for _, id := range w.cronIDs {
