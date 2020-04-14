@@ -26,6 +26,10 @@ grafana: dist_dir; $(info ======== compiled busybee)
 busybee: dist_dir; $(info ======== compiled busybee)
 	env GO111MODULE=off GOOS=$(GOOS) go build -o $(DIST_DIR)busybee $(LD_FLAGS) $(ROOT_DIR)cmd/server/*.go
 
+.PHONY: checker
+checker: dist_dir; $(info ======== compiled checker)
+	env GO111MODULE=off GOOS=$(GOOS) go build -o $(DIST_DIR)checker $(LD_FLAGS) $(ROOT_DIR)cmd/checker/*.go
+
 .PHONY: docker
 docker: ; $(info ======== compiled busybee docker)
 	docker build -t deepfabric/busybee:$(VERSION) -f Dockerfile .

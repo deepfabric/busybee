@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	limit uint64 = 40000
+	limit uint64 = 80000
 )
 
 type kvLoader struct {
