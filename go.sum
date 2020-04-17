@@ -108,6 +108,8 @@ github.com/fagongzi/goetty v1.3.2 h1:ARKYpvh2yvh47zMeGxnnmjpYbkroPL4khLfe8oAyQ9E
 github.com/fagongzi/goetty v1.3.2/go.mod h1:lLUyHhtjlOqatxVXgyLocwoI2o359JzLE7EWRGZiGw4=
 github.com/fagongzi/goetty v1.4.3 h1:GvBik3Uk1fd1iC9BIYRDGnyPS5u0CLXMVGjOE9qCmZA=
 github.com/fagongzi/goetty v1.4.3/go.mod h1:lLUyHhtjlOqatxVXgyLocwoI2o359JzLE7EWRGZiGw4=
+github.com/fagongzi/goetty v1.5.0 h1:8uDMJRFsHSkx+jTTQ/VwkeikZUew8N3IeT7Q78oGqgI=
+github.com/fagongzi/goetty v1.5.0/go.mod h1:lLUyHhtjlOqatxVXgyLocwoI2o359JzLE7EWRGZiGw4=
 github.com/fagongzi/log v0.0.0-20191122063922-293b75312445 h1:XhTJpo5oMYnjgQPq28pufQ/XDGoQXi1x8qa87A4Fsb8=
 github.com/fagongzi/log v0.0.0-20191122063922-293b75312445/go.mod h1:1aUifpZCjAdZK7L3vRRl2cpSktbKasAU5vOSyLSCODs=
 github.com/fagongzi/util v0.0.0-20181102105153-fd38e0f42a4f/go.mod h1:jYDIbpaqHXCCQ7QIDXRVfsQYAGKSNNb6N8BPTgdpcdE=

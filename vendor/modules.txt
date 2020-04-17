@@ -133,7 +133,7 @@ github.com/deepfabric/prophet
 github.com/dgrijalva/jwt-go
 # github.com/fagongzi/expr v0.0.0-20200304112710-04fa348af2e0
 github.com/fagongzi/expr
-# github.com/fagongzi/goetty v1.4.3
+# github.com/fagongzi/goetty v1.5.0
 github.com/fagongzi/goetty
 # github.com/fagongzi/log v0.0.0-20191122063922-293b75312445
 github.com/fagongzi/log

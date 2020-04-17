@@ -9,7 +9,7 @@ require (
 	github.com/deepfabric/beehive v0.0.0-20200414051226-9df54c608dd0
 	github.com/deepfabric/prophet v0.0.0-20200414050845-eafd59e2a17e
 	github.com/fagongzi/expr v0.0.0-20200304112710-04fa348af2e0
-	github.com/fagongzi/goetty v1.4.3
+	github.com/fagongzi/goetty v1.5.0
 	github.com/fagongzi/log v0.0.0-20191122063922-293b75312445
 	github.com/fagongzi/util v0.0.0-20200205003627-8cf7ebc854c9
 	github.com/gogo/protobuf v1.3.1

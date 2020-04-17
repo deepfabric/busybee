@@ -31,7 +31,8 @@ type stepCB struct {
 }
 
 func (cb *stepCB) reset() {
-	if cb.c != nil {
+	if cb != nil &&
+		cb.c != nil {
 		close(cb.c)
 	}
 }
@@ -41,7 +42,8 @@ func (cb *stepCB) wait() error {
 }
 
 func (cb *stepCB) complete(err error) {
-	if cb.c != nil {
+	if cb != nil &&
+		cb.c != nil {
 		cb.c <- err
 	}
 }

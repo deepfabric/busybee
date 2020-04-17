@@ -20,7 +20,8 @@ import (
 
 var (
 	emptyJoinBytes         = protoc.MustMarshal(&rpcpb.QueueJoinGroupResponse{})
-	defaultMaxBytes uint64 = 1024 * 1024 // 1mb
+	defaultMaxBytes uint64 = 1024 * 1024     // 1mb
+	maxBytesInBuf          = 1024 * 1024 * 5 // 5mb
 )
 
 func (h *beeStorage) queueJoinGroup(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs map[string]interface{}) (uint64, int64, *raftcmdpb.Response) {
@@ -137,15 +138,16 @@ func (h *beeStorage) queueFetch(shard bhmetapb.Shard, req *raftcmdpb.Request, at
 			c := uint64(0)
 			var items [][]byte
 			err := h.getStore(shard.ID).Scan(startKey, endKey, func(key, value []byte) (bool, error) {
+				if size >= max || len(buf.RawBuf()) >= maxBytesInBuf {
+					return false, nil
+				}
+
 				buf.MarkWrite()
 				buf.Write(value)
 				items = append(items, buf.WrittenDataAfterMark())
 				c++
 				size += uint64(len(value))
 
-				if size >= max {
-					return false, nil
-				}
 				return true, nil
 			}, false)
 			if err != nil {

@@ -164,6 +164,11 @@ func (h *beeStorage) scan(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs ma
 
 	customResp := getBytesSliceResponse(attrs)
 	err := h.getStore(shard.ID).Scan(req.Key, end, func(key, value []byte) (bool, error) {
+		if uint64(len(customResp.Values)) >= customReq.Limit ||
+			len(buf.RawBuf()) >= maxBytesInBuf {
+			return false, nil
+		}
+
 		buf.MarkWrite()
 		buf.Write(key[9:])
 		customResp.Keys = append(customResp.Keys, buf.WrittenDataAfterMark())
@@ -172,9 +177,6 @@ func (h *beeStorage) scan(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs ma
 		buf.Write(value)
 		customResp.Values = append(customResp.Values, buf.WrittenDataAfterMark())
 
-		if uint64(len(customResp.Values)) >= customReq.Limit {
-			return false, nil
-		}
 		return true, nil
 	}, false)
 	if err != nil {
