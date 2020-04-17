@@ -706,8 +706,10 @@ func (w *stateWorker) doCheckStepTTLTimeout(tran *transaction, idx int) {
 
 		value := itr.Next()
 		w.tempUserEvent.UserID = value
-		alreadyBM.Add(value)
 		tran.doUserEvent(w.tempUserEvent)
+
+		alreadyBM.Add(value)
+		count++
 
 		if count >= maxTriggerCount {
 			break
