@@ -19,9 +19,9 @@ import (
 )
 
 var (
-	emptyJoinBytes         = protoc.MustMarshal(&rpcpb.QueueJoinGroupResponse{})
-	defaultMaxBytes uint64 = 1024 * 1024     // 1mb
-	maxBytesInBuf          = 1024 * 1024 * 5 // 5mb
+	emptyJoinBytes                 = protoc.MustMarshal(&rpcpb.QueueJoinGroupResponse{})
+	defaultMaxBytesPerFetch uint64 = 1024 * 1024     // 1mb
+	maxBytesInBuf                  = 1024 * 1024 * 5 // 5mb
 )
 
 func (h *beeStorage) queueJoinGroup(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs map[string]interface{}) (uint64, int64, *raftcmdpb.Response) {
@@ -112,6 +112,8 @@ func (h *beeStorage) queueFetch(shard bhmetapb.Shard, req *raftcmdpb.Request, at
 
 	changed := maybeUpdateCompletedOffset(state, now, queueFetch)
 	if maybeRemoveTimeoutConsumers(state, now) {
+		log.Infof("group %s clear all consumers, because some consumer timeout",
+			string(queueFetch.Group))
 		changed = true
 	}
 
@@ -129,16 +131,17 @@ func (h *beeStorage) queueFetch(shard bhmetapb.Shard, req *raftcmdpb.Request, at
 			startKey := QueueItemKey(req.Key, p.Completed+1, buf)
 			endKey := QueueItemKey(req.Key, p.Completed+1+queueFetch.Count, buf)
 
-			max := queueFetch.MaxBytes
-			if max == 0 {
-				max = defaultMaxBytes
+			maxBytesPerFetch := queueFetch.MaxBytes
+			if maxBytesPerFetch == 0 {
+				maxBytesPerFetch = defaultMaxBytesPerFetch
 			}
 
 			size := uint64(0)
 			c := uint64(0)
 			var items [][]byte
 			err := h.getStore(shard.ID).Scan(startKey, endKey, func(key, value []byte) (bool, error) {
-				if size >= max || len(buf.RawBuf()) >= maxBytesInBuf {
+				if size >= maxBytesPerFetch ||
+					!allowWriteToBuf(buf, len(value)) {
 					return false, nil
 				}
 
@@ -379,4 +382,8 @@ func writeWriteBatch(store bhstorage.DataStorage, attrs map[string]interface{}) 
 			delete(attrs, key)
 		}
 	}
+}
+
+func allowWriteToBuf(buf *goetty.ByteBuf, size int) bool {
+	return buf.GetWriteIndex()+size < maxBytesInBuf
 }
