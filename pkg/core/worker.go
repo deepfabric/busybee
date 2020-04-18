@@ -20,7 +20,8 @@ import (
 )
 
 var (
-	workerBatch        = int64(16)
+	fetchEventBatch    = int64(16)
+	handleEventBatch   = int64(256)
 	maxTriggerCount    = 256
 	ttlTriggerInterval = time.Minute
 )
@@ -331,11 +332,11 @@ func (w *stateWorker) run() {
 	go func() {
 		w.checkLastTranscation()
 
-		items := make([]interface{}, workerBatch, workerBatch)
+		items := make([]interface{}, handleEventBatch, handleEventBatch)
 		tran := newTransaction()
 
 		for {
-			n, err := w.queue.Get(workerBatch, items)
+			n, err := w.queue.Get(handleEventBatch, items)
 			if err != nil {
 				logger.Fatalf("BUG: fetch from work queue failed with %+v", err)
 			}
@@ -406,7 +407,7 @@ func (w *stateWorker) run() {
 		}
 	}()
 
-	w.consumer.Start(uint64(workerBatch), w.onEvent)
+	w.consumer.Start(uint64(fetchEventBatch), w.onEvent)
 	logger.Infof("worker %s started", w.key)
 }
 
