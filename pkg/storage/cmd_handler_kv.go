@@ -164,8 +164,15 @@ func (h *beeStorage) scan(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs ma
 
 	customResp := getBytesSliceResponse(attrs)
 	err := h.getStore(shard.ID).Scan(req.Key, end, func(key, value []byte) (bool, error) {
-		if uint64(len(customResp.Values)) >= customReq.Limit ||
-			!allowWriteToBuf(buf, len(value)) {
+		if !allowWriteToBuf(buf, len(value)) {
+			log.Warningf("scan skipped, buf cap %d, write at %d, value %d",
+				buf.Capacity(),
+				buf.GetWriteIndex(),
+				len(value))
+			return false, nil
+		}
+
+		if uint64(len(customResp.Values)) >= customReq.Limit {
 			return false, nil
 		}
 

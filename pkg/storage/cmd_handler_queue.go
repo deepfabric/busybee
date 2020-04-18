@@ -142,6 +142,12 @@ func (h *beeStorage) queueFetch(shard bhmetapb.Shard, req *raftcmdpb.Request, at
 			err := h.getStore(shard.ID).Scan(startKey, endKey, func(key, value []byte) (bool, error) {
 				if size >= maxBytesPerFetch ||
 					!allowWriteToBuf(buf, len(value)) {
+					log.Warningf("queue fetch on group %s skipped, fetch %d, buf cap %d, write at %d, value %d",
+						string(queueFetch.Group),
+						size,
+						buf.Capacity(),
+						buf.GetWriteIndex(),
+						len(value))
 					return false, nil
 				}
 
