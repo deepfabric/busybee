@@ -1431,6 +1431,94 @@ func TestTriggerTTLTimeout(t *testing.T) {
 	assert.Equal(t, uint64(3), m["step_end_else"], "TestTriggerTTLTimeout failed")
 }
 
+type testCheckerNotifier struct {
+	notifies []metapb.Notify
+}
+
+func (nt *testCheckerNotifier) Notify(id uint64, buf *goetty.ByteBuf, values []metapb.Notify, conds *rpcpb.Condition, kvs ...[]byte) error {
+	nt.notifies = append(nt.notifies, values...)
+	return nil
+}
+
+func TestNotifyWithTTL(t *testing.T) {
+	store, deferFunc := storage.NewTestStorage(t, false)
+	defer deferFunc()
+
+	nf := &testCheckerNotifier{}
+	ng, err := NewEngine(store, nf)
+	assert.NoError(t, err, "TestNotifyWithTTL failed")
+	assert.NoError(t, ng.Start(), "TestNotifyWithTTL failed")
+	defer ng.Stop()
+
+	err = ng.(*engine).tenantInitWithReplicas(metapb.Tenant{
+		ID: 10001,
+		Output: metapb.TenantQueue{
+			Partitions:      1,
+			ConsumerTimeout: 60,
+		},
+	}, 1)
+	assert.NoError(t, err, "TestNotifyWithTTL failed")
+	time.Sleep(time.Second * 12)
+
+	bm := roaring.BitmapOf(1)
+	_, err = ng.StartInstance(metapb.Workflow{
+		ID:       10000,
+		TenantID: 10001,
+		Name:     "test_wf",
+		Steps: []metapb.Step{
+			{
+				Name: "step_start",
+				Execution: metapb.Execution{
+					Type: metapb.Direct,
+					Direct: &metapb.DirectExecution{
+						NextStep: "step_1",
+					},
+				},
+			},
+			{
+				Name: "step_1",
+				Execution: metapb.Execution{
+					Type: metapb.Direct,
+					Direct: &metapb.DirectExecution{
+						NextStep: "step_2",
+					},
+				},
+			},
+			{
+				TTL:  10,
+				Name: "step_2",
+				Execution: metapb.Execution{
+					Type:   metapb.Direct,
+					Direct: &metapb.DirectExecution{},
+				},
+			},
+		},
+	}, metapb.RawLoader, util.MustMarshalBM(bm), 1)
+	assert.NoError(t, err, "TestNotifyWithTTL failed")
+
+	assert.NoError(t, waitTestWorkflow(ng, 10000, metapb.Running), "TestNotifyWithTTL failed")
+
+	err = ng.Storage().PutToQueue(10001, 0, metapb.TenantInputGroup, protoc.MustMarshal(&metapb.Event{
+		Type: metapb.UserType,
+		User: &metapb.UserEvent{
+			TenantID: 10001,
+			UserID:   1,
+			Data: []metapb.KV{
+				{
+					Key:   []byte("uid"),
+					Value: []byte("1"),
+				},
+			},
+		},
+	}))
+	assert.NoError(t, err, "TestStartInstance failed")
+
+	time.Sleep(time.Second)
+
+	assert.Equal(t, 2, len(nf.notifies), "TestNotifyWithTTL failed")
+	assert.Equal(t, int32(10), nf.notifies[1].ToStepCycleTTL, "TestNotifyWithTTL failed")
+}
+
 func TestStepCountAndNotiesMatched(t *testing.T) {
 	store, deferFunc := storage.NewTestStorage(t, false)
 	defer deferFunc()

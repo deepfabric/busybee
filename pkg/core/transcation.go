@@ -176,7 +176,8 @@ func (tran *transaction) maybeTriggerDirectSteps(current int, ctx changedCtx) {
 	from := ctx.to
 	to := tran.w.directNexts[ctx.to]
 	for {
-		tran.addChanged(changedCtx{from, to, ctx.who, 0})
+		tran.addChanged(changedCtx{from, to, ctx.who,
+			tran.w.state.States[tran.w.stepIndexs[to]].Step.TTL})
 		if !tran.w.isDirectStep(to) {
 			break
 		}
