@@ -431,7 +431,7 @@ func (w *stateWorker) completeTransaction(tran *transaction) {
 		w.retryDo("exec notify", tran, w.execNotify)
 		w.retryDo("exec update state", tran, w.execUpdate)
 
-		logger.Infof("worker %s state update to version %d",
+		logger.Debugf("worker %s state update to version %d",
 			w.key,
 			w.state.Version)
 	}
@@ -530,7 +530,7 @@ func (w *stateWorker) execNotify(tran *transaction) error {
 		return err
 	}
 
-	logger.Infof("worker %s moved %d",
+	logger.Debugf("worker %s moved %d",
 		w.key,
 		totalMoved)
 	return nil
@@ -631,7 +631,7 @@ func (w *stateWorker) doUpdateWorkflow(workflow metapb.Workflow) error {
 	w.state.States = newStates
 	w.state.Version++
 	w.retryDo("exec update workflow", nil, w.execUpdate)
-	logger.Infof("worker %s workflow updated", w.key)
+	logger.Debugf("worker %s workflow updated", w.key)
 	return nil
 }
 

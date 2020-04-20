@@ -1334,7 +1334,11 @@ func TestTriggerTTLTimeout(t *testing.T) {
 	assert.NoError(t, ng.Start(), "TestTriggerTTLTimeout failed")
 	defer ng.Stop()
 
+	old := ttlTriggerInterval
 	ttlTriggerInterval = time.Millisecond * 100
+	defer func() {
+		ttlTriggerInterval = old
+	}()
 
 	err = ng.(*engine).tenantInitWithReplicas(metapb.Tenant{
 		ID: 10001,
@@ -1511,7 +1515,7 @@ func TestNotifyWithTTL(t *testing.T) {
 			},
 		},
 	}))
-	assert.NoError(t, err, "TestStartInstance failed")
+	assert.NoError(t, err, "TestNotifyWithTTL failed")
 
 	time.Sleep(time.Second)
 
