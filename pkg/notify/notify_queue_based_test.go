@@ -22,7 +22,7 @@ func TestNotify(t *testing.T) {
 	}))
 
 	n := NewQueueBasedNotifierWithGroup(s, metapb.DefaultGroup)
-	assert.NoError(t, n.Notify(tenantID, buf, []metapb.Notify{metapb.Notify{
+	assert.NoError(t, n.Notify(tenantID, buf, []metapb.Notify{{
 		UserID: 1,
 	}}, nil), "TestNotify failed")
 
@@ -47,7 +47,7 @@ func TestNotifyWithConditionNotExist(t *testing.T) {
 	conditionValue := []byte("cvalue")
 
 	for i := 0; i < 2; i++ {
-		assert.NoError(t, n.Notify(tenantID, buf, []metapb.Notify{metapb.Notify{
+		assert.NoError(t, n.Notify(tenantID, buf, []metapb.Notify{{
 			UserID: 1,
 		}}, &rpcpb.Condition{Key: conditionKey, Cmp: rpcpb.NotExists},
 			conditionKey, conditionValue), "TestNotifyWithConditionNotExist failed")
@@ -76,7 +76,7 @@ func TestNotifyWithConditionExist(t *testing.T) {
 	conditionKey := []byte("ckey")
 	conditionValue := []byte("cvalue")
 
-	assert.NoError(t, n.Notify(tenantID, buf, []metapb.Notify{metapb.Notify{
+	assert.NoError(t, n.Notify(tenantID, buf, []metapb.Notify{{
 		UserID: 1,
 	}}, &rpcpb.Condition{Key: conditionKey, Cmp: rpcpb.Exists},
 		conditionKey, conditionValue), "TestNotifyWithConditionExist failed")
@@ -106,7 +106,7 @@ func TestNotifyWithConditionEqual(t *testing.T) {
 		err := s.Set(storage.QueueKVKey(tenantID, conditionKey), values[i])
 		assert.NoError(t, err, "TestNotifyWithConditionEqual failed")
 
-		assert.NoError(t, n.Notify(tenantID, buf, []metapb.Notify{metapb.Notify{
+		assert.NoError(t, n.Notify(tenantID, buf, []metapb.Notify{{
 			UserID: 1,
 		}}, &rpcpb.Condition{Key: conditionKey, Cmp: rpcpb.Equal, Value: conditionValue},
 			conditionKey, values[i]), "TestNotifyWithConditionEqual failed")
@@ -138,7 +138,7 @@ func TestNotifyWithConditionGE(t *testing.T) {
 		err := s.Set(storage.QueueKVKey(tenantID, conditionKey), values[i])
 		assert.NoError(t, err, "TestNotifyWithConditionGE failed")
 
-		assert.NoError(t, n.Notify(tenantID, buf, []metapb.Notify{metapb.Notify{
+		assert.NoError(t, n.Notify(tenantID, buf, []metapb.Notify{{
 			UserID: 1,
 		}}, &rpcpb.Condition{Key: conditionKey, Cmp: rpcpb.GE, Value: conditionValue},
 			conditionKey, values[i]), "TestNotifyWithConditionGE failed")
@@ -169,7 +169,7 @@ func TestNotifyWithConditionGT(t *testing.T) {
 		err := s.Set(storage.QueueKVKey(tenantID, conditionKey), values[i])
 		assert.NoError(t, err, "TestNotifyWithConditionGT failed")
 
-		assert.NoError(t, n.Notify(tenantID, buf, []metapb.Notify{metapb.Notify{
+		assert.NoError(t, n.Notify(tenantID, buf, []metapb.Notify{{
 			UserID: 1,
 		}}, &rpcpb.Condition{Key: conditionKey, Cmp: rpcpb.GT, Value: conditionValue},
 			conditionKey, values[i]), "TestNotifyWithConditionGT failed")
@@ -200,7 +200,7 @@ func TestNotifyWithConditionLE(t *testing.T) {
 		err := s.Set(storage.QueueKVKey(tenantID, conditionKey), values[i])
 		assert.NoError(t, err, "TestNotifyWithConditionLE failed")
 
-		assert.NoError(t, n.Notify(tenantID, buf, []metapb.Notify{metapb.Notify{
+		assert.NoError(t, n.Notify(tenantID, buf, []metapb.Notify{{
 			UserID: 1,
 		}}, &rpcpb.Condition{Key: conditionKey, Cmp: rpcpb.LE, Value: conditionValue},
 			conditionKey, values[i]), "TestNotifyWithConditionLE failed")
@@ -231,7 +231,7 @@ func TestNotifyWithConditionLT(t *testing.T) {
 		err := s.Set(storage.QueueKVKey(tenantID, conditionKey), values[i])
 		assert.NoError(t, err, "TestNotifyWithConditionLT failed")
 
-		assert.NoError(t, n.Notify(tenantID, buf, []metapb.Notify{metapb.Notify{
+		assert.NoError(t, n.Notify(tenantID, buf, []metapb.Notify{{
 			UserID: 1,
 		}}, &rpcpb.Condition{Key: conditionKey, Cmp: rpcpb.LT, Value: conditionValue},
 			conditionKey, values[i]), "TestNotifyWithConditionLT failed")
