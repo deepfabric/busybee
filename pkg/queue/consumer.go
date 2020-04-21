@@ -34,6 +34,7 @@ type Consumer interface {
 type consumer struct {
 	sync.RWMutex
 
+	rejoin        bool
 	group         metapb.Group
 	consumerGroup []byte
 	id            uint64
@@ -46,11 +47,11 @@ type consumer struct {
 }
 
 // NewConsumer returns a queue consumer
-func NewConsumer(id uint64, store storage.Storage, consumerGroup []byte) (Consumer, error) {
-	return newConsumerWithGroup(id, store, consumerGroup, metapb.TenantInputGroup)
+func NewConsumer(id uint64, rejoin bool, store storage.Storage, consumerGroup []byte) (Consumer, error) {
+	return newConsumerWithGroup(id, rejoin, store, consumerGroup, metapb.TenantInputGroup)
 }
 
-func newConsumerWithGroup(id uint64, store storage.Storage, consumerGroup []byte, group metapb.Group) (Consumer, error) {
+func newConsumerWithGroup(id uint64, rejoin bool, store storage.Storage, consumerGroup []byte, group metapb.Group) (Consumer, error) {
 	value, err := store.Get(storage.TenantMetadataKey(id))
 	if err != nil {
 		metric.IncStorageFailed()
@@ -79,6 +80,7 @@ func newConsumerWithGroup(id uint64, store storage.Storage, consumerGroup []byte
 		store:         store,
 		consumerGroup: consumerGroup,
 		group:         group,
+		rejoin:        rejoin,
 	}, nil
 }
 
@@ -120,6 +122,7 @@ func (c *consumer) doJoin(arg interface{}) {
 	req := rpcpb.AcquireQueueJoinGroupRequest()
 	req.ID = c.id
 	req.Group = c.consumerGroup
+	req.Rejoin = c.rejoin
 	c.store.AsyncExecCommandWithGroup(req, c.group, c.onJoinResp, nil)
 }
 

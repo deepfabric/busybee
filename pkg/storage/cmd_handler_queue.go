@@ -58,18 +58,20 @@ func (h *beeStorage) queueJoinGroup(shard bhmetapb.Shard, req *raftcmdpb.Request
 	}
 
 	// re join
-	for c := range state.Groups {
-		if bytes.Compare(state.Groups[c], joinReq.Group) == 0 {
-			joinResp.Index = uint32(c)
-			for p := range state.States {
-				if state.States[p].Consumer == uint32(c) {
-					joinResp.Partitions = append(joinResp.Partitions, uint32(p))
-					joinResp.Versions = append(joinResp.Versions, state.States[p].Version)
+	if joinReq.Rejoin {
+		for c := range state.Groups {
+			if bytes.Compare(state.Groups[c], joinReq.Group) == 0 {
+				joinResp.Index = uint32(c)
+				for p := range state.States {
+					if state.States[p].Consumer == uint32(c) {
+						joinResp.Partitions = append(joinResp.Partitions, uint32(p))
+						joinResp.Versions = append(joinResp.Versions, state.States[p].Version)
+					}
 				}
-			}
 
-			resp.Value = protoc.MustMarshal(joinResp)
-			return 0, 0, resp
+				resp.Value = protoc.MustMarshal(joinResp)
+				return 0, 0, resp
+			}
 		}
 	}
 

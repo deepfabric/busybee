@@ -864,63 +864,6 @@ func TestQueueJoin(t *testing.T) {
 	}
 }
 
-func TestReQueueJoin(t *testing.T) {
-	store, deferFunc := NewTestStorage(t, true)
-	defer deferFunc()
-
-	tid := uint64(1)
-	g1 := []byte("g1")
-	state := &metapb.QueueState{
-		Partitions: 2,
-		States: []metapb.Partiton{
-			{}, {},
-		},
-		Timeout: 60,
-	}
-	buf := goetty.NewByteBuf(32)
-	key := QueueMetaKey(tid, buf)
-	err := store.Set(key, protoc.MustMarshal(state))
-	assert.NoError(t, err, "TestReQueueJoin failed")
-
-	req := rpcpb.AcquireQueueJoinGroupRequest()
-	req.ID = tid
-	req.Group = g1
-	resp := getTestJoinResp(t, store, req)
-	assert.Equal(t, uint32(0), resp.Index, "TestReQueueJoin failed")
-	assert.Equal(t, 2, len(resp.Partitions), "TestReQueueJoin failed")
-	assert.Equal(t, 2, len(resp.Versions), "TestReQueueJoin failed")
-
-	req.Reset()
-	req.ID = tid
-	req.Group = g1
-	resp = getTestJoinResp(t, store, req)
-	assert.Equal(t, uint32(0), resp.Index, "TestReQueueJoin failed")
-	assert.Equal(t, 2, len(resp.Partitions), "TestReQueueJoin failed")
-	assert.Equal(t, 2, len(resp.Versions), "TestReQueueJoin failed")
-
-	pvs := []uint32{0, 1}
-	vs := []uint64{0, 0}
-	for idx := range resp.Partitions {
-		assert.Equal(t, pvs[idx], resp.Partitions[idx], "TestReQueueJoin failed")
-		assert.Equal(t, vs[idx], resp.Versions[idx], "TestReQueueJoin failed")
-	}
-
-	state = getTestQueueuState(t, store, tid, g1)
-	assert.Equal(t, uint32(1), state.Consumers, "TestReQueueJoin failed")
-
-	versionValues := []uint64{0, 0}
-	consumerValues := []uint32{0, 0}
-	stateValues := []metapb.PartitonState{metapb.PSRebalancing, metapb.PSRebalancing}
-	for i := 0; i < 2; i++ {
-		assert.Equal(t, versionValues[i], state.States[i].Version, "TestReQueueJoin failed")
-		assert.Equal(t, consumerValues[i], state.States[i].Consumer, "TestReQueueJoin failed")
-		assert.Equal(t, stateValues[i], state.States[i].State, "TestReQueueJoin failed")
-		assert.Equal(t, uint64(0), state.States[i].Completed, "TestReQueueJoin failed")
-		assert.Equal(t, uint64(0), state.States[i].LastFetchCount, "TestReQueueJoin failed")
-		assert.True(t, state.States[i].LastFetchTS > 0, "TestReQueueJoin failed")
-	}
-}
-
 func TestQueueFetchAfterJoin(t *testing.T) {
 	store, deferFunc := NewTestStorage(t, true)
 	defer deferFunc()

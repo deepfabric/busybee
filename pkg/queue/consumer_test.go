@@ -17,7 +17,7 @@ func TestConsumerWithTenantNotCreated(t *testing.T) {
 
 	tid := uint64(10000)
 	g1 := []byte("g1")
-	c, err := newConsumerWithGroup(tid, store, g1, metapb.DefaultGroup)
+	c, err := newConsumerWithGroup(tid, false, store, g1, metapb.DefaultGroup)
 	assert.Nil(t, c, "TestConsumerWithTenantNotCreated failed")
 	assert.Error(t, err, "TestConsumerWithTenantNotCreated failed")
 }
@@ -32,7 +32,7 @@ func TestConsumerWithQueueMetaNotCreated(t *testing.T) {
 	err := store.Set(storage.TenantMetadataKey(tid), protoc.MustMarshal(&metapb.Tenant{}))
 	assert.NoError(t, err, "TestConsumerWithQueueMetaNotCreated failed")
 
-	c, err := newConsumerWithGroup(tid, store, g1, metapb.DefaultGroup)
+	c, err := newConsumerWithGroup(tid, false, store, g1, metapb.DefaultGroup)
 	assert.Nil(t, c, "TestConsumerWithQueueMetaNotCreated failed")
 	assert.Error(t, err, "TestConsumerWithQueueMetaNotCreated failed")
 }
@@ -55,7 +55,7 @@ func TestConsumerStartAndStop(t *testing.T) {
 	}))
 	assert.NoError(t, err, "TestConsumerStartAndStop failed")
 
-	c, err := newConsumerWithGroup(tid, store, g1, metapb.DefaultGroup)
+	c, err := newConsumerWithGroup(tid, false, store, g1, metapb.DefaultGroup)
 	assert.NoError(t, err, "TestConsumerStartAndStop failed")
 	assert.NotNil(t, c, "TestConsumerStartAndStop failed")
 
@@ -87,7 +87,7 @@ func TestConsumer(t *testing.T) {
 		States:     make([]metapb.Partiton, 3, 3),
 	}))
 
-	c, err := newConsumerWithGroup(tid, store, g1, metapb.DefaultGroup)
+	c, err := newConsumerWithGroup(tid, false, store, g1, metapb.DefaultGroup)
 	assert.NoError(t, err, "TestConsumer failed")
 	assert.NotNil(t, c, "TestConsumer failed")
 
@@ -144,7 +144,7 @@ func TestConsumerRemovePartition(t *testing.T) {
 		return 0, nil
 	}
 
-	c, err := newConsumerWithGroup(tid, store, g1, metapb.DefaultGroup)
+	c, err := newConsumerWithGroup(tid, false, store, g1, metapb.DefaultGroup)
 	assert.NoError(t, err, "TestConsumerRemovePartition failed")
 	assert.NotNil(t, c, "TestConsumerRemovePartition failed")
 
@@ -152,7 +152,7 @@ func TestConsumerRemovePartition(t *testing.T) {
 	time.Sleep(time.Second)
 	assert.Equal(t, 2, len(c.(*consumer).partitions), "TestConsumerStartAndStop failed")
 
-	c2, err := newConsumerWithGroup(tid, store, g1, metapb.DefaultGroup)
+	c2, err := newConsumerWithGroup(tid, false, store, g1, metapb.DefaultGroup)
 	assert.NoError(t, err, "TestConsumerRemovePartition failed")
 	assert.NotNil(t, c, "TestConsumerRemovePartition failed")
 
@@ -161,4 +161,43 @@ func TestConsumerRemovePartition(t *testing.T) {
 	assert.Equal(t, 1, len(c2.(*consumer).partitions), "TestConsumerStartAndStop failed")
 
 	assert.Equal(t, 1, len(c.(*consumer).partitions), "TestConsumerStartAndStop failed")
+}
+
+func TestConsumerRejoin(t *testing.T) {
+	store, deferFunc := storage.NewTestStorage(t, true)
+	defer deferFunc()
+
+	buf := goetty.NewByteBuf(32)
+	tid := uint64(10000)
+	g1 := []byte("g1")
+
+	err := store.Set(storage.TenantMetadataKey(tid), protoc.MustMarshal(&metapb.Tenant{}))
+	assert.NoError(t, err, "TestConsumerRejoin failed")
+
+	err = store.Set(storage.QueueMetaKey(tid, buf), protoc.MustMarshal(&metapb.QueueState{
+		Partitions: 2,
+		Timeout:    60,
+		States:     make([]metapb.Partiton, 2, 2),
+	}))
+	assert.NoError(t, err, "TestConsumerRejoin failed")
+
+	cb := func(uint32, uint64, ...[]byte) (uint64, error) {
+		return 0, nil
+	}
+
+	c, err := newConsumerWithGroup(tid, true, store, g1, metapb.DefaultGroup)
+	assert.NoError(t, err, "TestConsumerRejoin failed")
+	assert.NotNil(t, c, "TestConsumerRejoin failed")
+
+	c.Start(16, cb)
+	time.Sleep(time.Second)
+	assert.Equal(t, 2, len(c.(*consumer).partitions), "TestConsumerRejoin failed")
+
+	c2, err := newConsumerWithGroup(tid, true, store, g1, metapb.DefaultGroup)
+	assert.NoError(t, err, "TestConsumerRejoin failed")
+	assert.NotNil(t, c, "TestConsumerRejoin failed")
+
+	c2.Start(16, cb)
+	time.Sleep(time.Second * 2)
+	assert.Equal(t, 2, len(c2.(*consumer).partitions), "TestConsumerRejoin failed")
 }

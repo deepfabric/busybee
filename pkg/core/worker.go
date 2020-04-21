@@ -90,7 +90,7 @@ type stateWorker struct {
 }
 
 func newStateWorker(key string, state metapb.WorkflowInstanceWorkerState, eng Engine) (*stateWorker, error) {
-	consumer, err := queue.NewConsumer(state.TenantID, eng.Storage(), []byte(key))
+	consumer, err := queue.NewConsumer(state.TenantID, true, eng.Storage(), []byte(key))
 	if err != nil {
 		metric.IncStorageFailed()
 		return nil, err
@@ -408,7 +408,9 @@ func (w *stateWorker) run() {
 	}()
 
 	w.consumer.Start(uint64(fetchEventBatch), w.onEvent)
-	logger.Infof("worker %s started", w.key)
+	logger.Infof("worker %s started with %d crowd",
+		w.key,
+		w.totalCrowds.GetCardinality())
 }
 
 func (w *stateWorker) completeTransaction(tran *transaction) {

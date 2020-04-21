@@ -192,38 +192,20 @@ func BMSplit(bm *roaring.Bitmap, ranges uint64) []*roaring.Bitmap {
 		return []*roaring.Bitmap{bm.Clone()}
 	}
 
-	countPerRange := bm.GetCardinality() / ranges
-	countMorePerRange := countPerRange + 1
-	mod := bm.GetCardinality() % ranges
-
 	values := make([]*roaring.Bitmap, 0, ranges)
-	c := uint64(0)
-	tmp := AcquireBitmap()
+	for i := uint64(0); i < ranges; i++ {
+		values = append(values, AcquireBitmap())
+	}
+
+	size := uint32(ranges)
 	itr := bm.Iterator()
-	check := countPerRange
 	for {
 		if !itr.HasNext() {
 			break
 		}
 
 		value := itr.Next()
-		tmp.Add(value)
-		c++
-
-		check = countPerRange
-		if uint64(len(values)) < mod {
-			check = countMorePerRange
-		}
-
-		if c == check {
-			values = append(values, tmp)
-			tmp = AcquireBitmap()
-			c = 0
-		}
-	}
-
-	if tmp.GetCardinality() > 0 {
-		values = append(values, tmp)
+		values[value%size].Add(value)
 	}
 
 	return values

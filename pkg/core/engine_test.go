@@ -1623,7 +1623,7 @@ func TestStepCountAndNotiesMatched(t *testing.T) {
 		assert.NoError(t, err, "TestStepCountAndNotiesMatched failed")
 	}
 
-	time.Sleep(time.Second * 10)
+	time.Sleep(time.Second * 20)
 
 	states, err := ng.InstanceCountState(wid)
 	assert.NoError(t, err, "TestStepCountAndNotiesMatched failed")
@@ -1641,8 +1641,10 @@ func TestStepCountAndNotiesMatched(t *testing.T) {
 	buf := goetty.NewByteBuf(32)
 	partitionKey := storage.PartitionKey(tid, 0)
 	from := uint64(0)
-	endKey := storage.QueueItemKey(partitionKey, math.MaxUint32, buf)
+	buf2 := goetty.NewByteBuf(32)
+	endKey := storage.QueueItemKey(partitionKey, math.MaxUint32, buf2)
 	for {
+		buf.Clear()
 		keys, values, err := ng.Storage().ScanWithGroup(storage.QueueItemKey(partitionKey, from, buf), endKey, 256, metapb.TenantOutputGroup)
 		assert.NoError(t, err, "TestStepCountAndNotiesMatched failed")
 		if err != nil {
