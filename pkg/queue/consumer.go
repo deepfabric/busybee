@@ -37,6 +37,7 @@ type consumer struct {
 	rejoin        bool
 	group         metapb.Group
 	consumerGroup []byte
+	consumer      uint32
 	id            uint64
 	store         storage.Storage
 
@@ -123,6 +124,7 @@ func (c *consumer) doJoin(arg interface{}) {
 	req.ID = c.id
 	req.Group = c.consumerGroup
 	req.Rejoin = c.rejoin
+	req.Consumer = c.consumer
 	c.store.AsyncExecCommandWithGroup(req, c.group, c.onJoinResp, nil)
 }
 
@@ -144,6 +146,7 @@ func (c *consumer) onJoinResp(arg interface{}, value []byte, err error) {
 		return
 	}
 
+	c.consumer = resp.Index
 	c.partitions = make(map[uint32]struct{})
 	for idx, partition := range resp.Partitions {
 		c.partitions[partition] = struct{}{}
@@ -168,11 +171,12 @@ func (c *consumer) retryJoin() {
 }
 
 func (c *consumer) startPartition(consumerIndex, partition uint32, version uint64) {
-	tag := fmt.Sprintf("%d/%s/p(%d)/g(%s)",
+	tag := fmt.Sprintf("%d/%s/p(%d)/g(%s)/v%d",
 		c.id,
 		c.group.String(),
 		partition,
 		string(c.consumerGroup),
+		version,
 	)
 
 	logger.Infof("%s started", tag)

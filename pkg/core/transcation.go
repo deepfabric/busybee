@@ -2,13 +2,17 @@ package core
 
 import (
 	"sync"
+	"sync/atomic"
 
 	"github.com/RoaringBitmap/roaring"
 	"github.com/deepfabric/busybee/pkg/metric"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
+	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
+	"github.com/deepfabric/busybee/pkg/storage"
 	"github.com/deepfabric/busybee/pkg/util"
 	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/util/hack"
+	"github.com/fagongzi/util/protoc"
 )
 
 var (
@@ -34,33 +38,23 @@ type transaction struct {
 	stepCrowds []*roaring.Bitmap
 	changes    []changedCtx
 	cbs        []*stepCB
-	restart    bool
 
-	event   *metapb.UserEvent
-	index   int
-	buf     *goetty.ByteBuf
-	kvCache map[string][]byte
+	event *metapb.UserEvent
+	index int
+	buf   *goetty.ByteBuf
+
+	kvCache     map[string][]byte
+	preLoadKeys [][]byte
+	completed   uint64
+	completedC  chan struct{}
 }
 
 func newTransaction() *transaction {
 	return &transaction{
-		buf:     goetty.NewByteBuf(32),
-		kvCache: make(map[string][]byte),
-		event:   &metapb.UserEvent{},
-	}
-}
-
-func (tran *transaction) resetExprCtx() {
-	tran.index = 0
-	tran.event.UserID = 0
-	tran.event.Data = nil
-	tran.event.TenantID = tran.w.state.TenantID
-	tran.event.WorkflowID = tran.w.state.WorkflowID
-	tran.event.InstanceID = tran.w.state.InstanceID
-
-	tran.buf.Clear()
-	for key := range tran.kvCache {
-		delete(tran.kvCache, key)
+		buf:        goetty.NewByteBuf(32),
+		event:      &metapb.UserEvent{},
+		kvCache:    make(map[string][]byte),
+		completedC: make(chan struct{}, 1),
 	}
 }
 
@@ -73,6 +67,11 @@ func (tran *transaction) start(w *stateWorker) {
 		v.Or(crowd)
 		tran.stepCrowds = append(tran.stepCrowds, v)
 	}
+}
+
+func (tran *transaction) close() {
+	tran.buf.Release()
+	close(tran.completedC)
 }
 
 func (tran *transaction) doStepTimerEvent(item item) {
@@ -117,6 +116,12 @@ func (tran *transaction) doStepUserEvents(item item) {
 	}
 
 	events := item.value.([]metapb.UserEvent)
+	tran.doUserEvents(events)
+}
+
+func (tran *transaction) doUserEvents(events []metapb.UserEvent) {
+	tran.doPreLoad(events)
+
 	for idx := range events {
 		tran.doUserEvent(&events[idx])
 	}
@@ -139,11 +144,64 @@ func (tran *transaction) doUserEvent(event *metapb.UserEvent) {
 					event,
 					err)
 				tran.err = err
-				return
 			}
 
 			return
 		}
+	}
+}
+
+func (tran *transaction) doPreLoad(events []metapb.UserEvent) {
+	tran.resetPreLoad()
+
+	for i := range events {
+		tran.resetExprCtx()
+		tran.event.UserID = events[i].UserID
+		tran.event.Data = events[i].Data
+
+		for j, crowd := range tran.stepCrowds {
+			if crowd.Contains(events[i].UserID) {
+				err := tran.w.steps[tran.w.state.States[j].Step.Name].Pre(tran, true, tran.addPreLoadKey)
+				if err != nil {
+					tran.err = err
+					return
+				}
+				break
+			}
+		}
+	}
+
+	if len(tran.preLoadKeys) == 0 {
+		return
+	}
+
+	for _, key := range tran.preLoadKeys {
+		req := rpcpb.AcquireGetRequest()
+		req.Key = key
+		tran.w.eng.Storage().AsyncExecCommand(req, tran.onLoadKey, key)
+	}
+
+	<-tran.completedC
+}
+
+func (tran *transaction) addPreLoadKey(key []byte) {
+	tran.preLoadKeys = append(tran.preLoadKeys, key)
+}
+
+func (tran *transaction) onLoadKey(arg interface{}, value []byte, err error) {
+	completed := atomic.AddUint64(&tran.completed, 1)
+
+	if err != nil {
+		logger.Errorf("worker %s pre load %+v failed with %+v", arg, err)
+	} else {
+		resp := rpcpb.AcquireBytesResponse()
+		protoc.MustUnmarshal(resp, value)
+		tran.kvCache[hack.SliceToString(arg.([]byte))] = resp.Value
+		rpcpb.ReleaseBytesResponse(resp)
+	}
+
+	if completed == uint64(len(tran.preLoadKeys)) {
+		tran.completedC <- struct{}{}
 	}
 }
 
@@ -229,30 +287,37 @@ func (tran *transaction) reset() {
 	tran.changes = tran.changes[:0]
 	tran.cbs = tran.cbs[:0]
 	tran.err = nil
-	tran.restart = false
+}
+
+func (tran *transaction) resetExprCtx() {
+	tran.index = 0
+	tran.event.UserID = 0
+	tran.event.Data = nil
+	tran.event.TenantID = tran.w.state.TenantID
+	tran.event.WorkflowID = tran.w.state.WorkflowID
+	tran.event.InstanceID = tran.w.state.InstanceID
+
+	tran.buf.Clear()
+}
+
+func (tran *transaction) resetPreLoad() {
+	tran.completed = 0
+	tran.preLoadKeys = tran.preLoadKeys[:0]
+	for key := range tran.kvCache {
+		delete(tran.kvCache, key)
+	}
 }
 
 func (tran *transaction) Event() *metapb.UserEvent {
 	return tran.event
 }
 
-func (tran *transaction) Profile(key []byte) ([]byte, error) {
-	attr := tran.profileKey(key, tran.event.UserID)
-	if value, ok := tran.kvCache[attr]; ok {
-		return value, nil
-	}
-
-	value, err := tran.w.eng.Service().GetProfileField(tran.event.TenantID, tran.event.UserID, hack.SliceToString(key))
-	if err != nil {
-		return nil, err
-	}
-
-	tran.kvCache[attr] = value
-	return value, nil
+func (tran *transaction) Profile(key []byte) []byte {
+	return storage.ProfileKey(tran.event.TenantID, tran.event.UserID)
 }
 
 func (tran *transaction) KV(key []byte) ([]byte, error) {
-	attr := tran.kvKey(key)
+	attr := hack.SliceToString(key)
 	if value, ok := tran.kvCache[attr]; ok {
 		return value, nil
 	}
@@ -272,19 +337,4 @@ func (tran *transaction) TotalCrowd() *roaring.Bitmap {
 
 func (tran *transaction) StepCrowd() *roaring.Bitmap {
 	return tran.w.stepCrowds[tran.index]
-}
-
-func (tran *transaction) profileKey(key []byte, id uint32) string {
-	tran.buf.MarkWrite()
-	tran.buf.WriteByte(0)
-	tran.buf.WriteUInt32(id)
-	tran.buf.Write(key)
-	return hack.SliceToString(tran.buf.WrittenDataAfterMark())
-}
-
-func (tran *transaction) kvKey(key []byte) string {
-	tran.buf.MarkWrite()
-	tran.buf.WriteByte(1)
-	tran.buf.Write(key)
-	return hack.SliceToString(tran.buf.WrittenDataAfterMark())
 }

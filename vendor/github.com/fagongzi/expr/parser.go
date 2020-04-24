@@ -48,7 +48,7 @@ type CalcFunc func(interface{}, Expr, interface{}) (interface{}, error)
 
 // Parser expr parser
 type Parser interface {
-	Parse([]byte) (Expr, error)
+	Parse([]byte, func(Expr)) (Expr, error)
 }
 
 type parser struct {
@@ -112,8 +112,8 @@ func (p *parserTemplate) addVarType(symbol string, varType VarType) {
 	p.varTypes[p.startToken] = varType
 }
 
-func (p *parserTemplate) Parse(input []byte) (Expr, error) {
-	return p.newParser(input).parse()
+func (p *parserTemplate) Parse(input []byte, cb func(Expr)) (Expr, error) {
+	return p.newParser(input).parse(cb)
 }
 
 func (p *parserTemplate) registerInternal(lexer Lexer) {
@@ -148,7 +148,7 @@ func (p *parserTemplate) newParser(input []byte) *parser {
 	}
 }
 
-func (p *parser) parse() (Expr, error) {
+func (p *parser) parse(cb func(Expr)) (Expr, error) {
 	p.stack.push(p.expr)
 	for {
 		p.lexer.NextToken()
@@ -160,7 +160,7 @@ func (p *parser) parse() (Expr, error) {
 		} else if token == tokenRightParen {
 			err = p.doRightParen()
 		} else if token == tokenVarStart {
-			err = p.doVarStart()
+			err = p.doVarStart(cb)
 			token = tokenVarEnd
 		} else if token == tokenLiteral {
 			err = p.doLiteral()
@@ -232,7 +232,7 @@ func (p *parser) doRightParen() error {
 	return err
 }
 
-func (p *parser) doVarStart() error {
+func (p *parser) doVarStart(cb func(Expr)) error {
 	if p.prevToken == tokenUnknown { // {
 		p.stack.append(&node{})
 	} else if p.prevToken == tokenLeftParen { // ({
@@ -266,6 +266,9 @@ func (p *parser) doVarStart() error {
 		return err
 	}
 
+	if cb != nil {
+		cb(varExpr)
+	}
 	p.stack.current().append(varExpr)
 	p.stack.pop()
 	return nil
@@ -325,28 +328,6 @@ func (p *parser) doRegexp() error {
 			p.lexer.TokenIndex())
 	}
 
-	return nil
-}
-
-func (p *parser) doVarEnd() error {
-	varType := p.template.opts.defaultType
-	if p.prevToken == tokenVarStart { // {a}
-
-	} else if t, ok := p.template.varTypes[p.prevToken]; ok {
-		varType = t
-	} else {
-		return fmt.Errorf("unexpect token <%s> before %d",
-			p.lexer.TokenSymbol(p.prevToken),
-			p.lexer.TokenIndex())
-	}
-
-	varExpr, err := p.template.factory(p.lexer.ScanString(), varType)
-	if err != nil {
-		return err
-	}
-
-	p.stack.current().append(varExpr)
-	p.stack.pop()
 	return nil
 }
 

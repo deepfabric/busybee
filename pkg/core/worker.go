@@ -20,7 +20,7 @@ import (
 )
 
 var (
-	fetchEventBatch    = int64(16)
+	fetchEventBatch    = int64(1024)
 	handleEventBatch   = int64(256)
 	maxTriggerCount    = 256
 	ttlTriggerInterval = time.Minute
@@ -84,9 +84,9 @@ type stateWorker struct {
 	queueStateKey            []byte
 	queueGetStateKey         []byte
 
-	tempBM        *roaring.Bitmap
-	tempUserEvent *metapb.UserEvent
-	tempNotifies  []metapb.Notify
+	tempBM       *roaring.Bitmap
+	tempEvents   []metapb.UserEvent
+	tempNotifies []metapb.Notify
 }
 
 func newStateWorker(key string, state metapb.WorkflowInstanceWorkerState, eng Engine) (*stateWorker, error) {
@@ -118,11 +118,6 @@ func newStateWorker(key string, state metapb.WorkflowInstanceWorkerState, eng En
 		queueStateKey:    queueStateKey,
 		queueGetStateKey: storage.QueueKVKey(state.TenantID, queueStateKey),
 		tempBM:           acquireBM(),
-		tempUserEvent: &metapb.UserEvent{
-			TenantID:   state.TenantID,
-			WorkflowID: state.WorkflowID,
-			InstanceID: state.InstanceID,
-		},
 	}
 
 	err = w.resetByState()
@@ -346,6 +341,7 @@ func (w *stateWorker) run() {
 			for i := int64(0); i < n; i++ {
 				value := items[i].(item)
 				if value.action == stopAction {
+					tran.close()
 					w.consumer.Stop()
 					w.resetTTLTimeout()
 
@@ -702,22 +698,28 @@ func (w *stateWorker) doCheckStepTTLTimeout(tran *transaction, idx int) {
 
 	count := 0
 	itr := w.tempBM.Iterator()
+	w.tempEvents = w.tempEvents[:0]
 	for {
 		if !itr.HasNext() {
 			break
 		}
 
 		value := itr.Next()
-		w.tempUserEvent.UserID = value
-		tran.doUserEvent(w.tempUserEvent)
-
 		alreadyBM.Add(value)
-		count++
+		w.tempEvents = append(w.tempEvents, metapb.UserEvent{
+			TenantID:   w.state.TenantID,
+			WorkflowID: w.state.WorkflowID,
+			InstanceID: w.state.InstanceID,
+			UserID:     value,
+		})
 
+		count++
 		if count >= maxTriggerCount {
 			break
 		}
 	}
+
+	tran.doUserEvents(w.tempEvents)
 }
 
 func (w *stateWorker) isDirectStep(name string) bool {

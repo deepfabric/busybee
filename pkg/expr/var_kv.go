@@ -30,3 +30,7 @@ func (v *kvVar) Exec(data interface{}) (interface{}, error) {
 
 	return byValueType(value, v.valueType)
 }
+
+func (v *kvVar) Key(ctx Ctx) ([]byte, error) {
+	return v.attr, nil
+}

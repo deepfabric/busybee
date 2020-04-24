@@ -41,8 +41,12 @@ func (c *testCtx) Event() *metapb.UserEvent {
 	return c.event
 }
 
-func (c *testCtx) Profile(key []byte) ([]byte, error) {
-	return c.KV(key)
+func (c *testCtx) Profile(key []byte) []byte {
+	if v, ok := c.kvs[string(key)]; ok {
+		return []byte(v)
+	}
+
+	return nil
 }
 
 func (c *testCtx) KV(key []byte) ([]byte, error) {
@@ -93,10 +97,11 @@ func TestFetchFromKV(t *testing.T) {
 
 func TestFetchFromProfile(t *testing.T) {
 	ctx := newTestCtx()
-	ctx.kvs["key1"] = "1"
+	ctx.kvs["name"] = `key1`
+	ctx.kvs["key1"] = `{"name":"1"}`
 
 	rt, err := NewRuntime(metapb.Expr{
-		Value: []byte("{num: profile.key1}==1"),
+		Value: []byte("{num: profile.name}==1"),
 	})
 	assert.NoError(t, err, "TestFetchFromProfile failed")
 
@@ -757,11 +762,12 @@ func TestDynamicVarWithEvent(t *testing.T) {
 
 func TestDynamicVarWithProfile(t *testing.T) {
 	ctx := newTestCtx()
-	ctx.kvs["key1"] = "profile"
+	ctx.kvs["name"] = "key1"
+	ctx.kvs["key1"] = `{"name":"profile"}`
 	ctx.kvs["profile_profile"] = "abc"
 
 	rt, err := NewRuntime(metapb.Expr{
-		Value: []byte("{dyna.profile_%s.profile.key1} == abc"),
+		Value: []byte("{dyna.profile_%s.profile.name} == abc"),
 	})
 	assert.NoError(t, err, "TestDynamicVarWithProfile failed")
 
@@ -780,6 +786,8 @@ func TestDynamicVarWithKV(t *testing.T) {
 		Value: []byte("{dyna.kv_%s.kv.key1} == abc"),
 	})
 	assert.NoError(t, err, "TestDynamicVarWithKV failed")
+
+	assert.Equal(t, 1, len(rt.(*runtime).dynas), "TestDynamicVarWithKV failed")
 
 	ok, value, err := rt.Exec(ctx)
 	assert.NoError(t, err, "TestDynamicVarWithKV failed")

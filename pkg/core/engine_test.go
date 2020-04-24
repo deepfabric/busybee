@@ -1590,7 +1590,7 @@ func TestStepCountAndNotiesMatched(t *testing.T) {
 				},
 			},
 		},
-	}, metapb.RawLoader, util.MustMarshalBM(bm), 16)
+	}, metapb.RawLoader, util.MustMarshalBM(bm), 8)
 	assert.NoError(t, err, "TestStepCountAndNotiesMatched failed")
 
 	assert.NoError(t, waitTestWorkflow(ng, 10000, metapb.Running), "TestStepCountAndNotiesMatched failed")
@@ -1623,7 +1623,7 @@ func TestStepCountAndNotiesMatched(t *testing.T) {
 		assert.NoError(t, err, "TestStepCountAndNotiesMatched failed")
 	}
 
-	time.Sleep(time.Second * 20)
+	time.Sleep(time.Second * 5)
 
 	states, err := ng.InstanceCountState(wid)
 	assert.NoError(t, err, "TestStepCountAndNotiesMatched failed")
@@ -1797,6 +1797,114 @@ func TestNotifyWithErrorRetry(t *testing.T) {
 	scanResp := rpcpb.AcquireBytesSliceResponse()
 	protoc.MustUnmarshal(scanResp, value)
 	assert.Equal(t, 1, len(scanResp.Keys), "TestNotifyWithErrorRetry failed")
+}
+
+func TestStepWithPreLoad(t *testing.T) {
+	store, deferFunc := storage.NewTestStorage(t, false)
+	defer deferFunc()
+
+	ng, err := NewEngine(store, notify.NewQueueBasedNotifier(store))
+	assert.NoError(t, err, "TestStepWithPreLoad failed")
+	assert.NoError(t, ng.Start(), "TestStepWithPreLoad failed")
+	defer ng.Stop()
+
+	tid := uint64(10001)
+	wid := uint64(10000)
+	err = ng.(*engine).tenantInitWithReplicas(metapb.Tenant{
+		ID: tid,
+		Output: metapb.TenantQueue{
+			Partitions:      1,
+			ConsumerTimeout: 60,
+		},
+	}, 1)
+	assert.NoError(t, err, "TestStepWithPreLoad failed")
+	time.Sleep(time.Second * 12)
+
+	err = store.Set([]byte("prev_1"), []byte("1"))
+	assert.NoError(t, err, "TestStepWithPreLoad failed")
+
+	bm := roaring.BitmapOf()
+	for i := uint32(1); i <= 10000; i++ {
+		bm.Add(i)
+	}
+	_, err = ng.StartInstance(metapb.Workflow{
+		ID:       wid,
+		TenantID: tid,
+		Name:     "test_wf",
+		Steps: []metapb.Step{
+			{
+				Name: "step_start",
+				Execution: metapb.Execution{
+					Type: metapb.Branch,
+					Branches: []metapb.ConditionExecution{
+						{
+							Condition: metapb.Expr{
+								Value: []byte("{num: dyna.prev_%s.event.uid} == 1"),
+							},
+							NextStep: "step_end_1",
+						},
+						{
+							Condition: metapb.Expr{
+								Value: []byte(`1 == 1`),
+							},
+							NextStep: "step_end_2",
+						},
+					},
+				},
+			},
+			{
+				Name: "step_end_1",
+				Execution: metapb.Execution{
+					Type:   metapb.Direct,
+					Direct: &metapb.DirectExecution{},
+				},
+			},
+			{
+				Name: "step_end_2",
+				Execution: metapb.Execution{
+					Type:   metapb.Direct,
+					Direct: &metapb.DirectExecution{},
+				},
+			},
+		},
+	}, metapb.RawLoader, util.MustMarshalBM(bm), 16)
+	assert.NoError(t, err, "TestStepWithPreLoad failed")
+
+	assert.NoError(t, waitTestWorkflow(ng, 10000, metapb.Running), "TestStepWithPreLoad failed")
+
+	var events [][]byte
+	for i := uint32(1); i <= 10000; i++ {
+		events = append(events, protoc.MustMarshal(&metapb.Event{
+			Type: metapb.UserType,
+			User: &metapb.UserEvent{
+				TenantID: tid,
+				UserID:   i,
+			},
+		}))
+
+		if len(events) == 256 {
+			err = ng.Storage().PutToQueueWithAlloc(tid, metapb.TenantInputGroup, events...)
+			assert.NoError(t, err, "TestStepWithPreLoad failed")
+			events = events[:0]
+		}
+	}
+
+	if len(events) > 0 {
+		err = ng.Storage().PutToQueueWithAlloc(tid, metapb.TenantInputGroup, events...)
+		assert.NoError(t, err, "TestStepWithPreLoad failed")
+	}
+
+	time.Sleep(time.Second * 2)
+
+	states, err := ng.InstanceCountState(wid)
+	assert.NoError(t, err, "TestStepWithPreLoad failed")
+	m := make(map[string]int)
+	for _, state := range states.States {
+		m[state.Step] = int(state.Count)
+	}
+	assert.Equal(t, 0, m["step_start"], "TestStepWithPreLoad failed")
+	assert.Equal(t, 1, m["step_end_1"], "TestStepWithPreLoad failed")
+	assert.Equal(t, 9999, m["step_end_2"], "TestStepWithPreLoad failed")
 }
 
 func waitTestWorkflow(ng Engine, wid uint64, state metapb.WorkflowInstanceState) error {

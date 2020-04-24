@@ -292,10 +292,11 @@ message Condition {
 
 // QueueJoinGroupRequest join a group
 message QueueJoinGroupRequest {
-    uint64 id     = 1 [(gogoproto.customname) = "ID"];
-    bytes  key    = 2; 
-    bytes  group  = 3;
-    bool   rejoin = 4;
+    uint64 id       = 1 [(gogoproto.customname) = "ID"];
+    bytes  key      = 2; 
+    bytes  group    = 3;
+    bool   rejoin   = 4;
+    uint32 consumer = 5;
 }
 
 // QueueJoinGroupResponse queue join group response

@@ -97,6 +97,7 @@ func NewStorage(dataPath string,
 		dataStorages,
 		raftstore.WithShardStateAware(h),
 		raftstore.WithWriteBatchFunc(h.WriteBatch),
+		raftstore.WithReadBatchFunc(h.ReadBatch),
 		raftstore.WithShardAddHandleFun(h.addShardCallback))
 	if err != nil {
 		return nil, err

@@ -830,6 +830,7 @@ func (eng *engine) doCreateWorker(arg interface{}) {
 		return
 	}
 
+	logger.Infof("create worker %s completed", workerKey(action.state))
 	if action.completed.done() {
 		eng.doCreateInstanceStateShardComplete(action.state.WorkflowID)
 	}
@@ -838,7 +839,7 @@ func (eng *engine) doCreateWorker(arg interface{}) {
 func (eng *engine) doBootstrapWorker(state metapb.WorkflowInstanceWorkerState) {
 	key := workerKey(state)
 	if _, ok := eng.workers.Load(key); ok {
-		logger.Fatalf("BUG: start a exists state worker")
+		logger.Fatalf("BUG: start a exists state worker %s", key)
 	}
 
 	now := time.Now().Unix()

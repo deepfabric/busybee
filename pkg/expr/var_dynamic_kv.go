@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/deepfabric/busybee/pkg/util"
 	engine "github.com/fagongzi/expr"
 	"github.com/fagongzi/log"
 	"github.com/fagongzi/util/format"
@@ -23,7 +24,7 @@ type dynamicKVVar struct {
 	attr      []byte
 	valueType engine.VarType
 
-	currentKeyFunc func(Ctx) ([]byte, error)
+	currentKeyFunc func(Ctx, bool) ([]byte, error)
 }
 
 func newDynamicKVVar(pattern string, dynamics []string, valueType engine.VarType) (engine.Expr, error) {
@@ -70,7 +71,7 @@ func (v *dynamicKVVar) Exec(data interface{}) (interface{}, error) {
 		log.Fatalf("BUG: invalid expr ctx type %T", ctx)
 	}
 
-	attr, err := v.currentKeyFunc(ctx)
+	attr, err := v.currentKeyFunc(ctx, false)
 	if err != nil {
 		return nil, err
 	}
@@ -83,19 +84,19 @@ func (v *dynamicKVVar) Exec(data interface{}) (interface{}, error) {
 	return byValueType(value, v.valueType)
 }
 
-func (v *dynamicKVVar) getCurrentYearKey(ctx Ctx) ([]byte, error) {
+func (v *dynamicKVVar) getCurrentYearKey(ctx Ctx, onlyKey bool) ([]byte, error) {
 	return hack.StringToSlice(fmt.Sprintf(v.pattern, time.Now().Year())), nil
 }
 
-func (v *dynamicKVVar) getCurrentMonthKey(ctx Ctx) ([]byte, error) {
+func (v *dynamicKVVar) getCurrentMonthKey(ctx Ctx, onlyKey bool) ([]byte, error) {
 	return hack.StringToSlice(fmt.Sprintf(v.pattern, time.Now().Month())), nil
 }
 
-func (v *dynamicKVVar) getCurrentDayKey(ctx Ctx) ([]byte, error) {
+func (v *dynamicKVVar) getCurrentDayKey(ctx Ctx, onlyKey bool) ([]byte, error) {
 	return hack.StringToSlice(fmt.Sprintf(v.pattern, time.Now().Day())), nil
 }
 
-func (v *dynamicKVVar) getFromEvent(ctx Ctx) ([]byte, error) {
+func (v *dynamicKVVar) getFromEvent(ctx Ctx, onlyKey bool) ([]byte, error) {
 	var value []byte
 	if bytes.Compare(uid, v.attr) == 0 {
 		value = format.UInt64ToString(uint64(ctx.Event().UserID))
@@ -115,7 +116,11 @@ func (v *dynamicKVVar) getFromEvent(ctx Ctx) ([]byte, error) {
 	return hack.StringToSlice(fmt.Sprintf(v.pattern, hack.SliceToString(value))), nil
 }
 
-func (v *dynamicKVVar) getFromKV(ctx Ctx) ([]byte, error) {
+func (v *dynamicKVVar) getFromKV(ctx Ctx, onlyKey bool) ([]byte, error) {
+	if onlyKey {
+		return v.attr, nil
+	}
+
 	value, err := ctx.KV(v.attr)
 	if err != nil {
 		return nil, err
@@ -124,11 +129,28 @@ func (v *dynamicKVVar) getFromKV(ctx Ctx) ([]byte, error) {
 	return hack.StringToSlice(fmt.Sprintf(v.pattern, hack.SliceToString(value))), nil
 }
 
-func (v *dynamicKVVar) getFromProfile(ctx Ctx) ([]byte, error) {
-	value, err := ctx.Profile(v.attr)
+func (v *dynamicKVVar) getFromProfile(ctx Ctx, onlyKey bool) ([]byte, error) {
+	if onlyKey {
+		return ctx.Profile(v.attr), nil
+	}
+
+	value, err := ctx.KV(ctx.Profile(v.attr))
 	if err != nil {
 		return nil, err
 	}
 
-	return hack.StringToSlice(fmt.Sprintf(v.pattern, hack.SliceToString(value))), nil
+	if len(value) == 0 {
+		return nil, nil
+	}
+
+	return hack.StringToSlice(fmt.Sprintf(v.pattern, hack.SliceToString(util.ExtractJSONField(value, hack.SliceToString(v.attr))))), nil
+}
+
+func (v *dynamicKVVar) DynaKey(ctx Ctx) ([]byte, error) {
+	key, err := v.currentKeyFunc(ctx, true)
+	if err != nil {
+		return nil, err
+	}
+
+	return key, nil
 }

@@ -124,22 +124,6 @@ func (h *beeStorage) resetID(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs
 	return written, int64(written), resp
 }
 
-func (h *beeStorage) get(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs map[string]interface{}) *raftcmdpb.Response {
-	resp := pb.AcquireResponse()
-	customReq := getGetRequest(attrs)
-	protoc.MustUnmarshal(customReq, req.Cmd)
-
-	value, err := h.getValue(shard.ID, req.Key)
-	if err != nil {
-		log.Fatalf("get %+v failed with %+v", req.Key, err)
-	}
-
-	customResp := getBytesResponse(attrs)
-	customResp.Value = value
-	resp.Value = protoc.MustMarshal(customResp)
-	return resp
-}
-
 func (h *beeStorage) scan(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs map[string]interface{}) *raftcmdpb.Response {
 	resp := &raftcmdpb.Response{}
 	customReq := getScanRequest(attrs)

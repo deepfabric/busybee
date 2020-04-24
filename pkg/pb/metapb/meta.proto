@@ -262,9 +262,8 @@ message Expr {
 message QueueState {
     uint32                  partitions = 1;
     uint32                  consumers  = 2;
-    repeated bytes          groups     = 3;
-    repeated Partiton       states     = 4 [(gogoproto.nullable) = false];
-    int64                   timeout    = 5;
+    repeated Partiton       states     = 3 [(gogoproto.nullable) = false];
+    int64                   timeout    = 4;
 }
 
 // Partiton partition state

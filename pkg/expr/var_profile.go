@@ -1,8 +1,10 @@
 package expr
 
 import (
+	"github.com/deepfabric/busybee/pkg/util"
 	engine "github.com/fagongzi/expr"
 	"github.com/fagongzi/log"
+	"github.com/fagongzi/util/hack"
 )
 
 type profileVar struct {
@@ -23,10 +25,19 @@ func (v *profileVar) Exec(data interface{}) (interface{}, error) {
 		log.Fatalf("BUG: invalid expr ctx type %T", ctx)
 	}
 
-	value, err := ctx.Profile(v.attr)
+	key := ctx.Profile(v.attr)
+	value, err := ctx.KV(key)
 	if err != nil {
 		return nil, err
 	}
 
-	return byValueType(value, v.valueType)
+	if len(value) == 0 {
+		return byValueType(value, v.valueType)
+	}
+
+	return byValueType(util.ExtractJSONField(value, hack.SliceToString(v.attr)), v.valueType)
+}
+
+func (v *profileVar) Key(ctx Ctx) ([]byte, error) {
+	return ctx.Profile(v.attr), nil
 }

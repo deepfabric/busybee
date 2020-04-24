@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"bytes"
 	"math"
 	"time"
 
@@ -49,6 +48,21 @@ func (h *beeStorage) queueJoinGroup(shard bhmetapb.Shard, req *raftcmdpb.Request
 		return 0, 0, resp
 	}
 
+	// re join
+	if joinReq.Rejoin && state.Consumers > 0 {
+		joinResp.Index = joinReq.Consumer
+		for p := range state.States {
+			if state.States[p].Consumer == joinReq.Consumer {
+				state.States[p].State = metapb.PSRunning
+				joinResp.Partitions = append(joinResp.Partitions, uint32(p))
+				joinResp.Versions = append(joinResp.Versions, state.States[p].Version)
+			}
+		}
+
+		resp.Value = protoc.MustMarshal(joinResp)
+		return 0, 0, resp
+	}
+
 	now := time.Now().Unix()
 	if state.Consumers >= state.Partitions {
 		if !maybeRemoveTimeoutConsumers(state, now) {
@@ -57,27 +71,8 @@ func (h *beeStorage) queueJoinGroup(shard bhmetapb.Shard, req *raftcmdpb.Request
 		}
 	}
 
-	// re join
-	if joinReq.Rejoin {
-		for c := range state.Groups {
-			if bytes.Compare(state.Groups[c], joinReq.Group) == 0 {
-				joinResp.Index = uint32(c)
-				for p := range state.States {
-					if state.States[p].Consumer == uint32(c) {
-						joinResp.Partitions = append(joinResp.Partitions, uint32(p))
-						joinResp.Versions = append(joinResp.Versions, state.States[p].Version)
-					}
-				}
-
-				resp.Value = protoc.MustMarshal(joinResp)
-				return 0, 0, resp
-			}
-		}
-	}
-
 	index := state.Consumers
 	state.Consumers++
-	state.Groups = append(state.Groups, joinReq.Group)
 	rebalanceConsumers(state)
 
 	for idx := range state.States {
@@ -159,9 +154,10 @@ func (h *beeStorage) queueFetch(shard bhmetapb.Shard, req *raftcmdpb.Request, at
 			size := uint64(0)
 			c := uint64(0)
 			var items [][]byte
+
 			err := h.getStore(shard.ID).Scan(startKey, endKey, func(key, value []byte) (bool, error) {
 				if !allowWriteToBuf(buf, len(value)) {
-					log.Warningf("queue fetch on group %s skipped, fetch %d, buf cap %d, write at %d, value %d",
+					log.Infof("queue fetch on group %s skipped, fetch %d, buf cap %d, write at %d, value %d",
 						string(queueFetch.Group),
 						size,
 						buf.Capacity(),
@@ -171,6 +167,9 @@ func (h *beeStorage) queueFetch(shard bhmetapb.Shard, req *raftcmdpb.Request, at
 				}
 
 				if size >= maxBytesPerFetch {
+					log.Infof("queue fetch on group %s skipped, fetch %d",
+						string(queueFetch.Group),
+						size)
 					return false, nil
 				}
 

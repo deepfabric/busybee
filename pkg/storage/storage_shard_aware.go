@@ -3,7 +3,6 @@ package storage
 import (
 	"bytes"
 	"context"
-	"math"
 
 	bhmetapb "github.com/deepfabric/beehive/pb/metapb"
 	"github.com/deepfabric/beehive/raftstore"
@@ -19,8 +18,8 @@ const (
 )
 
 var (
-	from = raftstore.EncodeDataKey(0, WorkflowCurrentInstanceKey(0))
-	end  = raftstore.EncodeDataKey(0, InstanceShardKey(math.MaxUint64, math.MaxUint32))
+	from = raftstore.EncodeDataKey(0, []byte{workflowCurrentPrefix})
+	end  = raftstore.EncodeDataKey(0, []byte{workflowWorkerPrefix + 1})
 )
 
 type shardCycle struct {

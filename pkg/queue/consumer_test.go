@@ -193,11 +193,14 @@ func TestConsumerRejoin(t *testing.T) {
 	time.Sleep(time.Second)
 	assert.Equal(t, 2, len(c.(*consumer).partitions), "TestConsumerRejoin failed")
 
+	c.Stop()
+	time.Sleep(time.Second)
+
 	c2, err := newConsumerWithGroup(tid, true, store, g1, metapb.DefaultGroup)
 	assert.NoError(t, err, "TestConsumerRejoin failed")
 	assert.NotNil(t, c, "TestConsumerRejoin failed")
 
 	c2.Start(16, cb)
-	time.Sleep(time.Second * 2)
+	time.Sleep(time.Second)
 	assert.Equal(t, 2, len(c2.(*consumer).partitions), "TestConsumerRejoin failed")
 }

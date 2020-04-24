@@ -12,7 +12,6 @@ import (
 func (h *beeStorage) init() {
 	h.AddWriteFunc("setif", uint64(rpcpb.SetIf), h.setIf)
 	h.AddWriteFunc("deleteif", uint64(rpcpb.DeleteIf), h.deleteIf)
-	h.AddReadFunc("get", uint64(rpcpb.Get), h.get)
 	h.AddReadFunc("scan", uint64(rpcpb.Scan), h.scan)
 	h.AddWriteFunc("allocid", uint64(rpcpb.AllocID), h.allocID)
 	h.AddWriteFunc("resetid", uint64(rpcpb.ResetID), h.resetID)
@@ -256,6 +255,10 @@ func (h *beeStorage) AddLocalFunc(cmd string, cmdType uint64, cb raftstore.Local
 
 func (h *beeStorage) WriteBatch() raftstore.CommandWriteBatch {
 	return newBatch(h, newKVBatch(), newBitmapBatch(), newQueueBatch())
+}
+
+func (h *beeStorage) ReadBatch() raftstore.CommandReadBatch {
+	return newBatchReader(h)
 }
 
 func (h *beeStorage) getValue(shard uint64, key []byte) ([]byte, error) {

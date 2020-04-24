@@ -66,6 +66,7 @@ func (ctx changedCtx) crowd() []byte {
 }
 
 type excution interface {
+	Pre(expr.Ctx, bool, func([]byte)) error
 	Execute(expr.Ctx, *transaction, who) error
 }
 
@@ -177,6 +178,10 @@ func (e *directExecution) Execute(ctx expr.Ctx, tran *transaction, target who) e
 	return nil
 }
 
+func (e *directExecution) Pre(expr.Ctx, bool, func([]byte)) error {
+	return nil
+}
+
 type conditionExecution struct {
 	conditionExpr expr.Runtime
 	exec          excution
@@ -213,6 +218,14 @@ func (e *conditionExecution) executeWithMatches(ctx expr.Ctx, tran *transaction,
 	return true, nil
 }
 
+func (e *conditionExecution) Pre(ctx expr.Ctx, resetDyna bool, cb func([]byte)) error {
+	if e.conditionExpr == nil {
+		return nil
+	}
+
+	return e.conditionExpr.Keys(ctx, resetDyna, cb)
+}
+
 func (e *conditionExecution) Execute(ctx expr.Ctx, tran *transaction, target who) error {
 	if e.conditionExpr != nil {
 		matches, value, err := e.conditionExpr.Exec(ctx)
@@ -244,6 +257,17 @@ func (e *conditionExecution) Execute(ctx expr.Ctx, tran *transaction, target who
 
 type branchExecution struct {
 	branches []*conditionExecution
+}
+
+func (e *branchExecution) Pre(ctx expr.Ctx, resetDyna bool, cb func([]byte)) error {
+	for _, exec := range e.branches {
+		err := exec.Pre(ctx, resetDyna, cb)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (e *branchExecution) Execute(ctx expr.Ctx, tran *transaction, target who) error {
@@ -278,5 +302,16 @@ func (e *parallelExecution) Execute(ctx expr.Ctx, tran *transaction, target who)
 	if e.nextStep != "" {
 		tran.stepChanged(changedCtx{e.step, e.nextStep, target, 0})
 	}
+	return nil
+}
+
+func (e *parallelExecution) Pre(ctx expr.Ctx, resetDyna bool, cb func([]byte)) error {
+	for _, exec := range e.exectuors {
+		err := exec.Pre(ctx, resetDyna, cb)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }

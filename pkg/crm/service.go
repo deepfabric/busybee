@@ -1,10 +1,10 @@
 package crm
 
 import (
-	"github.com/buger/jsonparser"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/deepfabric/busybee/pkg/storage"
+	"github.com/deepfabric/busybee/pkg/util"
 	"github.com/fagongzi/util/hack"
 	"github.com/fagongzi/util/protoc"
 )
@@ -78,18 +78,9 @@ func (s *service) GetProfileField(tid uint64, uid uint32, field string) ([]byte,
 		return value, nil
 	}
 
-	return extractAttrValue(value, field), nil
+	return util.ExtractJSONField(value, field), nil
 }
 
 func (s *service) update(tid uint64, from, to metapb.IDValue) error {
 	return s.store.Set(storage.MappingKey(tid, from, to.Type), hack.StringToSlice(to.Value))
-}
-
-func extractAttrValue(src []byte, paths ...string) []byte {
-	value, _, _, err := jsonparser.Get(src, paths...)
-	if err != nil {
-		return nil
-	}
-
-	return value
 }
