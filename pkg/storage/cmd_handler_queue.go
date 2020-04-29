@@ -211,6 +211,103 @@ func (h *beeStorage) queueFetch(shard bhmetapb.Shard, req *raftcmdpb.Request, at
 	return 0, 0, resp
 }
 
+func (h *beeStorage) queueScan(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs map[string]interface{}) *raftcmdpb.Response {
+	resp := pb.AcquireResponse()
+	queueScan := getQueueScanRequest(attrs)
+	protoc.MustUnmarshal(queueScan, req.Cmd)
+
+	fetchResp := getQueueFetchResponse(attrs)
+	buf := attrs[raftstore.AttrBuf].(*goetty.ByteBuf)
+
+	store := h.getStore(shard.ID)
+	key := committedOffsetKey(req.Key, queueScan.Consumer, buf)
+
+	data, err := store.Get(key)
+	if err != nil {
+		log.Fatalf("queue scan failed with %+v", err)
+	}
+
+	completed := queueScan.CompletedOffset
+	if len(data) > 0 {
+		lastCompleted := goetty.Byte2UInt64(data)
+		if lastCompleted > completed {
+			completed = lastCompleted
+		}
+	}
+
+	// do fetch new items
+	startKey := QueueItemKey(req.Key, completed+1, buf)
+	endKey := QueueItemKey(req.Key, completed+1+queueScan.Count, buf)
+
+	maxBytesPerFetch := queueScan.MaxBytes
+	if maxBytesPerFetch == 0 {
+		maxBytesPerFetch = defaultMaxBytesPerFetch
+	}
+
+	size := uint64(0)
+	c := uint64(0)
+	var items [][]byte
+
+	err = store.Scan(startKey, endKey, func(key, value []byte) (bool, error) {
+		if !allowWriteToBuf(buf, len(value)) {
+			log.Infof("queue scan skipped, fetch %d, buf cap %d, write at %d, value %d",
+				size,
+				buf.Capacity(),
+				buf.GetWriteIndex(),
+				len(value))
+			return false, nil
+		}
+
+		if size >= maxBytesPerFetch {
+			log.Infof("queue fetch skipped, fetch %d",
+				size)
+			return false, nil
+		}
+
+		buf.MarkWrite()
+		buf.Write(value)
+		items = append(items, buf.WrittenDataAfterMark())
+		c++
+		size += uint64(len(value))
+
+		return true, nil
+	}, false)
+	if err != nil {
+		log.Fatalf("fetch queue failed with %+v", err)
+	}
+
+	if c > 0 {
+		fetchResp.LastOffset = completed + c
+		fetchResp.Items = items
+	}
+
+	resp.Value = protoc.MustMarshal(fetchResp)
+	return resp
+}
+
+func (h *beeStorage) queueCommit(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs map[string]interface{}) (uint64, int64, *raftcmdpb.Response) {
+	resp := pb.AcquireResponse()
+	queueCommit := getQueueCommitRequest(attrs)
+	protoc.MustUnmarshal(queueCommit, req.Cmd)
+
+	buf := attrs[raftstore.AttrBuf].(*goetty.ByteBuf)
+	key := committedOffsetKey(req.Key, queueCommit.Consumer, buf)
+
+	buf.MarkWrite()
+	buf.WriteUint64(queueCommit.CompletedOffset)
+	buf.WriteInt64(time.Now().Unix())
+	completed := buf.WrittenDataAfterMark()
+
+	err := h.getStore(shard.ID).Set(key, completed)
+	if err != nil {
+		log.Fatalf("save %s completed offset failed with %+v",
+			queueCommit.Consumer,
+			err)
+	}
+
+	return 16, 16, resp
+}
+
 func maybeRemoveTimeoutConsumers(state *metapb.QueueState, now int64) bool {
 	if state.Consumers > 0 {
 		for _, p := range state.States {

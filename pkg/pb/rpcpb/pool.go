@@ -45,6 +45,8 @@ var (
 	queueAddPool                 sync.Pool
 	queueFetchPool               sync.Pool
 	queueJoinPool                sync.Pool
+	queueScanPool                sync.Pool
+	queueCommitPool              sync.Pool
 	tenantInitPool               sync.Pool
 	updateMappingPool            sync.Pool
 	scanMappingPool              sync.Pool
@@ -480,6 +482,36 @@ func AcquireQueueJoinGroupRequest() *QueueJoinGroupRequest {
 func ReleaseQueueJoinGroupRequest(value *QueueJoinGroupRequest) {
 	value.Reset()
 	queueJoinPool.Put(value)
+}
+
+// AcquireQueueScanRequest returns value from pool
+func AcquireQueueScanRequest() *QueueScanRequest {
+	value := queueScanPool.Get()
+	if value == nil {
+		return &QueueScanRequest{}
+	}
+	return value.(*QueueScanRequest)
+}
+
+// ReleaseQueueScanRequest returns the value to pool
+func ReleaseQueueScanRequest(value *QueueScanRequest) {
+	value.Reset()
+	queueScanPool.Put(value)
+}
+
+// AcquireQueueCommitRequest returns value from pool
+func AcquireQueueCommitRequest() *QueueCommitRequest {
+	value := queueCommitPool.Get()
+	if value == nil {
+		return &QueueCommitRequest{}
+	}
+	return value.(*QueueCommitRequest)
+}
+
+// ReleaseQueueCommitRequest returns the value to pool
+func ReleaseQueueCommitRequest(value *QueueCommitRequest) {
+	value.Reset()
+	queueCommitPool.Put(value)
 }
 
 // AcquireUpdateMappingRequest returns value from pool

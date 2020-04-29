@@ -1272,6 +1272,120 @@ func TestQueueFetchWithStaleCommitOffset(t *testing.T) {
 	}
 }
 
+func TestQueueScan(t *testing.T) {
+	store, deferFunc := NewTestStorage(t, true)
+	defer deferFunc()
+
+	tid := uint64(1)
+	c1 := []byte("consumer-01")
+
+	buf := goetty.NewByteBuf(32)
+	store.Set(QueueMetaKey(tid, buf), protoc.MustMarshal(&metapb.QueueState{
+		Partitions: 1,
+	}))
+
+	values := [][]byte{[]byte("1"), []byte("2"), []byte("3")}
+	err := store.PutToQueue(tid, 0, metapb.DefaultGroup, values...)
+	assert.NoError(t, err, "TestQueueScan failed")
+
+	for i := 0; i < 2; i++ {
+		req := rpcpb.AcquireQueueScanRequest()
+		req.ID = tid
+		req.Partition = 0
+		req.Consumer = c1
+		req.CompletedOffset = 0
+		req.Count = 3
+
+		value, err := store.ExecCommand(req)
+		assert.NoError(t, err, "TestQueueScan failed")
+		assert.NotEmpty(t, value, "TestQueueScan failed")
+
+		resp := &rpcpb.QueueFetchResponse{}
+		protoc.MustUnmarshal(resp, value)
+		assert.Equal(t, 3, len(resp.Items), "TestQueueScan failed")
+	}
+}
+
+func TestQueueScanWithCompletedOffset(t *testing.T) {
+	store, deferFunc := NewTestStorage(t, true)
+	defer deferFunc()
+
+	tid := uint64(1)
+	c1 := []byte("consumer-01")
+
+	buf := goetty.NewByteBuf(32)
+	store.Set(QueueMetaKey(tid, buf), protoc.MustMarshal(&metapb.QueueState{
+		Partitions: 1,
+	}))
+
+	values := [][]byte{[]byte("1"), []byte("2"), []byte("3")}
+	err := store.PutToQueue(tid, 0, metapb.DefaultGroup, values...)
+	assert.NoError(t, err, "TestQueueScan failed")
+
+	now := time.Now().Unix()
+	value := make([]byte, 16, 16)
+	goetty.Uint64ToBytesTo(1, value)
+	goetty.Int64ToBytesTo(now, value[8:])
+	err = store.Set(committedOffsetKey(PartitionKey(tid, 0), c1, buf), value)
+	assert.NoError(t, err, "TestQueueScan failed")
+
+	req := rpcpb.AcquireQueueScanRequest()
+	req.ID = tid
+	req.Partition = 0
+	req.Consumer = c1
+	req.CompletedOffset = 0
+	req.Count = 3
+
+	value, err = store.ExecCommand(req)
+	assert.NoError(t, err, "TestQueueScan failed")
+	assert.NotEmpty(t, value, "TestQueueScan failed")
+
+	resp := &rpcpb.QueueFetchResponse{}
+	protoc.MustUnmarshal(resp, value)
+	assert.Equal(t, 2, len(resp.Items), "TestQueueScan failed")
+}
+
+func TestQueueCommit(t *testing.T) {
+	store, deferFunc := NewTestStorage(t, true)
+	defer deferFunc()
+
+	tid := uint64(1)
+	c1 := []byte("consumer-01")
+
+	buf := goetty.NewByteBuf(32)
+	store.Set(QueueMetaKey(tid, buf), protoc.MustMarshal(&metapb.QueueState{
+		Partitions: 1,
+	}))
+
+	key := committedOffsetKey(PartitionKey(tid, 0), c1, buf)
+
+	req := rpcpb.AcquireQueueCommitRequest()
+	req.ID = tid
+	req.Partition = 0
+	req.Consumer = c1
+	req.CompletedOffset = 10
+	_, err := store.ExecCommand(req)
+	assert.NoError(t, err, "TestQueueCommit failed")
+
+	value, err := store.Get(key)
+	assert.NoError(t, err, "TestQueueCommit failed")
+	assert.NotEmpty(t, value, "TestQueueCommit failed")
+	assert.Equal(t, uint64(10), goetty.Byte2UInt64(value), "TestQueueCommit failed")
+
+	req = rpcpb.AcquireQueueCommitRequest()
+	req.ID = tid
+	req.Partition = 0
+	req.Consumer = c1
+	req.CompletedOffset = 2
+	_, err = store.ExecCommand(req)
+	assert.NoError(t, err, "TestQueueCommit failed")
+
+	value, err = store.Get(key)
+	assert.NoError(t, err, "TestQueueCommit failed")
+	assert.NotEmpty(t, value, "TestQueueCommit failed")
+	assert.Equal(t, uint64(2), goetty.Byte2UInt64(value), "TestQueueCommit failed")
+}
+
 func getTestQueueuState(t *testing.T, store Storage, tid uint64, g []byte) *metapb.QueueState {
 	buf := goetty.NewByteBuf(32)
 	key := QueueStateKey(tid, g, buf)

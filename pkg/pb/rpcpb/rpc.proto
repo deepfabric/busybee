@@ -42,6 +42,8 @@ enum Type {
     QueueAdd              = 300;
     QueueFetch            = 301;
     QueueJoin             = 302;
+    QueueScan             = 303;
+    QueueCommit           = 304;
     
     TenantInit    = 400;
     UpdateMapping = 401;
@@ -92,8 +94,10 @@ message Request {
     ResetIDRequest               resetID         = 31 [(gogoproto.nullable) = false];
     ScanMappingRequest           scanMapping     = 32 [(gogoproto.nullable) = false];
     GetIDSetRequest              getIDSet        = 33 [(gogoproto.nullable) = false];
-    SetIfRequest                 setIf           = 34  [(gogoproto.nullable) = false];
-    DeleteIfRequest              deleteIf        = 35  [(gogoproto.nullable) = false];
+    SetIfRequest                 setIf           = 34 [(gogoproto.nullable) = false];
+    DeleteIfRequest              deleteIf        = 35 [(gogoproto.nullable) = false];
+    QueueScanRequest             queueScan       = 36 [(gogoproto.nullable) = false];
+    QueueCommitRequest           queueCommit     = 37 [(gogoproto.nullable) = false];
 }
 
 // Response the busybee response
@@ -320,6 +324,26 @@ message QueueFetchRequest {
     uint64 completedOffset = 7;
     uint64 count           = 8;
     uint64 maxBytes        = 9;
+}
+
+// QueueScanRequest queue scan request
+message QueueScanRequest {
+    uint64 id              = 1 [(gogoproto.customname) = "ID"];
+    bytes  key             = 2; 
+    uint32 partition       = 3;
+    bytes  consumer        = 4;
+    uint64 completedOffset = 5;
+    uint64 count           = 6;
+    uint64 maxBytes        = 7;
+}
+
+// QueueCommitRequest queue commit completed offset
+message QueueCommitRequest { 
+    uint64 id              = 1 [(gogoproto.customname) = "ID"];
+    bytes  key             = 2; 
+    uint32 partition       = 3;
+    bytes  consumer        = 4;
+    uint64 completedOffset = 5;
 }
 
 // QueueFetchResponse fetch response

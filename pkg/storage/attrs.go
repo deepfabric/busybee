@@ -10,6 +10,8 @@ import (
 var (
 	attrRequestQueueAdd              = "req.queue.add"
 	attrRequestQueueFetch            = "req.queue.fetch"
+	attrRequestScanFetch             = "req.queue.scan"
+	attrRequestCommitFetch           = "req.queue.commit"
 	attrRequestQueueConcurrencyFetch = "req.queue.fetch.concurrency"
 	attrRequestQueueJoinGroup        = "req.queue.join.group"
 	attrRequestSet                   = "req.kv.set"
@@ -552,6 +554,34 @@ func getQueueFetchRequest(attrs map[string]interface{}) *rpcpb.QueueFetchRequest
 	} else {
 		value = &rpcpb.QueueFetchRequest{}
 		attrs[attrRequestQueueFetch] = value
+	}
+
+	value.Reset()
+	return value
+}
+
+func getQueueScanRequest(attrs map[string]interface{}) *rpcpb.QueueScanRequest {
+	var value *rpcpb.QueueScanRequest
+
+	if v, ok := attrs[attrRequestScanFetch]; ok {
+		value = v.(*rpcpb.QueueScanRequest)
+	} else {
+		value = &rpcpb.QueueScanRequest{}
+		attrs[attrRequestScanFetch] = value
+	}
+
+	value.Reset()
+	return value
+}
+
+func getQueueCommitRequest(attrs map[string]interface{}) *rpcpb.QueueCommitRequest {
+	var value *rpcpb.QueueCommitRequest
+
+	if v, ok := attrs[attrRequestCommitFetch]; ok {
+		value = v.(*rpcpb.QueueCommitRequest)
+	} else {
+		value = &rpcpb.QueueCommitRequest{}
+		attrs[attrRequestCommitFetch] = value
 	}
 
 	value.Reset()
