@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -131,7 +132,8 @@ type engine struct {
 	runner     *task.Runner
 	cronRunner *cron.Cron
 
-	workers                sync.Map // key -> *worker
+	runners sync.Map // key -> worker runner
+	// workers                sync.Map // key -> work runner key
 	eventC                 chan storage.Event
 	retryNewInstanceC      chan *metapb.WorkflowInstance
 	retryStoppingInstanceC chan *metapb.WorkflowInstance
@@ -168,16 +170,25 @@ func (eng *engine) initReport() {
 				return
 			case <-timer.C:
 				c := 0
-				eng.workers.Range(func(key, value interface{}) bool {
-					c++
+				eng.runners.Range(func(key, value interface{}) bool {
+					c += value.(*workerRunner).workerCount()
 					return true
 				})
 
-				logger.Debugf("%d running workers", c)
+				logger.Debugf("%d running instance state shards", c)
 				metric.SetWorkflowShardsCount(c)
 			}
 		}
 	})
+}
+
+func (eng *engine) workerCount() int {
+	c := 0
+	eng.runners.Range(func(key, value interface{}) bool {
+		c += value.(*workerRunner).workerCount()
+		return true
+	})
+	return c
 }
 
 func (eng *engine) initCron() {
@@ -206,6 +217,10 @@ func (eng *engine) TenantInit(metadata metapb.Tenant) error {
 }
 
 func (eng *engine) tenantInitWithReplicas(metadata metapb.Tenant, replicas uint32) error {
+	if metadata.Runners == 0 {
+		metadata.Runners = 1
+	}
+
 	err := eng.store.Set(storage.TenantMetadataKey(metadata.ID), protoc.MustMarshal(&metadata))
 	if err != nil {
 		return err
@@ -215,6 +230,29 @@ func (eng *engine) tenantInitWithReplicas(metadata metapb.Tenant, replicas uint3
 	defer buf.Release()
 
 	var shards []hbmetapb.Shard
+	for i := uint64(0); i < metadata.Runners; i++ {
+		shards = append(shards, hbmetapb.Shard{
+			Group: uint64(metapb.TenantRunnerGroup),
+			Start: storage.TenantRunnerKey(metadata.ID, i),
+			End:   storage.TenantRunnerKey(metadata.ID, i+1),
+			Data: protoc.MustMarshal(&metapb.CallbackAction{
+				SetKV: &metapb.SetKVAction{
+					KV: metapb.KV{
+						Key: storage.TenantRunnerMetadataKey(metadata.ID, i),
+						Value: protoc.MustMarshal(&metapb.WorkerRunner{
+							ID:    metadata.ID,
+							Index: i,
+							State: metapb.WRRunning,
+						}),
+					},
+					Group: metapb.TenantRunnerGroup,
+				},
+			}),
+			DisableSplit:  true,
+			LeastReplicas: replicas,
+		})
+	}
+
 	shards = append(shards, hbmetapb.Shard{
 		Group: uint64(metapb.TenantInputGroup),
 		Start: storage.PartitionKey(metadata.ID, 0),
@@ -272,6 +310,19 @@ func (eng *engine) doCheckTenant(tid uint64) error {
 	return nil
 }
 
+func (eng *engine) doCheckTenantRunner(tid uint64) error {
+	runners, err := eng.getTenantRunnerByState(tid, metapb.WRRunning)
+	if err != nil {
+		return err
+	}
+
+	if len(runners) == 0 {
+		return fmt.Errorf("%d has no runner worker", tid)
+	}
+
+	return nil
+}
+
 func (eng *engine) StartInstance(workflow metapb.Workflow, loader metapb.BMLoader, crowdMeta []byte, workers uint64) (uint64, error) {
 	t := time.Now().Unix()
 	logger.Infof("workflow-%d start instance with %s",
@@ -286,6 +337,13 @@ func (eng *engine) StartInstance(workflow metapb.Workflow, loader metapb.BMLoade
 	}
 
 	if err := eng.doCheckTenant(workflow.TenantID); err != nil {
+		logger.Errorf("workflow-%d start instance failed with %+v",
+			workflow.ID,
+			err)
+		return 0, err
+	}
+
+	if err := eng.doCheckTenantRunner(workflow.TenantID); err != nil {
 		logger.Errorf("workflow-%d start instance failed with %+v",
 			workflow.ID,
 			err)
@@ -657,14 +715,18 @@ func (eng *engine) loadRunningInstance(id uint64) (*metapb.WorkflowInstance, err
 	return instance, nil
 }
 
-func (eng *engine) getInstanceWorkers(instance *metapb.WorkflowInstance) ([]metapb.WorkflowInstanceWorkerState, error) {
-	from := storage.InstanceShardKey(instance.Snapshot.ID, 0)
-	end := storage.InstanceShardKey(instance.Snapshot.ID, uint32(instance.Workers))
+func (eng *engine) getTenantRunnerByState(tid uint64, expects ...metapb.WorkerRunnerState) ([]metapb.WorkerRunner, error) {
+	tenant := eng.mustDoLoadTenantMetadata(tid)
+	start := uint64(0)
+	end := storage.TenantRunnerMetadataKey(tid, tenant.Runners)
 
-	var shards []metapb.WorkflowInstanceWorkerState
+	var runners []metapb.WorkerRunner
+
 	for {
-		_, values, err := eng.store.Scan(from, end, 4)
+		_, values, err := eng.store.ScanWithGroup(storage.TenantRunnerMetadataKey(tid, start), end,
+			8, metapb.TenantRunnerGroup)
 		if err != nil {
+			metric.IncStorageFailed()
 			return nil, err
 		}
 
@@ -673,21 +735,86 @@ func (eng *engine) getInstanceWorkers(instance *metapb.WorkflowInstance) ([]meta
 		}
 
 		for _, value := range values {
-			shard := metapb.WorkflowInstanceWorkerState{}
-			protoc.MustUnmarshal(&shard, value)
-			shards = append(shards, shard)
+			state := metapb.WorkerRunner{}
+			protoc.MustUnmarshal(&state, value)
+
+			for _, expect := range expects {
+				if state.State == expect {
+					runners = append(runners, state)
+					break
+				}
+			}
+
+			start = state.Index
 		}
 
-		from = storage.InstanceShardKey(instance.Snapshot.ID, shards[len(shards)-1].Index+1)
+		start++
+		if start >= tenant.Runners {
+			break
+		}
 	}
 
+	return runners, nil
+}
+
+func (eng *engine) getInstanceWorkers(instance *metapb.WorkflowInstance) ([]metapb.WorkflowInstanceWorkerState, error) {
+	tenant := eng.mustDoLoadTenantMetadata(instance.Snapshot.TenantID)
+
+	var shards []metapb.WorkflowInstanceWorkerState
+	for i := uint64(0); i < tenant.Runners; i++ {
+		from := uint32(0)
+		end := storage.TenantRunnerWorkerKey(instance.Snapshot.TenantID, i, instance.Snapshot.ID, uint32(instance.Workers))
+
+		for {
+			startKey := storage.TenantRunnerWorkerKey(instance.Snapshot.TenantID, i, instance.Snapshot.ID, from)
+			_, values, err := eng.store.ScanWithGroup(startKey, end, 4, metapb.TenantRunnerGroup)
+			if err != nil {
+				return nil, err
+			}
+
+			if len(values) == 0 {
+				break
+			}
+
+			for _, value := range values {
+				shard := metapb.WorkflowInstanceWorkerState{}
+				protoc.MustUnmarshal(&shard, value)
+				shards = append(shards, shard)
+				from = shard.Index
+			}
+
+			from++
+		}
+	}
+
+	sort.Slice(shards, func(i, j int) bool {
+		return shards[i].Index < shards[j].Index
+	})
 	return shards, nil
 }
 
-func (eng *engine) buildSnapshot(instance *metapb.WorkflowInstance, buf *goetty.ByteBuf) (*metapb.WorkflowInstanceSnapshot, error) {
+func (eng *engine) mustDoLoadTenantMetadata(tid uint64) metapb.Tenant {
+	for {
+		value, err := eng.store.Get(storage.TenantMetadataKey(tid))
+		if err != nil {
+			metric.IncStorageFailed()
+			time.Sleep(time.Second * 5)
+			continue
+		}
+		if len(value) == 0 {
+			logger.Fatalf("Missing tenant metadata")
+		}
+
+		metadata := metapb.Tenant{}
+		protoc.MustUnmarshal(&metadata, value)
+		return metadata
+	}
+}
+
+func (eng *engine) buildSnapshot(instance *metapb.WorkflowInstance, buf *goetty.ByteBuf) (*metapb.WorkflowInstanceSnapshot, []metapb.WorkflowInstanceWorkerState, error) {
 	shards, err := eng.getInstanceWorkers(instance)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	snapshot := &metapb.WorkflowInstanceSnapshot{
@@ -702,7 +829,7 @@ func (eng *engine) buildSnapshot(instance *metapb.WorkflowInstance, buf *goetty.
 		for _, state := range shard.States {
 			v, err := eng.loadBM(state.Loader, state.LoaderMeta)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 
 			if bm, ok := value[state.Step.Name]; ok {
@@ -718,7 +845,7 @@ func (eng *engine) buildSnapshot(instance *metapb.WorkflowInstance, buf *goetty.
 
 		loader, loadMeta, err := eng.putBM(value[step.Name], key, eng.opts.snapshotTTL)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		snapshot.States = append(snapshot.States, metapb.StepState{
@@ -729,7 +856,7 @@ func (eng *engine) buildSnapshot(instance *metapb.WorkflowInstance, buf *goetty.
 		})
 	}
 
-	return snapshot, nil
+	return snapshot, shards, nil
 }
 
 func (eng *engine) handleEvent(ctx context.Context) {
@@ -777,10 +904,14 @@ func (eng *engine) doEvent(event storage.Event, buf *goetty.ByteBuf) {
 		eng.doStoppingInstanceEvent(event.Data.(*metapb.WorkflowInstance), buf)
 	case storage.StoppedInstanceEvent:
 		eng.doStoppedInstanceEvent(event.Data.(uint64))
-	case storage.RunningInstanceWorkerEvent:
+	case storage.InstanceWorkerCreatedEvent:
 		eng.doStartInstanceStateEvent(event.Data.(metapb.WorkflowInstanceWorkerState))
-	case storage.RemoveInstanceWorkerEvent:
+	case storage.InstanceWorkerDestoriedEvent:
 		eng.doInstanceStateRemovedEvent(event.Data.(metapb.WorkflowInstanceWorkerState))
+	case storage.StartRunnerEvent:
+		eng.doStartRunnerEvent(event.Data.(*metapb.WorkerRunner))
+	case storage.StopRunnerEvent:
+		eng.doStopRunnerEvent(event.Data.(*metapb.WorkerRunner))
 	}
 }
 
@@ -818,9 +949,9 @@ func (eng *engine) handleCreateWorker(c chan createWorkerAction) {
 
 func (eng *engine) doCreateWorker(arg interface{}) {
 	action := arg.(createWorkerAction)
-	_, err := eng.store.ExecCommand(&rpcpb.CreateInstanceStateShardRequest{
+	_, err := eng.store.ExecCommandWithGroup(&rpcpb.CreateInstanceStateShardRequest{
 		State: action.state,
-	})
+	}, metapb.TenantRunnerGroup)
 	if err != nil {
 		metric.IncStorageFailed()
 		logger.Errorf("create worker %s failed with %+v, retry later",
@@ -837,14 +968,16 @@ func (eng *engine) doCreateWorker(arg interface{}) {
 }
 
 func (eng *engine) doBootstrapWorker(state metapb.WorkflowInstanceWorkerState) {
-	key := workerKey(state)
-	if _, ok := eng.workers.Load(key); ok {
-		logger.Fatalf("BUG: start a exists state worker %s", key)
-	}
-
 	now := time.Now().Unix()
 	if state.StopAt != 0 && now >= state.StopAt {
 		return
+	}
+
+	key := workerKey(state)
+	runner := runnerKey(&metapb.WorkerRunner{ID: state.TenantID, Index: state.Runner})
+	value, ok := eng.runners.Load(runner)
+	if !ok {
+		logger.Fatalf("BUG: missing worker runner %s", key)
 	}
 
 	for {
@@ -853,12 +986,11 @@ func (eng *engine) doBootstrapWorker(state metapb.WorkflowInstanceWorkerState) {
 			logger.Errorf("create worker %s failed with %+v, retry later",
 				key,
 				err)
+			time.Sleep(time.Second * 5)
 			continue
 		}
 
-		eng.workers.Store(w.key, w)
-		w.run()
-
+		value.(*workerRunner).addWorker(w)
 		if state.StopAt != 0 {
 			after := time.Second * time.Duration(state.StopAt-now)
 			util.DefaultTimeoutWheel().Schedule(after, eng.stopWorker, w)
@@ -869,15 +1001,15 @@ func (eng *engine) doBootstrapWorker(state metapb.WorkflowInstanceWorkerState) {
 
 func (eng *engine) stopWorker(arg interface{}) {
 	w := arg.(*stateWorker)
-	eng.workers.Delete(w.key)
 	w.stop()
 }
 
 func (eng *engine) doInstanceStateRemovedEvent(state metapb.WorkflowInstanceWorkerState) {
 	key := workerKey(state)
-	if w, ok := eng.workers.Load(key); ok {
-		eng.workers.Delete(key)
-		w.(*stateWorker).stop()
+	rkey := runnerKey(&metapb.WorkerRunner{ID: state.TenantID, Index: state.Runner})
+
+	if runner, ok := eng.runners.Load(rkey); ok {
+		runner.(*workerRunner).removeWorker(key)
 	}
 }
 
@@ -896,11 +1028,28 @@ func (eng *engine) doStartInstanceEvent(instance *metapb.WorkflowInstance) {
 	logger.Infof("starting workflow-%d load bitmap completed",
 		instance.Snapshot.ID)
 
+	// load all runners, and alloc worker to these runners using RR balance
+	runners, err := eng.getTenantRunnerByState(instance.Snapshot.TenantID, metapb.WRRunning)
+	if err != nil {
+		logger.Errorf("start workflow-%d failed with %+v, retry later",
+			instance.Snapshot.ID, err)
+		util.DefaultTimeoutWheel().Schedule(eng.opts.retryInterval,
+			eng.addToRetryNewInstance, instance)
+		return
+	}
+	if len(runners) == 0 {
+		logger.Fatalf("BUG: starting workflow-%d with no running worker",
+			instance.Snapshot.ID)
+	}
+	logger.Infof("starting workflow-%d load %d worker runners completed",
+		instance.Snapshot.ID,
+		len(runners))
+
 	bms := bbutil.BMSplit(bm, instance.Workers)
 	completed := &actionCompleted{0, uint64(len(bms))}
-
 	for index, bm := range bms {
 		state := metapb.WorkflowInstanceWorkerState{}
+		state.Runner = uint64(index % len(runners))
 		state.TenantID = instance.Snapshot.TenantID
 		state.WorkflowID = instance.Snapshot.ID
 		state.InstanceID = instance.InstanceID
@@ -948,7 +1097,7 @@ func (eng *engine) doStoppingInstanceEvent(instance *metapb.WorkflowInstance, bu
 		instance.Snapshot.ID,
 		instance.Workers)
 
-	err := eng.doSaveSnapshot(instance, buf)
+	shards, err := eng.doSaveSnapshot(instance, buf)
 	if err != nil {
 		eng.doRetryStoppingInstance(instance, err)
 		return
@@ -958,12 +1107,14 @@ func (eng *engine) doStoppingInstanceEvent(instance *metapb.WorkflowInstance, bu
 		instance.Snapshot.ID,
 		instance.InstanceID)
 
-	n := uint32(instance.Workers)
-	for index := uint32(0); index < n; index++ {
+	for _, shard := range shards {
 		req := rpcpb.AcquireRemoveInstanceStateShardRequest()
+		req.TenantID = instance.Snapshot.TenantID
 		req.WorkflowID = instance.Snapshot.ID
-		req.Index = index
-		_, err := eng.store.ExecCommand(req)
+		req.InstanceID = instance.InstanceID
+		req.Index = shard.Index
+		req.Runner = shard.Runner
+		_, err := eng.store.ExecCommandWithGroup(req, metapb.TenantRunnerGroup)
 		if err != nil {
 			eng.doRetryStoppingInstance(instance, err)
 			return
@@ -995,61 +1146,38 @@ func (eng *engine) doRetryStoppingInstance(instance *metapb.WorkflowInstance, er
 		instance)
 }
 
-func (eng *engine) doSaveSnapshot(instance *metapb.WorkflowInstance, buf *goetty.ByteBuf) error {
+func (eng *engine) doSaveSnapshot(instance *metapb.WorkflowInstance, buf *goetty.ByteBuf) ([]metapb.WorkflowInstanceWorkerState, error) {
 	key := storage.WorkflowHistoryInstanceKey(instance.Snapshot.ID, instance.InstanceID, buf)
 	value, err := eng.store.Get(key)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if len(value) > 0 {
-		return nil
+		return nil, nil
 	}
 
-	snapshot, err := eng.buildSnapshot(instance, buf)
+	snapshot, shards, err := eng.buildSnapshot(instance, buf)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return eng.store.SetWithTTL(key, protoc.MustMarshal(snapshot), int64(eng.opts.snapshotTTL))
+	err = eng.store.SetWithTTL(key, protoc.MustMarshal(snapshot), int64(eng.opts.snapshotTTL))
+	if err != nil {
+		return nil, err
+	}
+
+	return shards, nil
 }
 
-func (eng *engine) doStoppedInstanceEvent(id uint64) {
-	var removed []interface{}
-	eng.workers.Range(func(key, value interface{}) bool {
-		w := value.(*stateWorker)
-		if w.state.WorkflowID == id {
-			removed = append(removed, key)
-		}
+func (eng *engine) doStoppedInstanceEvent(wid uint64) {
+	eng.runners.Range(func(key, value interface{}) bool {
+		value.(*workerRunner).removeWorkers(wid)
 		return true
 	})
 
-	for _, key := range removed {
-		if w, ok := eng.workers.Load(key); ok {
-			eng.stopWorker(w)
-		}
-	}
-
 	logger.Infof("workflow-%d stopped",
-		id)
-}
-
-func (eng *engine) doCreateInstanceState(instance *metapb.WorkflowInstance, state metapb.WorkflowInstanceWorkerState) bool {
-	_, err := eng.store.ExecCommand(&rpcpb.CreateInstanceStateShardRequest{
-		State: state,
-	})
-	if err != nil {
-		metric.IncStorageFailed()
-		logger.Errorf("create worker %s failed with %+v, retry later",
-			workerKey(state),
-			err)
-		util.DefaultTimeoutWheel().Schedule(eng.opts.retryInterval, eng.addToRetryNewInstance, instance)
-		return false
-	}
-
-	logger.Infof("worker %s created",
-		workerKey(state))
-	return true
+		wid)
 }
 
 func (eng *engine) doCreateInstanceStateShardComplete(id uint64) {

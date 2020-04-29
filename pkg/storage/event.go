@@ -9,10 +9,14 @@ const (
 	StoppingInstanceEvent
 	// StoppedInstanceEvent instance stopped event
 	StoppedInstanceEvent
-	// RunningInstanceWorkerEvent load a new instance state event
-	RunningInstanceWorkerEvent
-	// RemoveInstanceWorkerEvent instance state removed to another node event
-	RemoveInstanceWorkerEvent
+	// InstanceWorkerCreatedEvent create a new instance state event
+	InstanceWorkerCreatedEvent
+	// InstanceWorkerDestoriedEvent destoried instance state event
+	InstanceWorkerDestoriedEvent
+	// StartRunnerEvent start runner
+	StartRunnerEvent
+	// StopRunnerEvent stop runner
+	StopRunnerEvent
 )
 
 // Event the event

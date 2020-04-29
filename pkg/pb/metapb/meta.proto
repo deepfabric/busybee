@@ -24,8 +24,30 @@ message TenantQueue {
 
 // Tenant tenant metadata
 message Tenant {
-    uint64      id     = 1 [(gogoproto.customname) = "ID"];
-    TenantQueue output = 2 [(gogoproto.nullable) = false];
+    uint64      id               = 1 [(gogoproto.customname) = "ID"];
+    TenantQueue output           = 2 [(gogoproto.nullable) = false];
+    uint64      runners          = 3;
+}
+
+// WorkerRunnerState runner state
+enum WorkerRunnerState {
+    WRRunning  = 0;
+    WRStopped  = 1;
+}
+
+// WorkerRunner worker runner
+message WorkerRunner {
+    uint64                  id         = 1 [(gogoproto.customname) = "ID"];
+    uint64                  index      = 2;
+    WorkerRunnerState       state      = 3;
+    repeated WorkflowWorker workers    = 4 [(gogoproto.nullable) = false];
+    uint64                  totalCrowd = 5;
+}
+
+message WorkflowWorker {
+    uint64 workflowID = 1;
+    uint64 instanceID = 2;
+    uint32 index      = 3;
 }
 
 // WorkflowInstanceState workflow instance state
@@ -122,6 +144,7 @@ enum Group {
     DefaultGroup      = 0;
     TenantInputGroup  = 1;
     TenantOutputGroup = 2;
+    TenantRunnerGroup = 3;
 }
 
 // Workflow is process definition
@@ -163,6 +186,7 @@ message WorkflowInstanceWorkerState {
     repeated StepState states     = 5 [(gogoproto.nullable) = false];
     uint64             version    = 6;
     int64              stopAt     = 7;
+    uint64             runner     = 8;
 }
 
 // CountState step count state
@@ -284,7 +308,7 @@ enum PartitonState {
 
 // message CallbackAction
 message CallbackAction {
-    SetKVAction setKV = 1;
+    SetKVAction        setKV        = 1; 
 }
 
 // SetKVAction set kv action

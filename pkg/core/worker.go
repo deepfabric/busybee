@@ -33,6 +33,7 @@ const (
 	updateCrowdEventAction
 	updateWorkflowEventAction
 	checkTTLEventAction
+	initAction
 )
 
 type directCtx struct {
@@ -87,6 +88,9 @@ type stateWorker struct {
 	tempBM       *roaring.Bitmap
 	tempEvents   []metapb.UserEvent
 	tempNotifies []metapb.Notify
+
+	items []interface{}
+	tran  *transaction
 }
 
 func newStateWorker(key string, state metapb.WorkflowInstanceWorkerState, eng Engine) (*stateWorker, error) {
@@ -118,6 +122,8 @@ func newStateWorker(key string, state metapb.WorkflowInstanceWorkerState, eng En
 		queueStateKey:    queueStateKey,
 		queueGetStateKey: storage.QueueKVKey(state.TenantID, queueStateKey),
 		tempBM:           acquireBM(),
+		items:            make([]interface{}, handleEventBatch, handleEventBatch),
+		tran:             newTransaction(),
 	}
 
 	err = w.resetByState()
@@ -323,118 +329,121 @@ func (w *stateWorker) doEvent(action int, data interface{}) error {
 	return cb.wait()
 }
 
-func (w *stateWorker) run() {
-	go func() {
-		w.checkLastTranscation()
-
-		items := make([]interface{}, handleEventBatch, handleEventBatch)
-		tran := newTransaction()
-
-		for {
-			n, err := w.queue.Get(handleEventBatch, items)
-			if err != nil {
-				logger.Fatalf("BUG: fetch from work queue failed with %+v", err)
-			}
-
-			w.buf.Clear()
-			tran.start(w)
-			for i := int64(0); i < n; i++ {
-				value := items[i].(item)
-				if value.action == stopAction {
-					tran.close()
-					w.consumer.Stop()
-					w.resetTTLTimeout()
-
-					for _, v := range w.queue.Dispose() {
-						cb := (v.(item).cb)
-						cb.complete(task.ErrDisposed)
-						cb.reset()
-					}
-
-					for _, id := range w.cronIDs {
-						w.eng.StopCronJob(id)
-					}
-
-					for _, bm := range w.stepCrowds {
-						releaseBM(bm)
-					}
-					releaseBM(w.totalCrowds)
-
-					releaseBM(w.tempBM)
-					logger.Infof("worker %s stopped", w.key)
-					return
-				}
-
-				switch value.action {
-				case timerAction:
-					tran.doStepTimerEvent(value)
-				case userEventAction:
-					tran.doStepUserEvents(value)
-				case updateCrowdEventAction:
-					err = tran.err
-					w.completeTransaction(tran)
-					if err != nil {
-						value.cb.complete(err)
-					} else {
-						value.cb.complete(w.doUpdateCrowd(value.value.([]byte)))
-					}
-
-					tran.start(w)
-				case updateWorkflowEventAction:
-					err = tran.err
-					w.completeTransaction(tran)
-					if err != nil {
-						value.cb.complete(err)
-					} else {
-						value.cb.complete(w.doUpdateWorkflow(value.value.(metapb.Workflow)))
-					}
-
-					tran.start(w)
-				case checkTTLEventAction:
-					w.doCheckStepTTLTimeout(tran, value.value.(int))
-				}
-
-				if err != nil {
-					break
-				}
-			}
-
-			w.completeTransaction(tran)
-		}
-	}()
-
-	w.consumer.Start(uint64(fetchEventBatch), w.onEvent)
-	logger.Infof("worker %s started with %d crowd",
-		w.key,
-		w.totalCrowds.GetCardinality())
+func (w *stateWorker) init() {
+	w.queue.Put(item{
+		action: initAction,
+	})
 }
 
-func (w *stateWorker) completeTransaction(tran *transaction) {
-	defer tran.reset()
+func (w *stateWorker) handleEvent() bool {
+	if w.queue.Len() == 0 && !w.queue.Disposed() {
+		return false
+	}
 
-	if tran.err != nil {
-		for _, c := range tran.cbs {
-			c.complete(tran.err)
+	w.buf.Clear()
+	n, err := w.queue.Get(handleEventBatch, w.items)
+	if err != nil {
+		logger.Fatalf("BUG: fetch from work queue failed with %+v", err)
+	}
+
+	w.tran.start(w)
+	for i := int64(0); i < n; i++ {
+		value := w.items[i].(item)
+		if value.action == stopAction {
+			w.tran.close()
+			w.consumer.Stop()
+			w.resetTTLTimeout()
+
+			for _, v := range w.queue.Dispose() {
+				cb := (v.(item).cb)
+				cb.complete(task.ErrDisposed)
+				cb.reset()
+			}
+
+			for _, id := range w.cronIDs {
+				w.eng.StopCronJob(id)
+			}
+
+			for _, bm := range w.stepCrowds {
+				releaseBM(bm)
+			}
+			releaseBM(w.totalCrowds)
+
+			releaseBM(w.tempBM)
+			logger.Infof("worker %s stopped", w.key)
+			return false
+		}
+
+		switch value.action {
+		case initAction:
+			w.checkLastTranscation()
+			w.consumer.Start(uint64(fetchEventBatch), w.onEvent)
+			logger.Infof("worker %s init with %d crowd",
+				w.key,
+				w.totalCrowds.GetCardinality())
+		case timerAction:
+			w.tran.doStepTimerEvent(value)
+		case userEventAction:
+			w.tran.doStepUserEvents(value)
+		case updateCrowdEventAction:
+			err = w.tran.err
+			w.completeTransaction()
+			if err != nil {
+				value.cb.complete(err)
+			} else {
+				value.cb.complete(w.doUpdateCrowd(value.value.([]byte)))
+			}
+
+			w.tran.start(w)
+		case updateWorkflowEventAction:
+			err = w.tran.err
+			w.completeTransaction()
+			if err != nil {
+				value.cb.complete(err)
+			} else {
+				value.cb.complete(w.doUpdateWorkflow(value.value.(metapb.Workflow)))
+			}
+
+			w.tran.start(w)
+		case checkTTLEventAction:
+			w.doCheckStepTTLTimeout(value.value.(int))
+		}
+
+		if err != nil {
+			break
+		}
+	}
+
+	w.completeTransaction()
+	return true
+}
+
+func (w *stateWorker) completeTransaction() {
+	defer w.tran.reset()
+
+	if w.tran.err != nil {
+		for _, c := range w.tran.cbs {
+			c.complete(w.tran.err)
 		}
 		return
 	}
 
-	if len(tran.changes) > 0 {
+	if len(w.tran.changes) > 0 {
 		for idx := range w.stepCrowds {
 			w.stepCrowds[idx].Clear()
-			w.stepCrowds[idx].Or(tran.stepCrowds[idx])
+			w.stepCrowds[idx].Or(w.tran.stepCrowds[idx])
 		}
 
 		w.state.Version++
-		w.retryDo("exec notify", tran, w.execNotify)
-		w.retryDo("exec update state", tran, w.execUpdate)
+		w.retryDo("exec notify", w.tran, w.execNotify)
+		w.retryDo("exec update state", w.tran, w.execUpdate)
 
 		logger.Debugf("worker %s state update to version %d",
 			w.key,
 			w.state.Version)
 	}
 
-	for _, c := range tran.cbs {
+	for _, c := range w.tran.cbs {
 		c.complete(nil)
 	}
 }
@@ -477,6 +486,10 @@ func (w *stateWorker) checkLastTranscation() {
 		break
 	}
 }
+
+var (
+	c uint64
+)
 
 func (w *stateWorker) execNotify(tran *transaction) error {
 	totalMoved := uint64(0)
@@ -531,6 +544,13 @@ func (w *stateWorker) execNotify(tran *transaction) error {
 	logger.Debugf("worker %s moved %d",
 		w.key,
 		totalMoved)
+
+	n := atomic.AddUint64(&c, totalMoved)
+	if n%1024 == 0 {
+		logger.Infof("******************************* moved %d", n)
+	} else if n%1000 == 0 {
+		logger.Infof("******************************* moved %d", n)
+	}
 	return nil
 }
 
@@ -543,7 +563,7 @@ func (w *stateWorker) execUpdate(batch *transaction) error {
 
 	req := rpcpb.AcquireUpdateInstanceStateShardRequest()
 	req.State = w.state
-	_, err := w.eng.Storage().ExecCommand(req)
+	_, err := w.eng.Storage().ExecCommandWithGroup(req, metapb.TenantRunnerGroup)
 	return err
 }
 
@@ -659,8 +679,8 @@ func (w *stateWorker) doUpdateCrowd(crowd []byte) error {
 	return nil
 }
 
-func (w *stateWorker) doCheckStepTTLTimeout(tran *transaction, idx int) {
-	if tran.err != nil {
+func (w *stateWorker) doCheckStepTTLTimeout(idx int) {
+	if w.tran.err != nil {
 		return
 	}
 
@@ -719,7 +739,7 @@ func (w *stateWorker) doCheckStepTTLTimeout(tran *transaction, idx int) {
 		}
 	}
 
-	tran.doUserEvents(w.tempEvents)
+	w.tran.doUserEvents(w.tempEvents)
 }
 
 func (w *stateWorker) isDirectStep(name string) bool {

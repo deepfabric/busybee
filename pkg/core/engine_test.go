@@ -63,7 +63,7 @@ func TestTenantInit(t *testing.T) {
 	err = store.RaftStore().Prophet().GetStore().LoadResources(16, func(res prophet.Resource) {
 		c++
 	})
-	assert.Equal(t, 3, c, "TestTenantInit failed")
+	assert.Equal(t, 4, c, "TestTenantInit failed")
 
 	buf := goetty.NewByteBuf(32)
 	data, err := store.GetWithGroup(storage.QueueMetaKey(tid, buf), metapb.TenantOutputGroup)
@@ -113,23 +113,14 @@ func TestStopInstanceAndRestart(t *testing.T) {
 
 		assert.NoError(t, waitTestWorkflow(ng, 10000, metapb.Running), "TestStopInstance failed")
 
-		c := 0
-		ng.(*engine).workers.Range(func(key, value interface{}) bool {
-			c++
-			return true
-		})
-		assert.Equal(t, 3, c, "TestStopInstance failed")
+		assert.Equal(t, 3, ng.(*engine).workerCount(), "TestStopInstance failed")
 
 		err = ng.StopInstance(10000)
 		assert.NoError(t, err, "TestStopInstance failed")
 
 		assert.NoError(t, waitTestWorkflow(ng, 10000, metapb.Stopped), "TestStopInstance failed")
-		c = 0
-		ng.(*engine).workers.Range(func(key, value interface{}) bool {
-			c++
-			return true
-		})
-		assert.Equal(t, 0, c, "TestStopInstance failed")
+
+		assert.Equal(t, 0, ng.(*engine).workerCount(), "TestStopInstance failed")
 
 		value, err := ng.Storage().Get(storage.WorkflowCurrentInstanceKey(10000))
 		assert.NoError(t, err, "TestStopInstance failed")
@@ -165,8 +156,11 @@ func TestStartInstance(t *testing.T) {
 	assert.NoError(t, ng.Start(), "TestStartInstance failed")
 	defer ng.Stop()
 
+	tid := uint64(10001)
+	wid := uint64(10000)
+
 	err = ng.(*engine).tenantInitWithReplicas(metapb.Tenant{
-		ID: 10001,
+		ID: tid,
 		Output: metapb.TenantQueue{
 			Partitions:      1,
 			ConsumerTimeout: 60,
@@ -177,8 +171,8 @@ func TestStartInstance(t *testing.T) {
 
 	bm := roaring.BitmapOf(1, 2, 3, 4)
 	_, err = ng.StartInstance(metapb.Workflow{
-		ID:       10000,
-		TenantID: 10001,
+		ID:       wid,
+		TenantID: tid,
 		StopAt:   time.Now().Add(time.Second * 10).Unix(),
 		Name:     "test_wf",
 		Steps: []metapb.Step{
@@ -221,13 +215,20 @@ func TestStartInstance(t *testing.T) {
 	assert.NoError(t, err, "TestStartInstance failed")
 
 	assert.NoError(t, waitTestWorkflow(ng, 10000, metapb.Running), "TestStartInstance failed")
+	assert.Equal(t, 3, ng.(*engine).workerCount(), "TestStartInstance failed")
 
-	c := 0
-	ng.(*engine).workers.Range(func(key, value interface{}) bool {
-		c++
-		return true
-	})
-	assert.Equal(t, 3, c, "TestStartInstance failed")
+	for i := uint32(0); i < 3; i++ {
+		data, err := store.GetWithGroup(storage.TenantRunnerWorkerKey(tid, 0, wid, i), metapb.TenantRunnerGroup)
+		assert.NoError(t, err, "TestStartInstance failed")
+		assert.NotEmpty(t, data, "TestStartInstance failed")
+	}
+
+	data, err := store.GetWithGroup(storage.TenantRunnerMetadataKey(tid, 0), metapb.TenantRunnerGroup)
+	assert.NoError(t, err, "TestStartInstance failed")
+	assert.NotEmpty(t, data, "TestStartInstance failed")
+	metadata := &metapb.WorkerRunner{}
+	protoc.MustUnmarshal(metadata, data)
+	assert.Equal(t, 3, len(metadata.Workers), "TestStartInstance failed")
 
 	err = ng.Storage().PutToQueue(10001, 0, metapb.TenantInputGroup, protoc.MustMarshal(&metapb.Event{
 		Type: metapb.UserType,
@@ -275,12 +276,20 @@ func TestStartInstance(t *testing.T) {
 	assert.Equal(t, uint64(3), bm.GetCardinality(), "TestStartInstance failed")
 
 	time.Sleep(time.Second * 9)
-	c = 0
-	ng.(*engine).workers.Range(func(key, value interface{}) bool {
-		c++
-		return true
-	})
-	assert.Equal(t, 0, c, "TestStartInstance failed")
+	assert.Equal(t, 0, ng.(*engine).workerCount(), "TestStartInstance failed")
+
+	for i := uint32(0); i < 3; i++ {
+		data, err := store.GetWithGroup(storage.TenantRunnerWorkerKey(tid, 0, wid, i), metapb.TenantRunnerGroup)
+		assert.NoError(t, err, "TestStartInstance failed")
+		assert.Empty(t, data, "TestStartInstance failed")
+	}
+
+	data, err = store.GetWithGroup(storage.TenantRunnerMetadataKey(tid, 0), metapb.TenantRunnerGroup)
+	assert.NoError(t, err, "TestStartInstance failed")
+	assert.NotEmpty(t, data, "TestStartInstance failed")
+	metadata = &metapb.WorkerRunner{}
+	protoc.MustUnmarshal(metadata, data)
+	assert.Equal(t, 0, len(metadata.Workers), "TestStartInstance failed")
 }
 
 func TestTriggerDirect(t *testing.T) {
@@ -359,13 +368,7 @@ func TestTriggerDirect(t *testing.T) {
 	assert.NoError(t, err, "TestTriggerDirect failed")
 
 	assert.NoError(t, waitTestWorkflow(ng, 10000, metapb.Running), "TestTriggerDirect failed")
-
-	c := 0
-	ng.(*engine).workers.Range(func(key, value interface{}) bool {
-		c++
-		return true
-	})
-	assert.Equal(t, 3, c, "TestTriggerDirect failed")
+	assert.Equal(t, 3, ng.(*engine).workerCount(), "TestTriggerDirect failed")
 
 	err = ng.Storage().PutToQueue(10001, 0, metapb.TenantInputGroup, protoc.MustMarshal(&metapb.Event{
 		Type: metapb.UserType,
@@ -497,13 +500,7 @@ func TestUpdateCrowd(t *testing.T) {
 	assert.NoError(t, err, "TestUpdateCrowd failed")
 
 	assert.NoError(t, waitTestWorkflow(ng, 10000, metapb.Running), "TestUpdateCrowd failed")
-
-	c := 0
-	ng.(*engine).workers.Range(func(key, value interface{}) bool {
-		c++
-		return true
-	})
-	assert.Equal(t, 3, c, "TestUpdateCrowd failed")
+	assert.Equal(t, 3, ng.(*engine).workerCount(), "TestUpdateCrowd failed")
 
 	err = ng.Storage().PutToQueue(tid, 0, metapb.TenantInputGroup, protoc.MustMarshal(&metapb.Event{
 		Type: metapb.UserType,
@@ -694,12 +691,7 @@ func TestUpdateWorkflow(t *testing.T) {
 	assert.NoError(t, err, "TestUpdateWorkflow failed")
 
 	assert.NoError(t, waitTestWorkflow(ng, 10000, metapb.Running), "TestUpdateWorkflow failed")
-	c := 0
-	ng.(*engine).workers.Range(func(key, value interface{}) bool {
-		c++
-		return true
-	})
-	assert.Equal(t, 3, c, "TestUpdateWorkflow failed")
+	assert.Equal(t, 3, ng.(*engine).workerCount(), "TestUpdateWorkflow failed")
 
 	err = ng.Storage().PutToQueue(tid, 0, metapb.TenantInputGroup, protoc.MustMarshal(&metapb.Event{
 		Type: metapb.UserType,
@@ -1396,13 +1388,7 @@ func TestTriggerTTLTimeout(t *testing.T) {
 	assert.NoError(t, err, "TestTriggerTTLTimeout failed")
 
 	assert.NoError(t, waitTestWorkflow(ng, 10000, metapb.Running), "TestTriggerTTLTimeout failed")
-
-	c := 0
-	ng.(*engine).workers.Range(func(key, value interface{}) bool {
-		c++
-		return true
-	})
-	assert.Equal(t, 3, c, "TestTriggerTTLTimeout failed")
+	assert.Equal(t, 3, ng.(*engine).workerCount(), "TestTriggerTTLTimeout failed")
 
 	err = ng.Storage().PutToQueue(10001, 0, metapb.TenantInputGroup, protoc.MustMarshal(&metapb.Event{
 		Type: metapb.UserType,
@@ -1763,12 +1749,7 @@ func TestNotifyWithErrorRetry(t *testing.T) {
 	assert.NoError(t, err, "TestNotifyWithErrorRetry failed")
 
 	time.Sleep(time.Second)
-	c := 0
-	ng.(*engine).workers.Range(func(key, value interface{}) bool {
-		c++
-		return true
-	})
-	assert.Equal(t, 3, c, "TestNotifyWithErrorRetry failed")
+	assert.Equal(t, 3, ng.(*engine).workerCount(), "TestNotifyWithErrorRetry failed")
 
 	err = ng.Storage().PutToQueue(10001, 0, metapb.TenantInputGroup, protoc.MustMarshal(&metapb.Event{
 		Type: metapb.UserType,
@@ -1811,7 +1792,8 @@ func TestStepWithPreLoad(t *testing.T) {
 	tid := uint64(10001)
 	wid := uint64(10000)
 	err = ng.(*engine).tenantInitWithReplicas(metapb.Tenant{
-		ID: tid,
+		ID:      tid,
+		Runners: 4,
 		Output: metapb.TenantQueue{
 			Partitions:      1,
 			ConsumerTimeout: 60,

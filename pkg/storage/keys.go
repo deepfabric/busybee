@@ -9,15 +9,17 @@ import (
 )
 
 const (
-	mappingIDPrefix       byte = 0
-	mappingPrefix         byte = 1
-	profilePrefix         byte = 2
-	tenantMetadataPrefix  byte = 3
-	workflowCurrentPrefix byte = 4
-	workflowWorkerPrefix  byte = 5
-	workflowHistoryPrefix byte = 6
-	workflowCrowdPrefix   byte = 7
-	tempPrefix            byte = 8
+	mappingIDPrefix            byte = 0
+	mappingPrefix              byte = 1
+	profilePrefix              byte = 2
+	tenantMetadataPrefix       byte = 3
+	tenantRunnerPrefix         byte = 4
+	tenantRunnerMetadataPrefix byte = 5
+	tenantRunnerWorkerPrefix   byte = 6
+	workflowCurrentPrefix      byte = 7
+	workflowHistoryPrefix      byte = 8
+	workflowCrowdPrefix        byte = 9
+	tempPrefix                 byte = 10
 
 	queueOffsetField    byte = 0
 	queueItemField      byte = 1
@@ -97,12 +99,54 @@ func WorkflowCrowdShardKey(wid, instanceID uint64, version uint32, buf *goetty.B
 	return buf.WrittenDataAfterMark()
 }
 
-// InstanceShardKey instance shard key
-func InstanceShardKey(id uint64, index uint32) []byte {
-	key := make([]byte, 13, 13)
-	key[0] = workflowWorkerPrefix
-	goetty.Uint64ToBytesTo(id, key[1:])
-	goetty.Uint32ToBytesTo(index, key[9:])
+// TenantRunnerKey tenant runner key
+func TenantRunnerKey(tid uint64, runner uint64) []byte {
+	key := make([]byte, 17, 17)
+	key[0] = tenantRunnerPrefix
+	goetty.Uint64ToBytesTo(tid, key[1:])
+	goetty.Uint64ToBytesTo(runner, key[9:])
+	return key
+}
+
+// TenantRunnerMetadataKey tenant runner metadata key
+func TenantRunnerMetadataKey(tid uint64, runner uint64) []byte {
+	key := make([]byte, 18, 18)
+	key[0] = tenantRunnerPrefix
+	goetty.Uint64ToBytesTo(tid, key[1:])
+	goetty.Uint64ToBytesTo(runner, key[9:])
+	key[17] = tenantRunnerMetadataPrefix
+	return key
+}
+
+// TenantRunnerWorkerMinKey tenant runner worker min key
+func TenantRunnerWorkerMinKey(tid uint64, runner uint64) []byte {
+	key := make([]byte, 18, 18)
+	key[0] = tenantRunnerPrefix
+	goetty.Uint64ToBytesTo(tid, key[1:])
+	goetty.Uint64ToBytesTo(runner, key[9:])
+	key[17] = tenantRunnerWorkerPrefix
+	return key
+}
+
+// TenantRunnerWorkerMaxKey tenant runner worker max key
+func TenantRunnerWorkerMaxKey(tid uint64, runner uint64) []byte {
+	key := make([]byte, 18, 18)
+	key[0] = tenantRunnerPrefix
+	goetty.Uint64ToBytesTo(tid, key[1:])
+	goetty.Uint64ToBytesTo(runner, key[9:])
+	key[17] = tenantRunnerWorkerPrefix + 1
+	return key
+}
+
+// TenantRunnerWorkerKey tenant runner worker key
+func TenantRunnerWorkerKey(tid uint64, runner uint64, wid uint64, worker uint32) []byte {
+	key := make([]byte, 30, 30)
+	key[0] = tenantRunnerPrefix
+	goetty.Uint64ToBytesTo(tid, key[1:])
+	goetty.Uint64ToBytesTo(runner, key[9:])
+	key[17] = tenantRunnerWorkerPrefix
+	goetty.Uint64ToBytesTo(wid, key[18:])
+	goetty.Uint32ToBytesTo(worker, key[26:])
 	return key
 }
 

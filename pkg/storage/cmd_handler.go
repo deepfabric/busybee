@@ -177,21 +177,23 @@ func (h *beeStorage) BuildRequest(req *raftcmdpb.Request, cmd interface{}) error
 		rpcpb.ReleaseStoppedInstanceRequest(msg)
 	case *rpcpb.CreateInstanceStateShardRequest:
 		msg := cmd.(*rpcpb.CreateInstanceStateShardRequest)
-		req.Key = InstanceShardKey(msg.State.WorkflowID, msg.State.Index)
+		req.Key = TenantRunnerWorkerKey(msg.State.TenantID, msg.State.Runner,
+			msg.State.WorkflowID, msg.State.Index)
 		req.CustemType = uint64(rpcpb.CreateInstanceStateShard)
 		req.Type = raftcmdpb.Write
 		req.Cmd = protoc.MustMarshal(msg)
 		rpcpb.ReleaseCreateInstanceStateShardRequest(msg)
 	case *rpcpb.UpdateInstanceStateShardRequest:
 		msg := cmd.(*rpcpb.UpdateInstanceStateShardRequest)
-		req.Key = InstanceShardKey(msg.State.WorkflowID, msg.State.Index)
+		req.Key = TenantRunnerWorkerKey(msg.State.TenantID, msg.State.Runner,
+			msg.State.WorkflowID, msg.State.Index)
 		req.CustemType = uint64(rpcpb.UpdateInstanceStateShard)
 		req.Type = raftcmdpb.Write
 		req.Cmd = protoc.MustMarshal(msg)
 		rpcpb.ReleaseUpdateInstanceStateShardRequest(msg)
 	case *rpcpb.RemoveInstanceStateShardRequest:
 		msg := cmd.(*rpcpb.RemoveInstanceStateShardRequest)
-		req.Key = InstanceShardKey(msg.WorkflowID, msg.Index)
+		req.Key = TenantRunnerWorkerKey(msg.TenantID, msg.Runner, msg.WorkflowID, msg.Index)
 		req.CustemType = uint64(rpcpb.RemoveInstanceStateShard)
 		req.Type = raftcmdpb.Write
 		req.Cmd = protoc.MustMarshal(msg)

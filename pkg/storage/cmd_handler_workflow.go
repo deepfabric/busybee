@@ -6,6 +6,8 @@ import (
 	"github.com/deepfabric/beehive/pb"
 	bhmetapb "github.com/deepfabric/beehive/pb/metapb"
 	"github.com/deepfabric/beehive/pb/raftcmdpb"
+	"github.com/deepfabric/beehive/raftstore"
+	bhutil "github.com/deepfabric/beehive/util"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/fagongzi/log"
@@ -204,35 +206,50 @@ func (h *beeStorage) workflowInstanceStopped(shard bhmetapb.Shard, req *raftcmdp
 	return uint64(len(req.Key) + len(value)), 0, resp
 }
 
+// in group TenantRunnerGroup, disable split
 func (h *beeStorage) createInstanceWorker(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs map[string]interface{}) (uint64, int64, *raftcmdpb.Response) {
 	resp := pb.AcquireResponse()
 	cmd := getCreateInstanceStateShardRequest(attrs)
 	protoc.MustUnmarshal(cmd, req.Cmd)
 
-	resp.Value = rpcpb.EmptyRespBytes
+	resp.Value = rpcpb.TrueRespBytes
 
-	value, err := h.getValue(shard.ID, req.Key)
-	if err != nil {
-		log.Fatalf("create workflow instance state %+v failed with %+v", cmd, err)
-	}
-	if len(value) > 0 {
+	key := runnerKey(cmd.State.TenantID, cmd.State.Runner)
+	runner := h.loadWorkerRunner(shard.ID, key)
+	if runner.State == metapb.WRStopped {
+		resp.Value = rpcpb.FalseRespBytes
 		return 0, 0, resp
 	}
 
-	err = h.getStore(shard.ID).Set(req.Key, protoc.MustMarshal(&cmd.State))
+	for _, wr := range runner.Workers {
+		if wr.WorkflowID == cmd.State.WorkflowID &&
+			wr.InstanceID == cmd.State.InstanceID &&
+			wr.Index == cmd.State.Index {
+			return 0, 0, resp
+		}
+	}
+
+	runner.Workers = append(runner.Workers, metapb.WorkflowWorker{
+		WorkflowID: cmd.State.WorkflowID,
+		InstanceID: cmd.State.InstanceID,
+		Index:      cmd.State.Index,
+	})
+
+	wb := bhutil.NewWriteBatch()
+	wb.Set(req.Key, protoc.MustMarshal(&cmd.State))
+	wb.Set(key, protoc.MustMarshal(runner))
+	err := h.getStore(shard.ID).Write(wb, false)
 	if err != nil {
 		log.Fatalf("save workflow instance %+v failed with %+v", cmd, err)
 	}
 	if h.store.MaybeLeader(shard.ID) {
 		h.eventC <- Event{
-			EventType: RunningInstanceWorkerEvent,
+			EventType: InstanceWorkerCreatedEvent,
 			Data:      cmd.State,
 		}
 	}
 
-	writtenBytes := uint64(len(req.Key) + len(req.Cmd))
-	changedBytes := int64(writtenBytes)
-	return writtenBytes, changedBytes, resp
+	return 0, 0, resp
 }
 
 func (h *beeStorage) updateInstanceWorkerState(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs map[string]interface{}) (uint64, int64, *raftcmdpb.Response) {
@@ -255,9 +272,7 @@ func (h *beeStorage) updateInstanceWorkerState(shard bhmetapb.Shard, req *raftcm
 		log.Fatalf("update workflow instance state %+v failed with %+v", cmd, err)
 	}
 
-	writtenBytes := uint64(len(req.Key) + len(req.Cmd))
-	changedBytes := int64(writtenBytes)
-	return writtenBytes, changedBytes, resp
+	return 0, 0, resp
 }
 
 func (h *beeStorage) removeInstanceWorker(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs map[string]interface{}) (uint64, int64, *raftcmdpb.Response) {
@@ -267,25 +282,71 @@ func (h *beeStorage) removeInstanceWorker(shard bhmetapb.Shard, req *raftcmdpb.R
 
 	resp.Value = rpcpb.EmptyRespBytes
 
-	err := h.getStore(shard.ID).Delete(req.Key)
-	if err != nil {
-		log.Fatalf("remove workflow instance state %d/%d failed with %+v",
-			cmd.WorkflowID,
-			cmd.Index,
-			err)
+	key := runnerKey(cmd.TenantID, cmd.Runner)
+	runner := h.loadWorkerRunner(shard.ID, key)
+	if runner.State == metapb.WRStopped {
+		log.Fatalf("BUG: remove a instance shard from a stopped worker runner")
 	}
+
+	var newWorkers []metapb.WorkflowWorker
+	for _, wr := range runner.Workers {
+		if wr.WorkflowID == cmd.WorkflowID &&
+			wr.InstanceID == cmd.InstanceID &&
+			wr.Index == cmd.Index {
+			continue
+		}
+
+		newWorkers = append(newWorkers, wr)
+	}
+
+	if len(newWorkers) == len(runner.Workers) {
+		return 0, 0, resp
+	}
+
+	runner.Workers = newWorkers
+	wb := bhutil.NewWriteBatch()
+	wb.Delete(req.Key)
+	wb.Set(key, protoc.MustMarshal(runner))
+	err := h.getStore(shard.ID).Write(wb, false)
 	if err != nil {
 		log.Fatalf("remove workflow instance state %+v failed with %+v", cmd, err)
 	}
 
 	if h.store.MaybeLeader(shard.ID) {
 		h.eventC <- Event{
-			EventType: RemoveInstanceWorkerEvent,
+			EventType: InstanceWorkerDestoriedEvent,
 			Data: metapb.WorkflowInstanceWorkerState{
+				TenantID:   cmd.TenantID,
 				WorkflowID: cmd.WorkflowID,
+				InstanceID: cmd.InstanceID,
 				Index:      cmd.Index,
+				Runner:     cmd.Runner,
 			},
 		}
 	}
-	return uint64(len(req.Key)), -int64(len(req.Key)), resp
+	return 0, 0, resp
+}
+
+func (h *beeStorage) loadWorkerRunner(shard uint64, key []byte) *metapb.WorkerRunner {
+	data, err := h.getValue(shard, key)
+	if err != nil {
+		log.Fatalf("load worker runner %+v failed with %+v",
+			key,
+			err)
+	}
+
+	if len(data) == 0 {
+		log.Fatalf("BUG: missing worker runner %+v",
+			key)
+	}
+
+	value := &metapb.WorkerRunner{}
+	protoc.MustUnmarshal(value, data)
+
+	return value
+}
+
+func runnerKey(tid uint64, runner uint64) []byte {
+	return raftstore.EncodeDataKey(uint64(metapb.TenantRunnerGroup),
+		TenantRunnerMetadataKey(tid, runner))
 }

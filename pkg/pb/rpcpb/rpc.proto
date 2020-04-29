@@ -247,8 +247,11 @@ message UpdateInstanceStateShardRequest {
 
 // RemoveInstanceStateShardRequest remove a instance state
 message RemoveInstanceStateShardRequest {
-    uint64 workflowID = 1;
-    uint32 index      = 2;
+    uint64 tenantID   = 1;
+    uint64 workflowID = 2;
+    uint64 instanceID = 3;
+    uint32 index      = 4;
+    uint64 runner     = 5;
 }
 
 // InstanceCountStateRequest instance count state
