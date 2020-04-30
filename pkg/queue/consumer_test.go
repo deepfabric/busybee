@@ -48,7 +48,7 @@ func TestConsumerStartAndStop(t *testing.T) {
 	err := store.Set(storage.TenantMetadataKey(tid), protoc.MustMarshal(&metapb.Tenant{}))
 	assert.NoError(t, err, "TestConsumerStartAndStop failed")
 
-	err = store.Set(storage.QueueMetaKey(tid, buf), protoc.MustMarshal(&metapb.QueueState{
+	err = store.Set(storage.QueueMetaKey(tid, 0, buf), protoc.MustMarshal(&metapb.QueueState{
 		Partitions: 2,
 		Timeout:    60,
 		States:     make([]metapb.Partiton, 2, 2),
@@ -81,7 +81,7 @@ func TestConsumer(t *testing.T) {
 	g1 := []byte("g1")
 
 	store.Set(storage.TenantMetadataKey(tid), protoc.MustMarshal(&metapb.Tenant{}))
-	store.Set(storage.QueueMetaKey(tid, buf), protoc.MustMarshal(&metapb.QueueState{
+	store.Set(storage.QueueMetaKey(tid, 0, buf), protoc.MustMarshal(&metapb.QueueState{
 		Partitions: 3,
 		Timeout:    60,
 		States:     make([]metapb.Partiton, 3, 3),
@@ -133,7 +133,7 @@ func TestConsumerRemovePartition(t *testing.T) {
 	err := store.Set(storage.TenantMetadataKey(tid), protoc.MustMarshal(&metapb.Tenant{}))
 	assert.NoError(t, err, "TestConsumerRemovePartition failed")
 
-	err = store.Set(storage.QueueMetaKey(tid, buf), protoc.MustMarshal(&metapb.QueueState{
+	err = store.Set(storage.QueueMetaKey(tid, 0, buf), protoc.MustMarshal(&metapb.QueueState{
 		Partitions: 2,
 		Timeout:    60,
 		States:     make([]metapb.Partiton, 2, 2),
@@ -174,7 +174,7 @@ func TestConsumerRejoin(t *testing.T) {
 	err := store.Set(storage.TenantMetadataKey(tid), protoc.MustMarshal(&metapb.Tenant{}))
 	assert.NoError(t, err, "TestConsumerRejoin failed")
 
-	err = store.Set(storage.QueueMetaKey(tid, buf), protoc.MustMarshal(&metapb.QueueState{
+	err = store.Set(storage.QueueMetaKey(tid, 0, buf), protoc.MustMarshal(&metapb.QueueState{
 		Partitions: 2,
 		Timeout:    60,
 		States:     make([]metapb.Partiton, 2, 2),

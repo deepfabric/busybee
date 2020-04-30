@@ -50,7 +50,7 @@ func (qb *queueBatch) addReq(req *raftcmdpb.Request, resp *raftcmdpb.Response, b
 		prefix := req.Key[:len(req.Key)-len(msg.Key)]
 
 		if !qb.loaded {
-			key := QueueMetaKey(id, qb.buf)
+			key := QueueMetaKey(id, target, qb.buf)
 			qb.buf.MarkWrite()
 			qb.buf.Write(prefix)
 			qb.buf.Write(key)

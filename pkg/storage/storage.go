@@ -85,6 +85,13 @@ type beeStorage struct {
 func NewStorage(dataPath string,
 	metadataStorages []bhstorage.MetadataStorage,
 	dataStorages []bhstorage.DataStorage) (Storage, error) {
+	return NewStorageWithOptions(dataPath, metadataStorages, dataStorages)
+}
+
+// NewStorageWithOptions returns a beehive request handler
+func NewStorageWithOptions(dataPath string,
+	metadataStorages []bhstorage.MetadataStorage,
+	dataStorages []bhstorage.DataStorage, opts ...raftstore.Option) (Storage, error) {
 
 	h := &beeStorage{
 		eventC: make(chan Event, 1024),
@@ -92,13 +99,15 @@ func NewStorage(dataPath string,
 		runner: task.NewRunner(),
 	}
 
+	opts = append(opts, raftstore.WithShardStateAware(h))
+	opts = append(opts, raftstore.WithWriteBatchFunc(h.WriteBatch))
+	opts = append(opts, raftstore.WithReadBatchFunc(h.ReadBatch))
+	opts = append(opts, raftstore.WithShardAddHandleFun(h.addShardCallback))
+
 	store, err := beehive.CreateRaftStoreFromFile(dataPath,
 		metadataStorages,
 		dataStorages,
-		raftstore.WithShardStateAware(h),
-		raftstore.WithWriteBatchFunc(h.WriteBatch),
-		raftstore.WithReadBatchFunc(h.ReadBatch),
-		raftstore.WithShardAddHandleFun(h.addShardCallback))
+		opts...)
 	if err != nil {
 		return nil, err
 	}

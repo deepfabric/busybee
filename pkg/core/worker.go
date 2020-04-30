@@ -20,7 +20,7 @@ import (
 )
 
 var (
-	fetchEventBatch    = int64(1024)
+	fetchEventBatch    = int64(2048)
 	handleEventBatch   = int64(256)
 	maxTriggerCount    = 256
 	ttlTriggerInterval = time.Minute
@@ -40,9 +40,11 @@ type directCtx struct {
 }
 
 type item struct {
-	action int
-	value  interface{}
-	cb     *stepCB
+	action    int
+	value     interface{}
+	cb        *stepCB
+	partition uint32
+	offset    uint64
 }
 
 type triggerInfo struct {
@@ -78,7 +80,7 @@ type stateWorker struct {
 	alreadyTriggerTTLTimeout map[string]*triggerInfo
 	queue                    *task.Queue
 	cronIDs                  []cron.EntryID
-	consumer                 queue.Consumer
+	consumer                 queue.AsyncConsumer
 	tenant                   string
 	cond                     *rpcpb.Condition
 	conditionKey             []byte
@@ -94,7 +96,7 @@ type stateWorker struct {
 }
 
 func newStateWorker(key string, state metapb.WorkflowInstanceWorkerState, eng Engine) (*stateWorker, error) {
-	consumer, err := queue.NewConsumer(state.TenantID, true, eng.Storage(), []byte(key))
+	consumer, err := queue.NewAsyncConsumer(state.TenantID, eng.Storage(), []byte(key))
 	if err != nil {
 		metric.IncStorageFailed()
 		return nil, err
@@ -230,21 +232,42 @@ func (w *stateWorker) checkTTLTimeout(arg interface{}) {
 	})
 }
 
-func (w *stateWorker) onEvent(partition uint32, maxOffset uint64, items ...[]byte) (uint64, error) {
-	logger.Debugf("worker %s consumer from queue partition %d, last offset %d, %d items",
+func (w *stateWorker) onFilterEvent(item []byte) (interface{}, bool) {
+	event := metapb.Event{}
+	protoc.MustUnmarshal(&event, item)
+
+	switch event.Type {
+	case metapb.UserType:
+		if w.matches(event.User.UserID) {
+			return event, true
+		}
+		return metapb.Event{}, false
+	case metapb.UpdateCrowdType:
+		if event.UpdateCrowd.WorkflowID == w.state.WorkflowID &&
+			event.UpdateCrowd.Index == w.state.Index {
+			return event, true
+		}
+		return metapb.Event{}, false
+	case metapb.UpdateWorkflowType:
+		if event.UpdateWorkflow.Workflow.ID == w.state.WorkflowID {
+			return event, true
+		}
+		return metapb.Event{}, false
+	}
+
+	return metapb.Event{}, false
+}
+
+func (w *stateWorker) onEvent(partition uint32, items []interface{}) (int, error) {
+	logger.Debugf("worker %s consumer %d items from queue partition %d",
 		w.key,
-		partition,
-		maxOffset,
-		len(items))
+		len(items),
+		partition)
 
-	offset := maxOffset - uint64(len(items)) + 1
-	completed := offset - 1
-
-	var event metapb.Event
+	completed := -1
 	var events []metapb.UserEvent
-	for _, item := range items {
-		event.Reset()
-		protoc.MustUnmarshal(&event, item)
+	for idx, item := range items {
+		event := item.(metapb.Event)
 		logger.Debugf("worker %s consumer event %+v",
 			w.key,
 			event)
@@ -266,7 +289,7 @@ func (w *stateWorker) onEvent(partition uint32, maxOffset uint64, items ...[]byt
 						return completed, err
 					}
 
-					completed = offset - 1
+					completed = idx - 1
 					events = events[:0]
 				}
 
@@ -274,7 +297,7 @@ func (w *stateWorker) onEvent(partition uint32, maxOffset uint64, items ...[]byt
 				if err != nil {
 					return completed, err
 				}
-				completed = offset
+				completed = idx
 			}
 		case metapb.UpdateWorkflowType:
 			if event.UpdateWorkflow.Workflow.ID == w.state.WorkflowID {
@@ -284,7 +307,7 @@ func (w *stateWorker) onEvent(partition uint32, maxOffset uint64, items ...[]byt
 						return completed, err
 					}
 
-					completed = offset - 1
+					completed = idx - 1
 					events = events[:0]
 				}
 
@@ -292,11 +315,9 @@ func (w *stateWorker) onEvent(partition uint32, maxOffset uint64, items ...[]byt
 				if err != nil {
 					return completed, err
 				}
-				completed = offset
+				completed = idx
 			}
 		}
-
-		offset++
 	}
 
 	if len(events) > 0 {
@@ -310,7 +331,7 @@ func (w *stateWorker) onEvent(partition uint32, maxOffset uint64, items ...[]byt
 		metric.IncEventHandled(len(items), w.tenant, metapb.TenantInputGroup)
 	}
 
-	return maxOffset, nil
+	return 0, nil
 }
 
 func (w *stateWorker) doEvent(action int, data interface{}) error {
@@ -377,7 +398,7 @@ func (w *stateWorker) handleEvent() bool {
 		switch value.action {
 		case initAction:
 			w.checkLastTranscation()
-			w.consumer.Start(uint64(fetchEventBatch), w.onEvent)
+			w.consumer.Start(uint64(fetchEventBatch), w.onFilterEvent, w.onEvent)
 			logger.Infof("worker %s init with %d crowd",
 				w.key,
 				w.totalCrowds.GetCardinality())
@@ -487,10 +508,6 @@ func (w *stateWorker) checkLastTranscation() {
 	}
 }
 
-var (
-	c uint64
-)
-
 func (w *stateWorker) execNotify(tran *transaction) error {
 	totalMoved := uint64(0)
 	w.tempNotifies = w.tempNotifies[:0]
@@ -545,12 +562,6 @@ func (w *stateWorker) execNotify(tran *transaction) error {
 		w.key,
 		totalMoved)
 
-	n := atomic.AddUint64(&c, totalMoved)
-	if n%1024 == 0 {
-		logger.Infof("******************************* moved %d", n)
-	} else if n%1000 == 0 {
-		logger.Infof("******************************* moved %d", n)
-	}
 	return nil
 }
 

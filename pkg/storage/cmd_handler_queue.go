@@ -35,7 +35,7 @@ func (h *beeStorage) queueJoinGroup(shard bhmetapb.Shard, req *raftcmdpb.Request
 	buf := attrs[raftstore.AttrBuf].(*goetty.ByteBuf)
 	stateKey := queueStateKey(req.Key[:len(req.Key)-4], joinReq.Group, buf)
 	stateAttrKey := hack.SliceToString(stateKey)
-	metaKey := queueMetaKey(req.Key[:len(req.Key)-4], buf)
+	metaKey := queueMetaKey(req.Key, buf)
 
 	joinResp := getQueueJoinGroupResponse(attrs)
 
@@ -107,7 +107,7 @@ func (h *beeStorage) queueFetch(shard bhmetapb.Shard, req *raftcmdpb.Request, at
 	buf := attrs[raftstore.AttrBuf].(*goetty.ByteBuf)
 	stateKey := queueStateKey(req.Key[:len(req.Key)-4], queueFetch.Group, buf)
 	stateAttrKey := hack.SliceToString(stateKey)
-	metaKey := queueMetaKey(req.Key[:len(req.Key)-4], buf)
+	metaKey := queueMetaKey(req.Key, buf)
 
 	fetchResp := getQueueFetchResponse(attrs)
 
@@ -430,6 +430,7 @@ func loadQueueState(store bhstorage.DataStorage, attrStateKey string, stateKey, 
 	}
 
 	if len(value) == 0 {
+		log.Infof("****************** load %+v", metaKey)
 		value, err = store.Get(metaKey)
 		if err != nil {
 			log.Fatalf("load queue state failed with %+v", err)

@@ -52,21 +52,25 @@ func TestTenantInit(t *testing.T) {
 	tid := uint64(10001)
 	err = ng.(*engine).tenantInitWithReplicas(metapb.Tenant{
 		ID: tid,
+		Input: metapb.TenantQueue{
+			Partitions:      2,
+			ConsumerTimeout: 60,
+		},
 		Output: metapb.TenantQueue{
 			Partitions:      2,
 			ConsumerTimeout: 60,
 		},
 	}, 1)
 	assert.NoError(t, err, "TestTenantInit failed")
-	time.Sleep(time.Second * 12)
+	time.Sleep(time.Second * 2)
 	c := 0
 	err = store.RaftStore().Prophet().GetStore().LoadResources(16, func(res prophet.Resource) {
 		c++
 	})
-	assert.Equal(t, 4, c, "TestTenantInit failed")
+	assert.Equal(t, 5, c, "TestTenantInit failed")
 
 	buf := goetty.NewByteBuf(32)
-	data, err := store.GetWithGroup(storage.QueueMetaKey(tid, buf), metapb.TenantOutputGroup)
+	data, err := store.GetWithGroup(storage.QueueMetaKey(tid, 0, buf), metapb.TenantOutputGroup)
 	assert.NoError(t, err, "TestTenantInit failed")
 	assert.NotEmpty(t, data, "TestTenantInit failed")
 }
@@ -82,13 +86,17 @@ func TestStopInstanceAndRestart(t *testing.T) {
 
 	err = ng.(*engine).tenantInitWithReplicas(metapb.Tenant{
 		ID: 10001,
+		Input: metapb.TenantQueue{
+			Partitions:      2,
+			ConsumerTimeout: 60,
+		},
 		Output: metapb.TenantQueue{
 			Partitions:      1,
 			ConsumerTimeout: 60,
 		},
 	}, 1)
 	assert.NoError(t, err, "TestStopInstance failed")
-	time.Sleep(time.Second * 12)
+	time.Sleep(time.Second * 2)
 
 	for i := 0; i < 2; i++ {
 		bm := roaring.BitmapOf(1, 2, 3, 4)
@@ -161,13 +169,17 @@ func TestStartInstance(t *testing.T) {
 
 	err = ng.(*engine).tenantInitWithReplicas(metapb.Tenant{
 		ID: tid,
+		Input: metapb.TenantQueue{
+			Partitions:      2,
+			ConsumerTimeout: 60,
+		},
 		Output: metapb.TenantQueue{
 			Partitions:      1,
 			ConsumerTimeout: 60,
 		},
 	}, 1)
 	assert.NoError(t, err, "TestStartInstance failed")
-	time.Sleep(time.Second * 12)
+	time.Sleep(time.Second * 2)
 
 	bm := roaring.BitmapOf(1, 2, 3, 4)
 	_, err = ng.StartInstance(metapb.Workflow{
@@ -303,13 +315,17 @@ func TestTriggerDirect(t *testing.T) {
 
 	err = ng.(*engine).tenantInitWithReplicas(metapb.Tenant{
 		ID: 10001,
+		Input: metapb.TenantQueue{
+			Partitions:      2,
+			ConsumerTimeout: 60,
+		},
 		Output: metapb.TenantQueue{
 			Partitions:      1,
 			ConsumerTimeout: 60,
 		},
 	}, 1)
 	assert.NoError(t, err, "TestTriggerDirect failed")
-	time.Sleep(time.Second * 12)
+	time.Sleep(time.Second * 2)
 
 	bm := roaring.BitmapOf(1, 2, 3, 4)
 	_, err = ng.StartInstance(metapb.Workflow{
@@ -447,13 +463,17 @@ func TestUpdateCrowd(t *testing.T) {
 
 	err = ng.(*engine).tenantInitWithReplicas(metapb.Tenant{
 		ID: tid,
+		Input: metapb.TenantQueue{
+			Partitions:      2,
+			ConsumerTimeout: 60,
+		},
 		Output: metapb.TenantQueue{
 			Partitions:      1,
 			ConsumerTimeout: 60,
 		},
 	}, 1)
 	assert.NoError(t, err, "TestUpdateCrowd failed")
-	time.Sleep(time.Second * 12)
+	time.Sleep(time.Second * 2)
 
 	bm := roaring.BitmapOf(2, 3, 4)
 	_, err = ng.StartInstance(metapb.Workflow{
@@ -557,6 +577,8 @@ func TestUpdateCrowd(t *testing.T) {
 	err = ng.UpdateCrowd(wid, metapb.RawLoader, util.MustMarshalBM(roaring.BitmapOf(1, 2, 3, 5)))
 	assert.NoError(t, err, "TestUpdateCrowd failed")
 
+	time.Sleep(time.Second * 2)
+
 	err = ng.Storage().PutToQueue(tid, 0, metapb.TenantInputGroup, protoc.MustMarshal(&metapb.Event{
 		Type: metapb.UserType,
 		User: &metapb.UserEvent{
@@ -599,13 +621,17 @@ func TestUpdateWorkflow(t *testing.T) {
 
 	err = ng.(*engine).tenantInitWithReplicas(metapb.Tenant{
 		ID: tid,
+		Input: metapb.TenantQueue{
+			Partitions:      2,
+			ConsumerTimeout: 60,
+		},
 		Output: metapb.TenantQueue{
 			Partitions:      1,
 			ConsumerTimeout: 60,
 		},
 	}, 1)
 	assert.NoError(t, err, "TestUpdateWorkflow failed")
-	time.Sleep(time.Second * 12)
+	time.Sleep(time.Second * 2)
 
 	bm := roaring.BitmapOf(1, 2, 3, 4)
 	_, err = ng.StartInstance(metapb.Workflow{
@@ -863,13 +889,17 @@ func TestTransaction(t *testing.T) {
 
 	err = ng.(*engine).tenantInitWithReplicas(metapb.Tenant{
 		ID: tid,
+		Input: metapb.TenantQueue{
+			Partitions:      2,
+			ConsumerTimeout: 60,
+		},
 		Output: metapb.TenantQueue{
 			Partitions:      1,
 			ConsumerTimeout: 60,
 		},
 	}, 1)
 	assert.NoError(t, err, "TestTransaction failed")
-	time.Sleep(time.Second * 12)
+	time.Sleep(time.Second * 2)
 
 	bm := roaring.BitmapOf(1, 2)
 	_, err = ng.StartInstance(metapb.Workflow{
@@ -1019,13 +1049,17 @@ func TestTimerWithUseStepCrowdToDrive(t *testing.T) {
 
 	err = ng.(*engine).tenantInitWithReplicas(metapb.Tenant{
 		ID: tid,
+		Input: metapb.TenantQueue{
+			Partitions:      2,
+			ConsumerTimeout: 60,
+		},
 		Output: metapb.TenantQueue{
 			Partitions:      1,
 			ConsumerTimeout: 60,
 		},
 	}, 1)
 	assert.NoError(t, err, "TestTimerWithUseStepCrowdToDrive failed")
-	time.Sleep(time.Second * 12)
+	time.Sleep(time.Second * 2)
 
 	bm := roaring.BitmapOf(1, 2)
 	_, err = ng.StartInstance(metapb.Workflow{
@@ -1081,13 +1115,17 @@ func TestLastTransactionNotCompleted(t *testing.T) {
 
 	err = ng.(*engine).tenantInitWithReplicas(metapb.Tenant{
 		ID: tid,
+		Input: metapb.TenantQueue{
+			Partitions:      2,
+			ConsumerTimeout: 60,
+		},
 		Output: metapb.TenantQueue{
 			Partitions:      1,
 			ConsumerTimeout: 60,
 		},
 	}, 1)
 	assert.NoError(t, err, "TestLastTransaction failed")
-	time.Sleep(time.Second * 12)
+	time.Sleep(time.Second * 2)
 
 	bm := roaring.BitmapOf(1)
 	instanceID, err := ng.StartInstance(metapb.Workflow{
@@ -1206,13 +1244,17 @@ func TestLastTransactionCompleted(t *testing.T) {
 
 	err = ng.(*engine).tenantInitWithReplicas(metapb.Tenant{
 		ID: tid,
+		Input: metapb.TenantQueue{
+			Partitions:      2,
+			ConsumerTimeout: 60,
+		},
 		Output: metapb.TenantQueue{
 			Partitions:      1,
 			ConsumerTimeout: 60,
 		},
 	}, 1)
 	assert.NoError(t, err, "TestLastTransactionCompleted failed")
-	time.Sleep(time.Second * 12)
+	time.Sleep(time.Second * 2)
 
 	bm := roaring.BitmapOf(1)
 	instanceID, err := ng.StartInstance(metapb.Workflow{
@@ -1334,13 +1376,17 @@ func TestTriggerTTLTimeout(t *testing.T) {
 
 	err = ng.(*engine).tenantInitWithReplicas(metapb.Tenant{
 		ID: 10001,
+		Input: metapb.TenantQueue{
+			Partitions:      2,
+			ConsumerTimeout: 60,
+		},
 		Output: metapb.TenantQueue{
 			Partitions:      1,
 			ConsumerTimeout: 60,
 		},
 	}, 1)
 	assert.NoError(t, err, "TestTriggerTTLTimeout failed")
-	time.Sleep(time.Second * 12)
+	time.Sleep(time.Second * 2)
 
 	bm := roaring.BitmapOf(1, 2, 3, 4)
 	_, err = ng.StartInstance(metapb.Workflow{
@@ -1442,13 +1488,17 @@ func TestNotifyWithTTL(t *testing.T) {
 
 	err = ng.(*engine).tenantInitWithReplicas(metapb.Tenant{
 		ID: 10001,
+		Input: metapb.TenantQueue{
+			Partitions:      2,
+			ConsumerTimeout: 60,
+		},
 		Output: metapb.TenantQueue{
 			Partitions:      1,
 			ConsumerTimeout: 60,
 		},
 	}, 1)
 	assert.NoError(t, err, "TestNotifyWithTTL failed")
-	time.Sleep(time.Second * 12)
+	time.Sleep(time.Second * 2)
 
 	bm := roaring.BitmapOf(1)
 	_, err = ng.StartInstance(metapb.Workflow{
@@ -1522,13 +1572,17 @@ func TestStepCountAndNotiesMatched(t *testing.T) {
 	wid := uint64(10000)
 	err = ng.(*engine).tenantInitWithReplicas(metapb.Tenant{
 		ID: tid,
+		Input: metapb.TenantQueue{
+			Partitions:      2,
+			ConsumerTimeout: 60,
+		},
 		Output: metapb.TenantQueue{
 			Partitions:      1,
 			ConsumerTimeout: 60,
 		},
 	}, 1)
 	assert.NoError(t, err, "TestStepCountAndNotiesMatched failed")
-	time.Sleep(time.Second * 12)
+	time.Sleep(time.Second * 2)
 
 	bm := roaring.BitmapOf()
 	for i := uint32(1); i <= 10000; i++ {
@@ -1703,13 +1757,17 @@ func TestNotifyWithErrorRetry(t *testing.T) {
 
 	err = ng.(*engine).tenantInitWithReplicas(metapb.Tenant{
 		ID: 10001,
+		Input: metapb.TenantQueue{
+			Partitions:      2,
+			ConsumerTimeout: 60,
+		},
 		Output: metapb.TenantQueue{
 			Partitions:      1,
 			ConsumerTimeout: 60,
 		},
 	}, 1)
 	assert.NoError(t, err, "TestNotifyWithErrorRetry failed")
-	time.Sleep(time.Second * 12)
+	time.Sleep(time.Second * 2)
 
 	bm := roaring.BitmapOf(1, 2, 3, 4)
 	_, err = ng.StartInstance(metapb.Workflow{
@@ -1794,13 +1852,17 @@ func TestStepWithPreLoad(t *testing.T) {
 	err = ng.(*engine).tenantInitWithReplicas(metapb.Tenant{
 		ID:      tid,
 		Runners: 4,
+		Input: metapb.TenantQueue{
+			Partitions:      2,
+			ConsumerTimeout: 60,
+		},
 		Output: metapb.TenantQueue{
 			Partitions:      1,
 			ConsumerTimeout: 60,
 		},
 	}, 1)
 	assert.NoError(t, err, "TestStepWithPreLoad failed")
-	time.Sleep(time.Second * 12)
+	time.Sleep(time.Second * 2)
 
 	err = store.Set([]byte("prev_1"), []byte("1"))
 	assert.NoError(t, err, "TestStepWithPreLoad failed")
@@ -1855,6 +1917,7 @@ func TestStepWithPreLoad(t *testing.T) {
 	assert.NoError(t, waitTestWorkflow(ng, 10000, metapb.Running), "TestStepWithPreLoad failed")
 
 	var events [][]byte
+	var p uint32
 	for i := uint32(1); i <= 10000; i++ {
 		events = append(events, protoc.MustMarshal(&metapb.Event{
 			Type: metapb.UserType,
@@ -1865,14 +1928,18 @@ func TestStepWithPreLoad(t *testing.T) {
 		}))
 
 		if len(events) == 256 {
-			err = ng.Storage().PutToQueueWithAlloc(tid, metapb.TenantInputGroup, events...)
+			err = ng.Storage().PutToQueue(tid, p, metapb.TenantInputGroup, events...)
 			assert.NoError(t, err, "TestStepWithPreLoad failed")
 			events = events[:0]
+			p++
+			if p >= 2 {
+				p = 0
+			}
 		}
 	}
 
 	if len(events) > 0 {
-		err = ng.Storage().PutToQueueWithAlloc(tid, metapb.TenantInputGroup, events...)
+		err = ng.Storage().PutToQueue(tid, p, metapb.TenantInputGroup, events...)
 		assert.NoError(t, err, "TestStepWithPreLoad failed")
 	}
 

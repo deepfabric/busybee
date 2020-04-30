@@ -17,7 +17,7 @@ func TestNotify(t *testing.T) {
 	buf := goetty.NewByteBuf(256)
 
 	tenantID := uint64(1)
-	s.Set(storage.QueueMetaKey(tenantID, buf), protoc.MustMarshal(&metapb.QueueState{
+	s.Set(storage.QueueMetaKey(tenantID, 0, buf), protoc.MustMarshal(&metapb.QueueState{
 		Partitions: 2,
 	}))
 
@@ -37,7 +37,7 @@ func TestNotifyWithConditionNotExist(t *testing.T) {
 
 	buf := goetty.NewByteBuf(256)
 	tenantID := uint64(1)
-	s.Set(storage.QueueMetaKey(tenantID, buf), protoc.MustMarshal(&metapb.QueueState{
+	s.Set(storage.QueueMetaKey(tenantID, 0, buf), protoc.MustMarshal(&metapb.QueueState{
 		Partitions: 1,
 	}))
 
@@ -68,7 +68,7 @@ func TestNotifyWithConditionExist(t *testing.T) {
 
 	buf := goetty.NewByteBuf(256)
 	tenantID := uint64(1)
-	s.Set(storage.QueueMetaKey(tenantID, buf), protoc.MustMarshal(&metapb.QueueState{
+	s.Set(storage.QueueMetaKey(tenantID, 0, buf), protoc.MustMarshal(&metapb.QueueState{
 		Partitions: 1,
 	}))
 	n := NewQueueBasedNotifierWithGroup(s, metapb.DefaultGroup)
@@ -92,7 +92,7 @@ func TestNotifyWithConditionEqual(t *testing.T) {
 
 	buf := goetty.NewByteBuf(256)
 	tenantID := uint64(1)
-	s.Set(storage.QueueMetaKey(tenantID, buf), protoc.MustMarshal(&metapb.QueueState{
+	s.Set(storage.QueueMetaKey(tenantID, 0, buf), protoc.MustMarshal(&metapb.QueueState{
 		Partitions: 1,
 	}))
 	n := NewQueueBasedNotifierWithGroup(s, metapb.DefaultGroup)
@@ -123,7 +123,7 @@ func TestNotifyWithConditionGE(t *testing.T) {
 
 	buf := goetty.NewByteBuf(256)
 	tenantID := uint64(1)
-	s.Set(storage.QueueMetaKey(tenantID, buf), protoc.MustMarshal(&metapb.QueueState{
+	s.Set(storage.QueueMetaKey(tenantID, 0, buf), protoc.MustMarshal(&metapb.QueueState{
 		Partitions: 1,
 	}))
 
@@ -155,7 +155,7 @@ func TestNotifyWithConditionGT(t *testing.T) {
 
 	buf := goetty.NewByteBuf(256)
 	tenantID := uint64(1)
-	s.Set(storage.QueueMetaKey(tenantID, buf), protoc.MustMarshal(&metapb.QueueState{
+	s.Set(storage.QueueMetaKey(tenantID, 0, buf), protoc.MustMarshal(&metapb.QueueState{
 		Partitions: 1,
 	}))
 	n := NewQueueBasedNotifierWithGroup(s, metapb.DefaultGroup)
@@ -186,7 +186,7 @@ func TestNotifyWithConditionLE(t *testing.T) {
 
 	buf := goetty.NewByteBuf(256)
 	tenantID := uint64(1)
-	s.Set(storage.QueueMetaKey(tenantID, buf), protoc.MustMarshal(&metapb.QueueState{
+	s.Set(storage.QueueMetaKey(tenantID, 0, buf), protoc.MustMarshal(&metapb.QueueState{
 		Partitions: 1,
 	}))
 	n := NewQueueBasedNotifierWithGroup(s, metapb.DefaultGroup)
@@ -217,7 +217,7 @@ func TestNotifyWithConditionLT(t *testing.T) {
 
 	buf := goetty.NewByteBuf(256)
 	tenantID := uint64(1)
-	s.Set(storage.QueueMetaKey(tenantID, buf), protoc.MustMarshal(&metapb.QueueState{
+	s.Set(storage.QueueMetaKey(tenantID, 0, buf), protoc.MustMarshal(&metapb.QueueState{
 		Partitions: 1,
 	}))
 	n := NewQueueBasedNotifierWithGroup(s, metapb.DefaultGroup)

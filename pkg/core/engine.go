@@ -28,13 +28,6 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
-const (
-	// InputQueuePartitionCount input queue partition count
-	InputQueuePartitionCount = 1
-	// InputQueueTimeout input queue consumer timeout
-	InputQueueTimeout = 60
-)
-
 var (
 	emptyBMData = bytes.NewBuffer(nil)
 	initBM      = roaring.NewBitmap()
@@ -221,6 +214,11 @@ func (eng *engine) tenantInitWithReplicas(metadata metapb.Tenant, replicas uint3
 		metadata.Runners = 1
 	}
 
+	if metadata.Input.Partitions == 0 {
+		metadata.Input.Partitions = 1
+		metadata.Input.ConsumerTimeout = 60
+	}
+
 	err := eng.store.Set(storage.TenantMetadataKey(metadata.ID), protoc.MustMarshal(&metadata))
 	if err != nil {
 		return err
@@ -253,26 +251,29 @@ func (eng *engine) tenantInitWithReplicas(metadata metapb.Tenant, replicas uint3
 		})
 	}
 
-	shards = append(shards, hbmetapb.Shard{
-		Group: uint64(metapb.TenantInputGroup),
-		Start: storage.PartitionKey(metadata.ID, 0),
-		End:   storage.PartitionKey(metadata.ID+1, 0),
-		Data: protoc.MustMarshal(&metapb.CallbackAction{
-			SetKV: &metapb.SetKVAction{
-				KV: metapb.KV{
-					Key: storage.QueueMetaKey(metadata.ID, buf),
-					Value: protoc.MustMarshal(&metapb.QueueState{
-						Partitions: InputQueuePartitionCount,
-						Timeout:    InputQueueTimeout,
-						States:     make([]metapb.Partiton, 1, 1),
-					}),
+	for i := uint32(0); i < metadata.Input.Partitions; i++ {
+		shards = append(shards, hbmetapb.Shard{
+			Group: uint64(metapb.TenantInputGroup),
+			Start: storage.PartitionKey(metadata.ID, i),
+			End:   storage.PartitionKey(metadata.ID, i+1),
+			Data: protoc.MustMarshal(&metapb.CallbackAction{
+				SetKV: &metapb.SetKVAction{
+					KV: metapb.KV{
+						Key: storage.QueueMetaKey(metadata.ID, i, buf),
+						Value: protoc.MustMarshal(&metapb.QueueState{
+							Partitions: metadata.Input.Partitions,
+							Timeout:    metadata.Input.ConsumerTimeout,
+							States:     make([]metapb.Partiton, metadata.Input.Partitions, metadata.Input.Partitions),
+						}),
+					},
+					Group: metapb.TenantInputGroup,
 				},
-				Group: metapb.TenantInputGroup,
-			},
-		}),
-		DisableSplit:  true,
-		LeastReplicas: replicas,
-	})
+			}),
+			DisableSplit:  true,
+			LeastReplicas: replicas,
+		})
+	}
+
 	shards = append(shards, hbmetapb.Shard{
 		Group: uint64(metapb.TenantOutputGroup),
 		Start: storage.PartitionKey(metadata.ID, 0),
@@ -280,7 +281,7 @@ func (eng *engine) tenantInitWithReplicas(metadata metapb.Tenant, replicas uint3
 		Data: protoc.MustMarshal(&metapb.CallbackAction{
 			SetKV: &metapb.SetKVAction{
 				KV: metapb.KV{
-					Key: storage.QueueMetaKey(metadata.ID, buf),
+					Key: storage.QueueMetaKey(metadata.ID, 0, buf),
 					Value: protoc.MustMarshal(&metapb.QueueState{
 						Partitions: metadata.Output.Partitions,
 						Timeout:    metadata.Output.ConsumerTimeout,

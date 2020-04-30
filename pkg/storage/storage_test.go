@@ -526,7 +526,7 @@ func TestPutToQueueWithClean(t *testing.T) {
 	defer deferFunc()
 
 	buf := goetty.NewByteBuf(32)
-	store.Set(QueueMetaKey(10, buf), protoc.MustMarshal(&metapb.QueueState{
+	store.Set(QueueMetaKey(10, 0, buf), protoc.MustMarshal(&metapb.QueueState{
 		Partitions: 2,
 	}))
 
@@ -592,7 +592,7 @@ func TestPutToQueue(t *testing.T) {
 	defer deferFunc()
 
 	buf := goetty.NewByteBuf(32)
-	store.Set(QueueMetaKey(10, buf), protoc.MustMarshal(&metapb.QueueState{
+	store.Set(QueueMetaKey(10, 0, buf), protoc.MustMarshal(&metapb.QueueState{
 		Partitions: 2,
 	}))
 
@@ -652,7 +652,7 @@ func TestPutToQueueWithAlloc(t *testing.T) {
 	defer deferFunc()
 
 	buf := goetty.NewByteBuf(32)
-	store.Set(QueueMetaKey(10, buf), protoc.MustMarshal(&metapb.QueueState{
+	store.Set(QueueMetaKey(10, 0, buf), protoc.MustMarshal(&metapb.QueueState{
 		Partitions: 3,
 	}))
 
@@ -672,7 +672,7 @@ func TestPutToQueueWithKV(t *testing.T) {
 	defer deferFunc()
 
 	buf := goetty.NewByteBuf(32)
-	store.Set(QueueMetaKey(10, buf), protoc.MustMarshal(&metapb.QueueState{
+	store.Set(QueueMetaKey(10, 0, buf), protoc.MustMarshal(&metapb.QueueState{
 		Partitions: 2,
 	}))
 
@@ -714,7 +714,7 @@ func TestPutToQueueWithAllocAndKV(t *testing.T) {
 	defer deferFunc()
 
 	buf := goetty.NewByteBuf(32)
-	store.Set(QueueMetaKey(10, buf), protoc.MustMarshal(&metapb.QueueState{
+	store.Set(QueueMetaKey(10, 0, buf), protoc.MustMarshal(&metapb.QueueState{
 		Partitions: 3,
 	}))
 
@@ -749,7 +749,7 @@ func TestQueueFetchWithNoConsumers(t *testing.T) {
 		Timeout: 60,
 	}
 	buf := goetty.NewByteBuf(32)
-	key := QueueMetaKey(tid, buf)
+	key := QueueMetaKey(tid, 0, buf)
 	err := store.Set(key, protoc.MustMarshal(state))
 	assert.NoError(t, err, "TestQueueFetchWithNoConsumers failed")
 
@@ -829,7 +829,8 @@ func TestQueueJoin(t *testing.T) {
 		Timeout: 60,
 	}
 	buf := goetty.NewByteBuf(32)
-	key := QueueMetaKey(tid, buf)
+	key := QueueMetaKey(tid, 0, buf)
+
 	err := store.Set(key, protoc.MustMarshal(state))
 	assert.NoError(t, err, "TestQueueJoin failed")
 
@@ -878,7 +879,7 @@ func TestQueueFetchAfterJoin(t *testing.T) {
 		Timeout: 60,
 	}
 	buf := goetty.NewByteBuf(32)
-	key := QueueMetaKey(tid, buf)
+	key := QueueMetaKey(tid, 0, buf)
 	err := store.Set(key, protoc.MustMarshal(state))
 	assert.NoError(t, err, "TestQueueFetchAfterJoin failed")
 
@@ -944,7 +945,7 @@ func TestQueueFetchWithRebalancing(t *testing.T) {
 	err := store.Set(key, protoc.MustMarshal(state))
 	assert.NoError(t, err, "TestQueueFetchWithRebalancing failed")
 
-	store.Set(QueueMetaKey(tid, buf), protoc.MustMarshal(state))
+	store.Set(QueueMetaKey(tid, 0, buf), protoc.MustMarshal(state))
 
 	err = store.PutToQueue(tid, 0, metapb.DefaultGroup, []byte("1"))
 	assert.NoError(t, err, "TestQueueFetchWithRebalancing failed")
@@ -1006,7 +1007,7 @@ func TestQueueFetchWithRemoveTimeoutConsumer(t *testing.T) {
 		Timeout: 60,
 	}
 	buf := goetty.NewByteBuf(32)
-	key := QueueMetaKey(tid, buf)
+	key := QueueMetaKey(tid, 0, buf)
 	err := store.Set(key, protoc.MustMarshal(state))
 	assert.NoError(t, err, "TestQueueConcurrencyFetchWithRemoveTimeoutConsumer failed")
 
@@ -1280,7 +1281,7 @@ func TestQueueScan(t *testing.T) {
 	c1 := []byte("consumer-01")
 
 	buf := goetty.NewByteBuf(32)
-	store.Set(QueueMetaKey(tid, buf), protoc.MustMarshal(&metapb.QueueState{
+	store.Set(QueueMetaKey(tid, 0, buf), protoc.MustMarshal(&metapb.QueueState{
 		Partitions: 1,
 	}))
 
@@ -1314,7 +1315,7 @@ func TestQueueScanWithCompletedOffset(t *testing.T) {
 	c1 := []byte("consumer-01")
 
 	buf := goetty.NewByteBuf(32)
-	store.Set(QueueMetaKey(tid, buf), protoc.MustMarshal(&metapb.QueueState{
+	store.Set(QueueMetaKey(tid, 0, buf), protoc.MustMarshal(&metapb.QueueState{
 		Partitions: 1,
 	}))
 
@@ -1353,7 +1354,7 @@ func TestQueueCommit(t *testing.T) {
 	c1 := []byte("consumer-01")
 
 	buf := goetty.NewByteBuf(32)
-	store.Set(QueueMetaKey(tid, buf), protoc.MustMarshal(&metapb.QueueState{
+	store.Set(QueueMetaKey(tid, 0, buf), protoc.MustMarshal(&metapb.QueueState{
 		Partitions: 1,
 	}))
 

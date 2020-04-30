@@ -68,7 +68,7 @@ func (q *tenantQueue) start() error {
 		meta := &metapb.Tenant{}
 		protoc.MustUnmarshal(meta, value)
 
-		q.partitons = core.InputQueuePartitionCount
+		q.partitons = meta.Input.Partitions
 		for i := uint32(0); i < q.partitons; i++ {
 			queue := task.New(1024)
 			q.partitonQueues = append(q.partitonQueues, queue)

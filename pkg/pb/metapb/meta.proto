@@ -25,8 +25,9 @@ message TenantQueue {
 // Tenant tenant metadata
 message Tenant {
     uint64      id               = 1 [(gogoproto.customname) = "ID"];
-    TenantQueue output           = 2 [(gogoproto.nullable) = false];
-    uint64      runners          = 3;
+    TenantQueue input            = 2 [(gogoproto.nullable) = false];
+    TenantQueue output           = 3 [(gogoproto.nullable) = false];
+    uint64      runners          = 4;
 }
 
 // WorkerRunnerState runner state

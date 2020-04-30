@@ -6,7 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/deepfabric/beehive/raftstore"
 	"github.com/deepfabric/beehive/storage"
 	"github.com/deepfabric/beehive/storage/nemo"
 	"github.com/stretchr/testify/assert"
@@ -54,7 +56,9 @@ func NewTestStorage(t *testing.T, start bool) (Storage, func()) {
 	assert.NoError(t, err, "NewTestStorage failed")
 	flag.Set("beehive-cfg", filepath.Join(tmp, "cfg.toml"))
 
-	store, err := NewStorage(tmp, []storage.MetadataStorage{s}, []storage.DataStorage{s})
+	store, err := NewStorageWithOptions(tmp, []storage.MetadataStorage{s},
+		[]storage.DataStorage{s},
+		raftstore.WithEnsureNewShardInterval(time.Millisecond*200))
 	assert.NoError(t, err, "NewTestStorage failed")
 	if start {
 		assert.NoError(t, store.Start(), "NewTestStorage failed")
