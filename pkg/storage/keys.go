@@ -183,7 +183,6 @@ func ProfileKey(tenantID uint64, uid uint32) []byte {
 	return key
 }
 
-// maxAndCleanOffsetKey store the max offset and already clean offset of the current queue
 func maxAndCleanOffsetKey(src []byte, buf *goetty.ByteBuf) []byte {
 	buf.MarkWrite()
 	buf.Write(src)

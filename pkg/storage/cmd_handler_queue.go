@@ -220,19 +220,18 @@ func (h *beeStorage) queueScan(shard bhmetapb.Shard, req *raftcmdpb.Request, att
 	buf := attrs[raftstore.AttrBuf].(*goetty.ByteBuf)
 
 	store := h.getStore(shard.ID)
-	key := committedOffsetKey(req.Key, queueScan.Consumer, buf)
-
-	data, err := store.Get(key)
-	if err != nil {
-		log.Fatalf("queue scan failed with %+v", err)
-	}
 
 	completed := queueScan.CompletedOffset
-	if len(data) > 0 {
-		lastCompleted := goetty.Byte2UInt64(data)
-		if lastCompleted > completed {
-			completed = lastCompleted
-		}
+	lastCompleted, ok := loadLastCompletedOffset(store, req.Key, queueScan.Consumer, buf)
+	if !ok {
+		max := loadMaxOffset(store, req.Key, buf)
+		mustPutCompletedOffset(store, req.Key, queueScan.Consumer, buf, max)
+		resp.Value = protoc.MustMarshal(fetchResp)
+		return resp
+	}
+
+	if lastCompleted > completed {
+		completed = lastCompleted
 	}
 
 	// do fetch new items
@@ -248,7 +247,7 @@ func (h *beeStorage) queueScan(shard bhmetapb.Shard, req *raftcmdpb.Request, att
 	c := uint64(0)
 	var items [][]byte
 
-	err = store.Scan(startKey, endKey, func(key, value []byte) (bool, error) {
+	err := store.Scan(startKey, endKey, func(key, value []byte) (bool, error) {
 		if !allowWriteToBuf(buf, len(value)) {
 			log.Infof("queue scan skipped, fetch %d, buf cap %d, write at %d, value %d",
 				size,
@@ -291,21 +290,9 @@ func (h *beeStorage) queueCommit(shard bhmetapb.Shard, req *raftcmdpb.Request, a
 	protoc.MustUnmarshal(queueCommit, req.Cmd)
 
 	buf := attrs[raftstore.AttrBuf].(*goetty.ByteBuf)
-	key := committedOffsetKey(req.Key, queueCommit.Consumer, buf)
-
-	buf.MarkWrite()
-	buf.WriteUint64(queueCommit.CompletedOffset)
-	buf.WriteInt64(time.Now().Unix())
-	completed := buf.WrittenDataAfterMark()
-
-	err := h.getStore(shard.ID).Set(key, completed)
-	if err != nil {
-		log.Fatalf("save %s completed offset failed with %+v",
-			queueCommit.Consumer,
-			err)
-	}
-
-	return 16, 16, resp
+	mustPutCompletedOffset(h.getStore(shard.ID), req.Key, queueCommit.Consumer,
+		buf, queueCommit.CompletedOffset)
+	return 0, 0, resp
 }
 
 func maybeRemoveTimeoutConsumers(state *metapb.QueueState, now int64) bool {
@@ -416,6 +403,44 @@ func maybeUpdateCompletedOffset(state *metapb.QueueState, now int64, req *rpcpb.
 	return true
 }
 
+func loadMaxOffset(store bhstorage.DataStorage, key []byte, buf *goetty.ByteBuf) uint64 {
+	value, err := store.Get(maxAndCleanOffsetKey(key, buf))
+	if err != nil {
+		log.Fatalf("load queue max offset failed with %+v", err)
+	}
+
+	if len(value) == 0 {
+		return 0
+	}
+
+	return goetty.Byte2UInt64(value)
+}
+
+func loadLastCompletedOffset(store bhstorage.DataStorage, key []byte, consumer []byte, buf *goetty.ByteBuf) (uint64, bool) {
+	value, err := store.Get(committedOffsetKey(key, consumer, buf))
+	if err != nil {
+		log.Fatalf("load consumer last completed offset failed with %+v", err)
+	}
+
+	if len(value) == 0 {
+		return 0, false
+	}
+
+	return goetty.Byte2UInt64(value), true
+}
+
+func mustPutCompletedOffset(store bhstorage.DataStorage, key []byte, consumer []byte, buf *goetty.ByteBuf, value uint64) {
+	completedKey := committedOffsetKey(key, consumer, buf)
+
+	buf.MarkWrite()
+	buf.WriteUint64(value)
+	buf.WriteInt64(time.Now().Unix())
+	err := store.Set(completedKey, buf.WrittenDataAfterMark())
+	if err != nil {
+		log.Fatalf("save consumer last completed offset failed with %+v", err)
+	}
+}
+
 func loadQueueState(store bhstorage.DataStorage, attrStateKey string, stateKey, metaKey []byte, attrs map[string]interface{}) *metapb.QueueState {
 	if value, ok := attrs[attrQueueStates]; ok {
 		states := value.(map[string]*metapb.QueueState)
@@ -430,7 +455,6 @@ func loadQueueState(store bhstorage.DataStorage, attrStateKey string, stateKey, 
 	}
 
 	if len(value) == 0 {
-		log.Infof("****************** load %+v", metaKey)
 		value, err = store.Get(metaKey)
 		if err != nil {
 			log.Fatalf("load queue state failed with %+v", err)

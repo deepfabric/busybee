@@ -1285,10 +1285,7 @@ func TestQueueScan(t *testing.T) {
 		Partitions: 1,
 	}))
 
-	values := [][]byte{[]byte("1"), []byte("2"), []byte("3")}
-	err := store.PutToQueue(tid, 0, metapb.DefaultGroup, values...)
-	assert.NoError(t, err, "TestQueueScan failed")
-
+	expectValues := []int{0, 3}
 	for i := 0; i < 2; i++ {
 		req := rpcpb.AcquireQueueScanRequest()
 		req.ID = tid
@@ -1299,11 +1296,16 @@ func TestQueueScan(t *testing.T) {
 
 		value, err := store.ExecCommand(req)
 		assert.NoError(t, err, "TestQueueScan failed")
-		assert.NotEmpty(t, value, "TestQueueScan failed")
 
 		resp := &rpcpb.QueueFetchResponse{}
 		protoc.MustUnmarshal(resp, value)
-		assert.Equal(t, 3, len(resp.Items), "TestQueueScan failed")
+		assert.Equal(t, expectValues[i], len(resp.Items), "TestQueueScan failed")
+
+		if i == 0 {
+			values := [][]byte{[]byte("1"), []byte("2"), []byte("3")}
+			err := store.PutToQueue(tid, 0, metapb.DefaultGroup, values...)
+			assert.NoError(t, err, "TestQueueScan failed")
+		}
 	}
 }
 
