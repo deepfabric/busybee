@@ -16,11 +16,6 @@ import (
 	"github.com/fagongzi/util/protoc"
 )
 
-var (
-	countToClean     = uint64(4096)
-	maxConsumerAlive = int64(7 * 24 * 60 * 60) // 7 day
-)
-
 func newQueueBatch() batchType {
 	return &queueBatch{
 		buf: goetty.NewByteBuf(256),
@@ -86,7 +81,7 @@ func (qb *queueBatch) addReq(req *raftcmdpb.Request, resp *raftcmdpb.Response, b
 
 			pb, ok := qb.pbs[target]
 			if !ok {
-				pb = newPartitionBatch(b, qb.tenant, metapb.Group(req.Group), id, target, prefix, qb.buf)
+				pb = newPartitionBatch(b, qb, metapb.Group(req.Group), id, target, prefix, qb.buf)
 				qb.pbs[target] = pb
 			}
 
@@ -157,7 +152,7 @@ type queuePartitionBatch struct {
 	removedOffset uint64
 	pairs         [][]byte
 
-	tenant                 string
+	qb                     *queueBatch
 	id                     uint64
 	group                  metapb.Group
 	buf                    *goetty.ByteBuf
@@ -168,7 +163,7 @@ type queuePartitionBatch struct {
 	maxAndCleanOffsetValue []byte
 }
 
-func newPartitionBatch(b *batch, tenant string, group metapb.Group, id uint64, partition uint32, prefix []byte, buf *goetty.ByteBuf) *queuePartitionBatch {
+func newPartitionBatch(b *batch, qb *queueBatch, group metapb.Group, id uint64, partition uint32, prefix []byte, buf *goetty.ByteBuf) *queuePartitionBatch {
 	buf.MarkWrite()
 	buf.Write(prefix)
 	buf.Write(PartitionKey(id, partition))
@@ -177,7 +172,7 @@ func newPartitionBatch(b *batch, tenant string, group metapb.Group, id uint64, p
 	pb := &queuePartitionBatch{
 		maxAndCleanOffsetValue: make([]byte, 16, 16),
 		buf:                    buf,
-		tenant:                 tenant,
+		qb:                     qb,
 		id:                     id,
 		group:                  group,
 		queueKey:               queueKey,
@@ -216,7 +211,7 @@ func (qb *queuePartitionBatch) exec(s bhstorage.DataStorage, b *batch) error {
 
 	if qb.maxOffset > 0 {
 		// clean [last clean offset, minimum committed offset in all consumers]
-		if qb.maxOffset-qb.removedOffset >= countToClean {
+		if qb.maxOffset-qb.removedOffset >= qb.qb.metadata.CleanBatch {
 			now := time.Now().Unix()
 			low := uint64(math.MaxUint64)
 			found := false
@@ -224,7 +219,7 @@ func (qb *queuePartitionBatch) exec(s bhstorage.DataStorage, b *batch) error {
 				v := goetty.Byte2UInt64(value)
 				ts := goetty.Byte2Int64(value[8:])
 
-				if (now-ts >= maxConsumerAlive) && v < low {
+				if (now-ts >= qb.qb.metadata.MaxAlive) && v < low {
 					low = v
 					found = true
 				}
@@ -256,8 +251,8 @@ func (qb *queuePartitionBatch) exec(s bhstorage.DataStorage, b *batch) error {
 		b.wb.Set(qb.pairs[2*i], qb.pairs[2*i+1])
 	}
 
-	metric.SetEventQueueSize(qb.maxOffset-qb.removedOffset, qb.tenant, qb.group)
-	metric.IncEventAdded(n, qb.tenant, qb.group)
+	metric.SetEventQueueSize(qb.maxOffset-qb.removedOffset, qb.qb.tenant, qb.group)
+	metric.IncEventAdded(n, qb.qb.tenant, qb.group)
 	return nil
 }
 

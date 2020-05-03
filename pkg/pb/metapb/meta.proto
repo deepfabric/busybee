@@ -20,6 +20,8 @@ enum BMLoader {
 message TenantQueue {
     uint32 partitions      = 1;
     int64  consumerTimeout = 2;
+    int64  maxAlive        = 3;
+    uint64 cleanBatch      = 4;
 }
 
 // Tenant tenant metadata
@@ -289,6 +291,8 @@ message QueueState {
     uint32                  consumers  = 2;
     repeated Partiton       states     = 3 [(gogoproto.nullable) = false];
     int64                   timeout    = 4;
+    int64                   maxAlive   = 5;
+    uint64                  cleanBatch = 6;
 }
 
 // Partiton partition state
