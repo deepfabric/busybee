@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"math"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -28,6 +29,10 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
+const (
+	maxPerWorker = 1000000
+)
+
 var (
 	emptyBMData = bytes.NewBuffer(nil)
 	initBM      = roaring.NewBitmap()
@@ -48,7 +53,7 @@ type Engine interface {
 	// StartInstance start instance, an instance may contain a lot of people,
 	// so an instance will be divided into many shards, each shard handles some
 	// people's events.
-	StartInstance(workflow metapb.Workflow, loader metapb.BMLoader, crowd []byte, workers uint64) (uint64, error)
+	StartInstance(workflow metapb.Workflow, loader metapb.BMLoader, crowd []byte) (uint64, error)
 	// LastInstance returns last instance
 	LastInstance(id uint64) (*metapb.WorkflowInstance, error)
 	// HistoryInstance returens a workflow instance snapshot
@@ -328,7 +333,7 @@ func (eng *engine) doCheckTenantRunner(tid uint64) error {
 	return nil
 }
 
-func (eng *engine) StartInstance(workflow metapb.Workflow, loader metapb.BMLoader, crowdMeta []byte, workers uint64) (uint64, error) {
+func (eng *engine) StartInstance(workflow metapb.Workflow, loader metapb.BMLoader, crowdMeta []byte) (uint64, error) {
 	t := time.Now().Unix()
 	logger.Infof("workflow-%d start instance with %s",
 		workflow.ID,
@@ -373,6 +378,12 @@ func (eng *engine) StartInstance(workflow metapb.Workflow, loader metapb.BMLoade
 			err)
 		return 0, err
 	}
+
+	if bm.GetCardinality() == 0 {
+		return 0, fmt.Errorf("workflow-%d start instance failed with 0 crowd",
+			workflow.ID)
+	}
+
 	end := time.Now().Unix()
 
 	logger.Infof("workflow-%d start instance, do load bitmap crowd completed in %d secs",
@@ -403,15 +414,13 @@ func (eng *engine) StartInstance(workflow metapb.Workflow, loader metapb.BMLoade
 			end-start)
 
 		bm.AndNot(oldBM)
-		logger.Infof("workflow-%d start instance with new instance, crow changed to %d, workers %d",
+		logger.Infof("workflow-%d start instance with new instance, crow changed to %d",
 			workflow.ID,
-			bm.GetCardinality(),
-			workers)
+			bm.GetCardinality())
 	} else {
-		logger.Infof("workflow-%d start instance with first instance, crow %d, workers %d",
+		logger.Infof("workflow-%d start instance with first instance, crow %d",
 			workflow.ID,
-			bm.GetCardinality(),
-			workers)
+			bm.GetCardinality())
 	}
 
 	id, err := eng.Storage().RaftStore().Prophet().GetRPC().AllocID()
@@ -448,7 +457,6 @@ func (eng *engine) StartInstance(workflow metapb.Workflow, loader metapb.BMLoade
 		Loader:     loader,
 		LoaderMeta: loaderMeta,
 		TotalCrowd: bm.GetCardinality(),
-		Workers:    workers,
 	}
 
 	req := rpcpb.AcquireStartingInstanceRequest()
@@ -768,7 +776,7 @@ func (eng *engine) getInstanceWorkers(instance *metapb.WorkflowInstance) ([]meta
 	var shards []metapb.WorkflowInstanceWorkerState
 	for i := uint64(0); i < tenant.Runners; i++ {
 		from := uint32(0)
-		end := storage.TenantRunnerWorkerKey(instance.Snapshot.TenantID, i, instance.Snapshot.ID, uint32(instance.Workers))
+		end := storage.TenantRunnerWorkerKey(instance.Snapshot.TenantID, i, instance.Snapshot.ID, math.MaxUint32)
 
 		for {
 			startKey := storage.TenantRunnerWorkerKey(instance.Snapshot.TenantID, i, instance.Snapshot.ID, from)
@@ -1050,7 +1058,7 @@ func (eng *engine) doStartInstanceEvent(instance *metapb.WorkflowInstance) {
 		instance.Snapshot.ID,
 		len(runners))
 
-	bms := bbutil.BMSplit(bm, instance.Workers)
+	bms := bbutil.BMSplit(bm, maxPerWorker)
 	completed := &actionCompleted{0, uint64(len(bms))}
 	for index, bm := range bms {
 		state := metapb.WorkflowInstanceWorkerState{}
@@ -1098,9 +1106,8 @@ func (eng *engine) doStartedInstanceEvent(instance *metapb.WorkflowInstance) {
 }
 
 func (eng *engine) doStoppingInstanceEvent(instance *metapb.WorkflowInstance, buf *goetty.ByteBuf) {
-	logger.Infof("stopping workflow-%d and %d workers",
-		instance.Snapshot.ID,
-		instance.Workers)
+	logger.Infof("stopping workflow-%d",
+		instance.Snapshot.ID)
 
 	shards, err := eng.doSaveSnapshot(instance, buf)
 	if err != nil {

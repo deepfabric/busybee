@@ -166,11 +166,10 @@ message WorkflowInstance {
     bytes                 loaderMeta  = 3;
     BMLoader              loader      = 4;
     uint64                totalCrowd  = 5;
-    uint64                workers     = 6;
-    int64                 startedAt   = 7;
-    int64                 stoppedAt   = 8;
-    uint64                version     = 9;
-    WorkflowInstanceState state       = 10;
+    int64                 startedAt   = 6;
+    int64                 stoppedAt   = 7;
+    uint64                version     = 8;
+    WorkflowInstanceState state       = 9;
 }
 
 // WorkflowInstanceSnapshot workflow instance snapshpot

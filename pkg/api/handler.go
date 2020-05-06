@@ -191,8 +191,7 @@ func (s *server) doHistoryInstance(ctx ctx) error {
 func (s *server) doStartInstance(ctx ctx) error {
 	_, err := s.engine.StartInstance(ctx.req.StartInstance.Instance.Snapshot,
 		ctx.req.StartInstance.Instance.Loader,
-		ctx.req.StartInstance.Instance.LoaderMeta,
-		ctx.req.StartInstance.Instance.Workers)
+		ctx.req.StartInstance.Instance.LoaderMeta)
 	if err != nil {
 		return err
 	}

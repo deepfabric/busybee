@@ -117,11 +117,9 @@ func TestStopInstanceAndRestart(t *testing.T) {
 					},
 				},
 			},
-		}, metapb.RawLoader, util.MustMarshalBM(bm), 3)
+		}, metapb.RawLoader, util.MustMarshalBM(bm))
 
 		assert.NoError(t, waitTestWorkflow(ng, 10000, metapb.Running), "TestStopInstance failed")
-
-		assert.Equal(t, 3, ng.(*engine).workerCount(), "TestStopInstance failed")
 
 		err = ng.StopInstance(10000)
 		assert.NoError(t, err, "TestStopInstance failed")
@@ -223,13 +221,12 @@ func TestStartInstance(t *testing.T) {
 				},
 			},
 		},
-	}, metapb.RawLoader, util.MustMarshalBM(bm), 3)
+	}, metapb.RawLoader, util.MustMarshalBM(bm))
 	assert.NoError(t, err, "TestStartInstance failed")
 
-	assert.NoError(t, waitTestWorkflow(ng, 10000, metapb.Running), "TestStartInstance failed")
-	assert.Equal(t, 3, ng.(*engine).workerCount(), "TestStartInstance failed")
+	assert.NoError(t, waitTestWorkflow(ng, wid, metapb.Running), "TestStartInstance failed")
 
-	for i := uint32(0); i < 3; i++ {
+	for i := uint32(0); i < 1; i++ {
 		data, err := store.GetWithGroup(storage.TenantRunnerWorkerKey(tid, 0, wid, i), metapb.TenantRunnerGroup)
 		assert.NoError(t, err, "TestStartInstance failed")
 		assert.NotEmpty(t, data, "TestStartInstance failed")
@@ -240,7 +237,7 @@ func TestStartInstance(t *testing.T) {
 	assert.NotEmpty(t, data, "TestStartInstance failed")
 	metadata := &metapb.WorkerRunner{}
 	protoc.MustUnmarshal(metadata, data)
-	assert.Equal(t, 3, len(metadata.Workers), "TestStartInstance failed")
+	assert.Equal(t, 1, len(metadata.Workers), "TestStartInstance failed")
 
 	err = ng.Storage().PutToQueue(10001, 0, metapb.TenantInputGroup, protoc.MustMarshal(&metapb.Event{
 		Type: metapb.UserType,
@@ -288,7 +285,6 @@ func TestStartInstance(t *testing.T) {
 	assert.Equal(t, uint64(3), bm.GetCardinality(), "TestStartInstance failed")
 
 	time.Sleep(time.Second * 9)
-	assert.Equal(t, 0, ng.(*engine).workerCount(), "TestStartInstance failed")
 
 	for i := uint32(0); i < 3; i++ {
 		data, err := store.GetWithGroup(storage.TenantRunnerWorkerKey(tid, 0, wid, i), metapb.TenantRunnerGroup)
@@ -380,11 +376,9 @@ func TestTriggerDirect(t *testing.T) {
 				},
 			},
 		},
-	}, metapb.RawLoader, util.MustMarshalBM(bm), 3)
+	}, metapb.RawLoader, util.MustMarshalBM(bm))
 	assert.NoError(t, err, "TestTriggerDirect failed")
-
 	assert.NoError(t, waitTestWorkflow(ng, 10000, metapb.Running), "TestTriggerDirect failed")
-	assert.Equal(t, 3, ng.(*engine).workerCount(), "TestTriggerDirect failed")
 
 	err = ng.Storage().PutToQueue(10001, 0, metapb.TenantInputGroup, protoc.MustMarshal(&metapb.Event{
 		Type: metapb.UserType,
@@ -516,11 +510,10 @@ func TestUpdateCrowd(t *testing.T) {
 				},
 			},
 		},
-	}, metapb.RawLoader, util.MustMarshalBM(bm), 3)
+	}, metapb.RawLoader, util.MustMarshalBM(bm))
 	assert.NoError(t, err, "TestUpdateCrowd failed")
 
 	assert.NoError(t, waitTestWorkflow(ng, 10000, metapb.Running), "TestUpdateCrowd failed")
-	assert.Equal(t, 3, ng.(*engine).workerCount(), "TestUpdateCrowd failed")
 
 	err = ng.Storage().PutToQueue(tid, 0, metapb.TenantInputGroup, protoc.MustMarshal(&metapb.Event{
 		Type: metapb.UserType,
@@ -713,11 +706,10 @@ func TestUpdateWorkflow(t *testing.T) {
 				},
 			},
 		},
-	}, metapb.RawLoader, util.MustMarshalBM(bm), 3)
+	}, metapb.RawLoader, util.MustMarshalBM(bm))
 	assert.NoError(t, err, "TestUpdateWorkflow failed")
 
 	assert.NoError(t, waitTestWorkflow(ng, 10000, metapb.Running), "TestUpdateWorkflow failed")
-	assert.Equal(t, 3, ng.(*engine).workerCount(), "TestUpdateWorkflow failed")
 
 	err = ng.Storage().PutToQueue(tid, 0, metapb.TenantInputGroup, protoc.MustMarshal(&metapb.Event{
 		Type: metapb.UserType,
@@ -955,7 +947,7 @@ func TestTransaction(t *testing.T) {
 				},
 			},
 		},
-	}, metapb.RawLoader, util.MustMarshalBM(bm), 3)
+	}, metapb.RawLoader, util.MustMarshalBM(bm))
 	assert.NoError(t, err, "TestTransaction failed")
 	assert.NoError(t, waitTestWorkflow(ng, 10000, metapb.Running), "TestTransaction failed")
 
@@ -1086,7 +1078,7 @@ func TestTimerWithUseStepCrowdToDrive(t *testing.T) {
 				},
 			},
 		},
-	}, metapb.RawLoader, util.MustMarshalBM(bm), 3)
+	}, metapb.RawLoader, util.MustMarshalBM(bm))
 	assert.NoError(t, err, "TestTimerWithUseStepCrowdToDrive failed")
 	assert.NoError(t, waitTestWorkflow(ng, 10000, metapb.Running), "TestTimerWithUseStepCrowdToDrive failed")
 
@@ -1161,7 +1153,7 @@ func TestLastTransactionNotCompleted(t *testing.T) {
 				},
 			},
 		},
-	}, metapb.RawLoader, util.MustMarshalBM(bm), 1)
+	}, metapb.RawLoader, util.MustMarshalBM(bm))
 	assert.NoError(t, err, "TestLastTransaction failed")
 
 	key := make([]byte, 12, 12)
@@ -1290,7 +1282,7 @@ func TestLastTransactionCompleted(t *testing.T) {
 				},
 			},
 		},
-	}, metapb.RawLoader, util.MustMarshalBM(bm), 1)
+	}, metapb.RawLoader, util.MustMarshalBM(bm))
 	assert.NoError(t, err, "TestLastTransactionCompleted failed")
 
 	key := make([]byte, 12, 12)
@@ -1430,11 +1422,10 @@ func TestTriggerTTLTimeout(t *testing.T) {
 				},
 			},
 		},
-	}, metapb.RawLoader, util.MustMarshalBM(bm), 3)
+	}, metapb.RawLoader, util.MustMarshalBM(bm))
 	assert.NoError(t, err, "TestTriggerTTLTimeout failed")
 
 	assert.NoError(t, waitTestWorkflow(ng, 10000, metapb.Running), "TestTriggerTTLTimeout failed")
-	assert.Equal(t, 3, ng.(*engine).workerCount(), "TestTriggerTTLTimeout failed")
 
 	err = ng.Storage().PutToQueue(10001, 0, metapb.TenantInputGroup, protoc.MustMarshal(&metapb.Event{
 		Type: metapb.UserType,
@@ -1533,7 +1524,7 @@ func TestNotifyWithTTL(t *testing.T) {
 				},
 			},
 		},
-	}, metapb.RawLoader, util.MustMarshalBM(bm), 1)
+	}, metapb.RawLoader, util.MustMarshalBM(bm))
 	assert.NoError(t, err, "TestNotifyWithTTL failed")
 
 	assert.NoError(t, waitTestWorkflow(ng, 10000, metapb.Running), "TestNotifyWithTTL failed")
@@ -1630,7 +1621,7 @@ func TestStepCountAndNotiesMatched(t *testing.T) {
 				},
 			},
 		},
-	}, metapb.RawLoader, util.MustMarshalBM(bm), 8)
+	}, metapb.RawLoader, util.MustMarshalBM(bm))
 	assert.NoError(t, err, "TestStepCountAndNotiesMatched failed")
 
 	assert.NoError(t, waitTestWorkflow(ng, 10000, metapb.Running), "TestStepCountAndNotiesMatched failed")
@@ -1803,11 +1794,10 @@ func TestNotifyWithErrorRetry(t *testing.T) {
 				},
 			},
 		},
-	}, metapb.RawLoader, util.MustMarshalBM(bm), 3)
+	}, metapb.RawLoader, util.MustMarshalBM(bm))
 	assert.NoError(t, err, "TestNotifyWithErrorRetry failed")
 
 	time.Sleep(time.Second)
-	assert.Equal(t, 3, ng.(*engine).workerCount(), "TestNotifyWithErrorRetry failed")
 
 	err = ng.Storage().PutToQueue(10001, 0, metapb.TenantInputGroup, protoc.MustMarshal(&metapb.Event{
 		Type: metapb.UserType,
@@ -1911,7 +1901,7 @@ func TestStepWithPreLoad(t *testing.T) {
 				},
 			},
 		},
-	}, metapb.RawLoader, util.MustMarshalBM(bm), 16)
+	}, metapb.RawLoader, util.MustMarshalBM(bm))
 	assert.NoError(t, err, "TestStepWithPreLoad failed")
 
 	assert.NoError(t, waitTestWorkflow(ng, 10000, metapb.Running), "TestStepWithPreLoad failed")

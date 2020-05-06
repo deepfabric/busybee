@@ -38,3 +38,17 @@ func TestAndnot(t *testing.T) {
 	bm = BMAndnotInterface(roaring.BitmapOf(1, 2, 3), roaring.BitmapOf(3, 4, 5), roaring.BitmapOf(3, 5, 6, 7))
 	assert.Equal(t, uint64(2), bm.GetCardinality(), "test and failed")
 }
+
+func TestBMSplit(t *testing.T) {
+	bm := AcquireBitmap()
+	bm.Flip(1, 100)
+
+	bms := BMSplit(bm, 101)
+	assert.Equal(t, 1, len(bms), "TestBMSplit failed")
+
+	bms = BMSplit(bm, 100)
+	assert.Equal(t, 1, len(bms), "TestBMSplit failed")
+
+	bms = BMSplit(bm, 99)
+	assert.Equal(t, 2, len(bms), "TestBMSplit failed")
+}

@@ -185,27 +185,26 @@ func BMAlloc(new *roaring.Bitmap, shards ...*roaring.Bitmap) {
 }
 
 // BMSplit split the bitmap
-func BMSplit(bm *roaring.Bitmap, ranges uint64) []*roaring.Bitmap {
-	if ranges <= 1 ||
-		bm.GetCardinality() == 0 ||
-		ranges > bm.GetCardinality() {
-		return []*roaring.Bitmap{bm.Clone()}
-	}
+func BMSplit(bm *roaring.Bitmap, maxSize uint64) []*roaring.Bitmap {
+	var values []*roaring.Bitmap
+	sub := AcquireBitmap()
+	values = append(values, sub)
 
-	values := make([]*roaring.Bitmap, 0, ranges)
-	for i := uint64(0); i < ranges; i++ {
-		values = append(values, AcquireBitmap())
-	}
-
-	size := uint32(ranges)
 	itr := bm.Iterator()
+	c := uint64(0)
 	for {
 		if !itr.HasNext() {
 			break
 		}
 
 		value := itr.Next()
-		values[value%size].Add(value)
+		sub.Add(value)
+		c++
+		if c >= maxSize {
+			values = append(values, sub)
+			sub = AcquireBitmap()
+			c = 0
+		}
 	}
 
 	return values
