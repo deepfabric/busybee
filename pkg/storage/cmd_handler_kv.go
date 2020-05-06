@@ -161,7 +161,7 @@ func (h *beeStorage) scan(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs ma
 		}
 
 		buf.MarkWrite()
-		buf.Write(key[9:])
+		buf.Write(raftstore.DecodeDataKey(key))
 		customResp.Keys = append(customResp.Keys, buf.WrittenDataAfterMark())
 
 		buf.MarkWrite()

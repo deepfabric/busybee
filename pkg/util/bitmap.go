@@ -197,14 +197,14 @@ func BMSplit(bm *roaring.Bitmap, maxSize uint64) []*roaring.Bitmap {
 			break
 		}
 
+		if c >= maxSize {
+			sub = AcquireBitmap()
+			values = append(values, sub)
+			c = 0
+		}
 		value := itr.Next()
 		sub.Add(value)
 		c++
-		if c >= maxSize {
-			values = append(values, sub)
-			sub = AcquireBitmap()
-			c = 0
-		}
 	}
 
 	return values

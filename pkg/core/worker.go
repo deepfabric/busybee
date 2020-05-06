@@ -399,9 +399,11 @@ func (w *stateWorker) handleEvent() bool {
 		case initAction:
 			w.checkLastTranscation()
 			w.consumer.Start(uint64(fetchEventBatch), w.onFilterEvent, w.onEvent)
-			logger.Infof("worker %s init with %d crowd",
+			logger.Infof("worker %s init with %d crowd, [%d, %d]",
 				w.key,
-				w.totalCrowds.GetCardinality())
+				w.totalCrowds.GetCardinality(),
+				w.totalCrowds.Minimum(),
+				w.totalCrowds.Maximum())
 		case timerAction:
 			w.tran.doStepTimerEvent(value)
 		case userEventAction:
@@ -558,7 +560,7 @@ func (w *stateWorker) execNotify(tran *transaction) error {
 		return err
 	}
 
-	logger.Debugf("worker %s moved %d",
+	logger.Infof("worker %s moved %d",
 		w.key,
 		totalMoved)
 

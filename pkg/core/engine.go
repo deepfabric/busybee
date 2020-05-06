@@ -974,7 +974,9 @@ func (eng *engine) doCreateWorker(arg interface{}) {
 		return
 	}
 
-	logger.Infof("create worker %s completed", workerKey(action.state))
+	logger.Infof("create worker %s on runner %s completed",
+		workerKey(action.state),
+		runnerKey(&metapb.WorkerRunner{ID: action.state.TenantID, Index: action.state.Runner}))
 	if action.completed.done() {
 		eng.doCreateInstanceStateShardComplete(action.state.WorkflowID)
 	}
@@ -1038,8 +1040,9 @@ func (eng *engine) doStartInstanceEvent(instance *metapb.WorkflowInstance) {
 			eng.addToRetryNewInstance, instance)
 		return
 	}
-	logger.Infof("starting workflow-%d load bitmap completed",
-		instance.Snapshot.ID)
+	logger.Infof("starting workflow-%d load bitmap completed with %d",
+		instance.Snapshot.ID,
+		bm.GetCardinality())
 
 	// load all runners, and alloc worker to these runners using RR balance
 	runners, err := eng.getTenantRunnerByState(instance.Snapshot.TenantID, metapb.WRRunning)

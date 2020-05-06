@@ -41,7 +41,9 @@ func TestAndnot(t *testing.T) {
 
 func TestBMSplit(t *testing.T) {
 	bm := AcquireBitmap()
-	bm.Flip(1, 100)
+	bm.Flip(1, 100+1)
+
+	assert.Equal(t, uint64(100), bm.GetCardinality(), "TestBMSplit failed")
 
 	bms := BMSplit(bm, 101)
 	assert.Equal(t, 1, len(bms), "TestBMSplit failed")
@@ -49,6 +51,8 @@ func TestBMSplit(t *testing.T) {
 	bms = BMSplit(bm, 100)
 	assert.Equal(t, 1, len(bms), "TestBMSplit failed")
 
-	bms = BMSplit(bm, 99)
+	bms = BMSplit(bm, 50)
 	assert.Equal(t, 2, len(bms), "TestBMSplit failed")
+	assert.Equal(t, 1, int(bms[0].Minimum()), "TestBMSplit failed")
+	assert.Equal(t, 51, int(bms[1].Minimum()), "TestBMSplit failed")
 }
