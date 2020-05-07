@@ -43,7 +43,7 @@ type transaction struct {
 	index int
 	buf   *goetty.ByteBuf
 
-	kvCache     map[string][]byte
+	kvCache     sync.Map //map[string][]byte
 	preLoadKeys [][]byte
 	completed   uint64
 	completedC  chan struct{}
@@ -53,7 +53,6 @@ func newTransaction() *transaction {
 	return &transaction{
 		buf:        goetty.NewByteBuf(32),
 		event:      &metapb.UserEvent{},
-		kvCache:    make(map[string][]byte),
 		completedC: make(chan struct{}, 1),
 	}
 }
@@ -196,7 +195,7 @@ func (tran *transaction) onLoadKey(arg interface{}, value []byte, err error) {
 	} else {
 		resp := rpcpb.AcquireBytesResponse()
 		protoc.MustUnmarshal(resp, value)
-		tran.kvCache[hack.SliceToString(arg.([]byte))] = resp.Value
+		tran.kvCache.Store(hack.SliceToString(arg.([]byte)), resp.Value)
 		rpcpb.ReleaseBytesResponse(resp)
 	}
 
@@ -303,9 +302,11 @@ func (tran *transaction) resetExprCtx() {
 func (tran *transaction) resetPreLoad() {
 	tran.completed = 0
 	tran.preLoadKeys = tran.preLoadKeys[:0]
-	for key := range tran.kvCache {
-		delete(tran.kvCache, key)
-	}
+
+	tran.kvCache.Range(func(key, value interface{}) bool {
+		tran.kvCache.Delete(key)
+		return true
+	})
 }
 
 func (tran *transaction) Event() *metapb.UserEvent {
@@ -318,8 +319,8 @@ func (tran *transaction) Profile(key []byte) []byte {
 
 func (tran *transaction) KV(key []byte) ([]byte, error) {
 	attr := hack.SliceToString(key)
-	if value, ok := tran.kvCache[attr]; ok {
-		return value, nil
+	if value, ok := tran.kvCache.Load(attr); ok {
+		return value.([]byte), nil
 	}
 
 	value, err := tran.w.eng.Storage().Get(key)
@@ -327,7 +328,7 @@ func (tran *transaction) KV(key []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	tran.kvCache[attr] = value
+	tran.kvCache.Store(attr, value)
 	return value, nil
 }
 
