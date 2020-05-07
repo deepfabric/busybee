@@ -992,7 +992,9 @@ func (eng *engine) doBootstrapWorker(state metapb.WorkflowInstanceWorkerState) {
 	runner := runnerKey(&metapb.WorkerRunner{ID: state.TenantID, Index: state.Runner})
 	value, ok := eng.runners.Load(runner)
 	if !ok {
-		logger.Fatalf("BUG: missing worker runner %s", key)
+		logger.Warningf("worker %s missing worker runner %s",
+			runner, key)
+		return
 	}
 
 	for {
