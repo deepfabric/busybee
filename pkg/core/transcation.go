@@ -3,6 +3,7 @@ package core
 import (
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/RoaringBitmap/roaring"
 	"github.com/deepfabric/busybee/pkg/metric"
@@ -34,14 +35,13 @@ func releaseBM(value *roaring.Bitmap) {
 
 type transaction struct {
 	w          *stateWorker
-	err        error
 	stepCrowds []*roaring.Bitmap
 	changes    []changedCtx
-	cbs        []*stepCB
 
-	event *metapb.UserEvent
-	index int
-	buf   *goetty.ByteBuf
+	userEvents []metapb.UserEvent
+	event      *metapb.UserEvent
+	index      int
+	buf        *goetty.ByteBuf
 
 	kvCache     sync.Map //map[string][]byte
 	preLoadKeys [][]byte
@@ -59,6 +59,7 @@ func newTransaction() *transaction {
 
 func (tran *transaction) start(w *stateWorker) {
 	tran.w = w
+	tran.reset()
 	tran.resetExprCtx()
 
 	for _, crowd := range w.stepCrowds {
@@ -75,9 +76,6 @@ func (tran *transaction) close() {
 
 func (tran *transaction) doStepTimerEvent(item item) {
 	idx := item.value.(int)
-	if tran.err != nil {
-		return
-	}
 
 	step := tran.w.state.States[idx]
 	if step.Step.Execution.Type != metapb.Timer {
@@ -95,35 +93,38 @@ func (tran *transaction) doStepTimerEvent(item item) {
 		target.users = tran.stepCrowds[idx].Clone()
 	}
 
-	err := tran.w.steps[step.Step.Name].Execute(tran, tran, target)
-	if err != nil {
+	for {
+		if tran.w.isStopped() {
+			return
+		}
+
+		err := tran.w.steps[step.Step.Name].Execute(tran, tran, target)
+		if err == nil {
+			break
+		}
+
 		metric.IncWorkflowWorkerFailed()
-		logger.Errorf("worker %s trigger timer failed with %+v",
+		logger.Errorf("worker %s trigger timer failed with %+v, try later",
 			tran.w.key,
 			err)
-		tran.err = err
-		return
+
+		tran.resetPreLoad()
+		time.Sleep(time.Second * 5)
 	}
 }
 
-func (tran *transaction) doStepUserEvents(item item) {
-	if item.cb != nil {
-		tran.cbs = append(tran.cbs, item.cb)
-	}
-	if tran.err != nil {
-		return
-	}
-
-	events := item.value.([]metapb.UserEvent)
-	tran.doUserEvents(events)
+func (tran *transaction) doStepUserEvent(event metapb.UserEvent) {
+	tran.userEvents = append(tran.userEvents, event)
 }
 
-func (tran *transaction) doUserEvents(events []metapb.UserEvent) {
-	tran.doPreLoad(events)
+func (tran *transaction) doStepFlushUserEvents() {
+	tran.doPreLoad()
 
-	for idx := range events {
-		tran.doUserEvent(&events[idx])
+	for idx := range tran.userEvents {
+		tran.doUserEvent(&tran.userEvents[idx])
 	}
+
+	tran.userEvents = tran.userEvents[:0]
 }
 
 func (tran *transaction) doUserEvent(event *metapb.UserEvent) {
@@ -135,37 +136,50 @@ func (tran *transaction) doUserEvent(event *metapb.UserEvent) {
 			tran.event.UserID = event.UserID
 			tran.event.Data = event.Data
 
-			err := tran.w.steps[tran.w.state.States[idx].Step.Name].Execute(tran, tran, who{event.UserID, nil})
-			if err != nil {
+			for {
+				if tran.w.isStopped() {
+					return
+				}
+
+				err := tran.w.steps[tran.w.state.States[idx].Step.Name].Execute(tran, tran, who{event.UserID, nil})
+				if err == nil {
+					return
+				}
+
 				metric.IncWorkflowWorkerFailed()
 				logger.Errorf("worker %s step event %+v failed with %+v",
 					tran.w.key,
 					event,
 					err)
-				tran.err = err
-			}
 
-			return
+				tran.resetPreLoad()
+				time.Sleep(time.Second * 5)
+			}
 		}
 	}
 }
 
-func (tran *transaction) doPreLoad(events []metapb.UserEvent) {
+func (tran *transaction) doPreLoad() {
 	tran.resetPreLoad()
 
-	for i := range events {
+	for i := range tran.userEvents {
 		tran.resetExprCtx()
-		tran.event.UserID = events[i].UserID
-		tran.event.Data = events[i].Data
+		tran.event.UserID = tran.userEvents[i].UserID
+		tran.event.Data = tran.userEvents[i].Data
 
 		for j, crowd := range tran.stepCrowds {
-			if crowd.Contains(events[i].UserID) {
-				err := tran.w.steps[tran.w.state.States[j].Step.Name].Pre(tran, true, tran.addPreLoadKey)
-				if err != nil {
-					tran.err = err
-					return
+			if crowd.Contains(tran.userEvents[i].UserID) {
+				for {
+					if tran.w.isStopped() {
+						return
+					}
+
+					err := tran.w.steps[tran.w.state.States[j].Step.Name].Pre(tran, true, tran.addPreLoadKey)
+					if err == nil {
+						break
+					}
+					time.Sleep(time.Second * 5)
 				}
-				break
 			}
 		}
 	}
@@ -284,8 +298,6 @@ func (tran *transaction) reset() {
 
 	tran.stepCrowds = tran.stepCrowds[:0]
 	tran.changes = tran.changes[:0]
-	tran.cbs = tran.cbs[:0]
-	tran.err = nil
 }
 
 func (tran *transaction) resetExprCtx() {

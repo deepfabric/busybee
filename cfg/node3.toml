@@ -25,6 +25,15 @@ peerAddr = "node3:2381"
 # The cluster seed node, to join the cluster, required while storeMetadata is true
 seed = "node1:2371"
 
+# The maximum count of transfer replica leader operator.
+maxRebalanceLeader = 4
+
+# The maximum count of remove|add replica operator.
+maxRebalanceReplica = 2
+
+# The maximum count of replica kind operator.
+maxScheduleReplica = 8
+
 [metric]
 # The prometheus pushgateway address
 addr = "pushgateway:9091"

@@ -7,6 +7,7 @@ import (
 
 	"github.com/deepfabric/busybee/pkg/metric"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
+	"github.com/deepfabric/busybee/pkg/queue"
 	"github.com/deepfabric/busybee/pkg/storage"
 	"github.com/fagongzi/util/protoc"
 )
@@ -47,17 +48,22 @@ type workerRunner struct {
 	tid         uint64
 	runnerIndex uint64
 	stopped     bool
-	workers     map[string]*stateWorker
 	eng         *engine
+	workers     map[string]*stateWorker
+	events      map[string][]metapb.Event
+	consumer    queue.AsyncConsumer
+
+	completedOffsets map[uint32]uint64
 }
 
 func newWorkerRunner(tid uint64, runnerIndex uint64, key string, eng *engine) *workerRunner {
 	return &workerRunner{
-		tid:         tid,
-		runnerIndex: runnerIndex,
-		key:         key,
-		workers:     make(map[string]*stateWorker),
-		eng:         eng,
+		tid:              tid,
+		runnerIndex:      runnerIndex,
+		key:              key,
+		workers:          make(map[string]*stateWorker),
+		eng:              eng,
+		completedOffsets: make(map[uint32]uint64),
 	}
 }
 
@@ -78,6 +84,10 @@ func (wr *workerRunner) stop() {
 
 	if wr.stopped {
 		return
+	}
+
+	if wr.consumer != nil {
+		wr.consumer.Stop()
 	}
 
 	wr.stopped = true
@@ -172,6 +182,75 @@ func (wr *workerRunner) loadInstanceShardStates() (int, error) {
 	return loaded, nil
 }
 
+func (wr *workerRunner) startQueueConsumer() error {
+	wr.Lock()
+	defer wr.Unlock()
+
+	consumer, err := queue.NewAsyncConsumer(wr.tid, wr.eng.store, []byte(wr.key))
+	if err != nil {
+		metric.IncStorageFailed()
+		logger.Errorf("%s create consumer failed with %+v, retry after 5s",
+			wr.key,
+			err)
+		return err
+	}
+
+	wr.consumer = consumer
+	wr.consumer.Start(wr.onEvent)
+	logger.Infof("%s consumer started",
+		wr.key,
+		err)
+	return nil
+}
+
+func (wr *workerRunner) loadShardStates() error {
+	loaded, err := wr.loadInstanceShardStates()
+	if err != nil {
+		metric.IncStorageFailed()
+		logger.Errorf("%s load instance shard states failed with %+v, retry after 5s",
+			wr.key,
+			err)
+		return err
+
+	}
+
+	logger.Infof("%s load %d instance shard states",
+		wr.key,
+		loaded)
+	return nil
+}
+
+func (wr *workerRunner) onEvent(p uint32, lastOffset uint64, items [][]byte) {
+	wr.RLock()
+	defer wr.RUnlock()
+
+	if wr.stopped {
+		return
+	}
+
+	if len(items) == 0 {
+		for _, w := range wr.workers {
+			if !w.isStopped() {
+				w.flushEvent()
+			}
+		}
+	}
+
+	offset := lastOffset - uint64(len(items)) + 1
+	for _, item := range items {
+		event := metapb.Event{}
+		protoc.MustUnmarshal(&event, item)
+
+		for _, w := range wr.workers {
+			if !w.isStopped() {
+				w.onEvent(p, offset, &event)
+			}
+		}
+
+		offset++
+	}
+}
+
 func (wr *workerRunner) run() {
 	logger.Infof("%s started", wr.key)
 
@@ -181,18 +260,23 @@ func (wr *workerRunner) run() {
 			break
 		}
 
-		loaded, err := wr.loadInstanceShardStates()
+		err := wr.loadShardStates()
 		if err == nil {
-			logger.Infof("%s load %d instance shard states ",
-				wr.key,
-				loaded)
+			break
+		}
+		time.Sleep(time.Second * 5)
+	}
+
+	for {
+		if wr.stopped {
+			logger.Infof("%s create queue consumer skipped by stopped", wr.key)
 			break
 		}
 
-		metric.IncStorageFailed()
-		logger.Errorf("%s load instance shard states failed with %+v, retry after 5s",
-			wr.key,
-			err)
+		err := wr.startQueueConsumer()
+		if err == nil {
+			break
+		}
 		time.Sleep(time.Second * 5)
 	}
 
@@ -202,12 +286,17 @@ func (wr *workerRunner) run() {
 			time.Sleep(time.Millisecond * 10)
 		}
 
+		for key := range wr.completedOffsets {
+			delete(wr.completedOffsets, key)
+		}
+
 		hasEvent = false
 		wr.RLock()
 		for key, w := range wr.workers {
 			if w.isStopped() {
 				delete(wr.workers, key)
-			} else if w.handleEvent() {
+				delete(wr.events, key)
+			} else if w.handleEvent(wr.completed) {
 				hasEvent = true
 			}
 		}
@@ -219,5 +308,28 @@ func (wr *workerRunner) run() {
 			return
 		}
 		wr.RUnlock()
+
+		if len(wr.completedOffsets) > 0 {
+			err := wr.consumer.Commit(wr.completedOffsets)
+			// just log it, commit next tick
+			if err != nil {
+				metric.IncStorageFailed()
+				logger.Errorf("%s commit offset failed with %+v", err)
+			}
+		}
+	}
+}
+
+func (wr *workerRunner) completed(p uint32, offset uint64) {
+	if offset <= 0 {
+		return
+	}
+
+	if value, ok := wr.completedOffsets[p]; ok {
+		if offset > value {
+			wr.completedOffsets[p] = offset
+		}
+	} else {
+		wr.completedOffsets[p] = offset
 	}
 }

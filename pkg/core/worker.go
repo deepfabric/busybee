@@ -9,7 +9,6 @@ import (
 	"github.com/deepfabric/busybee/pkg/metric"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
-	"github.com/deepfabric/busybee/pkg/queue"
 	"github.com/deepfabric/busybee/pkg/storage"
 	bbutil "github.com/deepfabric/busybee/pkg/util"
 	"github.com/fagongzi/goetty"
@@ -20,8 +19,8 @@ import (
 )
 
 var (
-	fetchEventBatch    = int64(2048)
-	handleEventBatch   = int64(256)
+	eventsCacheSize    = uint64(10000)
+	handleEventBatch   = uint64(256)
 	maxTriggerCount    = 256
 	ttlTriggerInterval = time.Minute
 )
@@ -30,8 +29,9 @@ const (
 	stopAction = iota
 	timerAction
 	userEventAction
-	updateCrowdEventAction
-	updateWorkflowEventAction
+	updateWorkflowAction
+	updateCrowdAction
+	flushAction
 	checkTTLEventAction
 	initAction
 )
@@ -42,7 +42,6 @@ type directCtx struct {
 type item struct {
 	action    int
 	value     interface{}
-	cb        *stepCB
 	partition uint32
 	offset    uint64
 }
@@ -78,9 +77,8 @@ type stateWorker struct {
 	entryActions             map[string]string
 	leaveActions             map[string]string
 	alreadyTriggerTTLTimeout map[string]*triggerInfo
-	queue                    *task.Queue
+	queue                    *task.RingBuffer
 	cronIDs                  []cron.EntryID
-	consumer                 queue.AsyncConsumer
 	tenant                   string
 	cond                     *rpcpb.Condition
 	conditionKey             []byte
@@ -91,17 +89,11 @@ type stateWorker struct {
 	tempEvents   []metapb.UserEvent
 	tempNotifies []metapb.Notify
 
-	items []interface{}
-	tran  *transaction
+	tran    *transaction
+	offsets map[uint32]uint64
 }
 
 func newStateWorker(key string, state metapb.WorkflowInstanceWorkerState, eng Engine) (*stateWorker, error) {
-	consumer, err := queue.NewAsyncConsumer(state.TenantID, eng.Storage(), []byte(key))
-	if err != nil {
-		metric.IncStorageFailed()
-		return nil, err
-	}
-
 	queueStateKey := make([]byte, 12, 12)
 	goetty.Uint64ToBytesTo(state.InstanceID, queueStateKey)
 	goetty.Uint32ToBytesTo(state.Index, queueStateKey[8:])
@@ -116,19 +108,18 @@ func newStateWorker(key string, state metapb.WorkflowInstanceWorkerState, eng En
 		eng:              eng,
 		buf:              goetty.NewByteBuf(32),
 		totalCrowds:      acquireBM(),
-		queue:            task.New(1024),
-		consumer:         consumer,
+		queue:            task.NewRingBuffer(eventsCacheSize),
 		tenant:           string(format.UInt64ToString(state.TenantID)),
 		cond:             &rpcpb.Condition{},
 		conditionKey:     conditionKey,
 		queueStateKey:    queueStateKey,
 		queueGetStateKey: storage.QueueKVKey(state.TenantID, queueStateKey),
 		tempBM:           acquireBM(),
-		items:            make([]interface{}, handleEventBatch, handleEventBatch),
 		tran:             newTransaction(),
+		offsets:          make(map[uint32]uint64),
 	}
 
-	err = w.resetByState()
+	err := w.resetByState()
 	if err != nil {
 		metric.IncWorkflowWorkerFailed()
 		return nil, err
@@ -232,122 +223,49 @@ func (w *stateWorker) checkTTLTimeout(arg interface{}) {
 	})
 }
 
-func (w *stateWorker) onFilterEvent(item []byte) (interface{}, bool) {
-	event := metapb.Event{}
-	protoc.MustUnmarshal(&event, item)
+func (w *stateWorker) flushEvent() {
+	if w.queue.Len() > 0 || len(w.tran.userEvents) > 0 {
+		w.queue.Put(item{
+			action: flushAction,
+		})
+
+	}
+}
+
+func (w *stateWorker) onEvent(p uint32, offset uint64, event *metapb.Event) {
+	if w.isStopped() {
+		return
+	}
 
 	switch event.Type {
 	case metapb.UserType:
 		if w.matches(event.User.UserID) {
-			return event, true
+			evt := *event.User
+			evt.WorkflowID = w.state.WorkflowID
+			evt.InstanceID = w.state.InstanceID
+			w.queue.Put(item{
+				action:    userEventAction,
+				value:     evt,
+				partition: p,
+				offset:    offset,
+			})
 		}
-		return metapb.Event{}, false
 	case metapb.UpdateCrowdType:
 		if event.UpdateCrowd.WorkflowID == w.state.WorkflowID &&
 			event.UpdateCrowd.Index == w.state.Index {
-			return event, true
+			w.queue.Put(item{
+				action: updateCrowdAction,
+				value:  event.UpdateCrowd.Crowd,
+			})
 		}
-		return metapb.Event{}, false
 	case metapb.UpdateWorkflowType:
 		if event.UpdateWorkflow.Workflow.ID == w.state.WorkflowID {
-			return event, true
-		}
-		return metapb.Event{}, false
-	}
-
-	return metapb.Event{}, false
-}
-
-func (w *stateWorker) onEvent(partition uint32, items []interface{}) (int, error) {
-	logger.Debugf("worker %s consumer %d items from queue partition %d",
-		w.key,
-		len(items),
-		partition)
-
-	completed := -1
-	var events []metapb.UserEvent
-	for idx, item := range items {
-		event := item.(metapb.Event)
-		logger.Debugf("worker %s consumer event %+v",
-			w.key,
-			event)
-
-		switch event.Type {
-		case metapb.UserType:
-			if w.matches(event.User.UserID) {
-				evt := *event.User
-				evt.WorkflowID = w.state.WorkflowID
-				evt.InstanceID = w.state.InstanceID
-				events = append(events, evt)
-			}
-		case metapb.UpdateCrowdType:
-			if event.UpdateCrowd.WorkflowID == w.state.WorkflowID &&
-				event.UpdateCrowd.Index == w.state.Index {
-				if len(events) > 0 {
-					err := w.doEvent(userEventAction, events)
-					if err != nil {
-						return completed, err
-					}
-
-					completed = idx - 1
-					events = events[:0]
-				}
-
-				err := w.doEvent(updateCrowdEventAction, event.UpdateCrowd.Crowd)
-				if err != nil {
-					return completed, err
-				}
-				completed = idx
-			}
-		case metapb.UpdateWorkflowType:
-			if event.UpdateWorkflow.Workflow.ID == w.state.WorkflowID {
-				if len(events) > 0 {
-					err := w.doEvent(userEventAction, events)
-					if err != nil {
-						return completed, err
-					}
-
-					completed = idx - 1
-					events = events[:0]
-				}
-
-				err := w.doEvent(updateWorkflowEventAction, event.UpdateWorkflow.Workflow)
-				if err != nil {
-					return completed, err
-				}
-				completed = idx
-			}
+			w.queue.Put(item{
+				action: updateWorkflowAction,
+				value:  event.UpdateWorkflow.Workflow,
+			})
 		}
 	}
-
-	if len(events) > 0 {
-		err := w.doEvent(userEventAction, events)
-		if err != nil {
-			return completed, err
-		}
-	}
-
-	if len(items) > 0 {
-		metric.IncEventHandled(len(items), w.tenant, metapb.TenantInputGroup)
-	}
-
-	return 0, nil
-}
-
-func (w *stateWorker) doEvent(action int, data interface{}) error {
-	cb := acquireCB()
-	defer releaseCB(cb)
-
-	err := w.queue.Put(item{
-		action: action,
-		value:  data,
-		cb:     cb,
-	})
-	if err != nil {
-		return err
-	}
-
-	return cb.wait()
 }
 
 func (w *stateWorker) init() {
@@ -356,49 +274,66 @@ func (w *stateWorker) init() {
 	})
 }
 
-func (w *stateWorker) handleEvent() bool {
-	if w.queue.Len() == 0 && !w.queue.Disposed() {
+func (w *stateWorker) doClose() {
+	w.tran.close()
+	w.resetTTLTimeout()
+	w.queue.Dispose()
+
+	for _, id := range w.cronIDs {
+		w.eng.StopCronJob(id)
+	}
+
+	for _, bm := range w.stepCrowds {
+		releaseBM(bm)
+	}
+	releaseBM(w.totalCrowds)
+
+	releaseBM(w.tempBM)
+	logger.Infof("worker %s stopped", w.key)
+}
+
+func (w *stateWorker) setOffset(p uint32, offset uint64) {
+	if offset <= 0 {
+		return
+	}
+
+	if value, ok := w.offsets[p]; ok {
+		if offset > value {
+			w.offsets[p] = offset
+		}
+	} else {
+		w.offsets[p] = offset
+	}
+}
+
+func (w *stateWorker) handleEvent(completedCB func(uint32, uint64)) bool {
+	if w.queue.Len() == 0 && !w.queue.IsDisposed() {
 		return false
 	}
 
 	w.buf.Clear()
-	n, err := w.queue.Get(handleEventBatch, w.items)
-	if err != nil {
-		logger.Fatalf("BUG: fetch from work queue failed with %+v", err)
+	w.tran.start(w)
+
+	size := w.queue.Len()
+	if size >= handleEventBatch {
+		size = handleEventBatch
 	}
 
-	w.tran.start(w)
-	for i := int64(0); i < n; i++ {
-		value := w.items[i].(item)
-		if value.action == stopAction {
-			w.tran.close()
-			w.consumer.Stop()
-			w.resetTTLTimeout()
-
-			for _, v := range w.queue.Dispose() {
-				cb := (v.(item).cb)
-				cb.complete(task.ErrDisposed)
-				cb.reset()
-			}
-
-			for _, id := range w.cronIDs {
-				w.eng.StopCronJob(id)
-			}
-
-			for _, bm := range w.stepCrowds {
-				releaseBM(bm)
-			}
-			releaseBM(w.totalCrowds)
-
-			releaseBM(w.tempBM)
-			logger.Infof("worker %s stopped", w.key)
-			return false
+	for i := uint64(0); i < size; i++ {
+		v, err := w.queue.Get()
+		if err != nil {
+			logger.Fatalf("BUG: queue can not disposed, but %+v", err)
 		}
 
+		value := v.(item)
+		w.setOffset(value.partition, value.offset)
+
 		switch value.action {
+		case stopAction:
+			w.doClose()
+			return false
 		case initAction:
 			w.checkLastTranscation()
-			w.consumer.Start(uint64(fetchEventBatch), w.onFilterEvent, w.onEvent)
 			logger.Infof("worker %s init with %d crowd, [%d, %d]",
 				w.key,
 				w.totalCrowds.GetCardinality(),
@@ -406,51 +341,34 @@ func (w *stateWorker) handleEvent() bool {
 				w.totalCrowds.Maximum())
 		case timerAction:
 			w.tran.doStepTimerEvent(value)
-		case userEventAction:
-			w.tran.doStepUserEvents(value)
-		case updateCrowdEventAction:
-			err = w.tran.err
-			w.completeTransaction()
-			if err != nil {
-				value.cb.complete(err)
-			} else {
-				value.cb.complete(w.doUpdateCrowd(value.value.([]byte)))
-			}
-
-			w.tran.start(w)
-		case updateWorkflowEventAction:
-			err = w.tran.err
-			w.completeTransaction()
-			if err != nil {
-				value.cb.complete(err)
-			} else {
-				value.cb.complete(w.doUpdateWorkflow(value.value.(metapb.Workflow)))
-			}
-
-			w.tran.start(w)
+			w.completeTransaction(completedCB)
 		case checkTTLEventAction:
 			w.doCheckStepTTLTimeout(value.value.(int))
-		}
+			w.completeTransaction(completedCB)
+		case userEventAction:
+			w.tran.doStepUserEvent(value.value.(metapb.UserEvent))
+		case flushAction:
+			w.tran.doStepFlushUserEvents()
+			w.completeTransaction(completedCB)
+		case updateCrowdAction:
+			w.tran.doStepFlushUserEvents()
+			w.completeTransaction(completedCB)
 
-		if err != nil {
-			break
+			w.doUpdateCrowd(value.value.([]byte))
+			w.tran.start(w)
+		case updateWorkflowAction:
+			w.tran.doStepFlushUserEvents()
+			w.completeTransaction(completedCB)
+
+			w.doUpdateWorkflow(value.value.(metapb.Workflow))
+			w.tran.start(w)
 		}
 	}
 
-	w.completeTransaction()
 	return true
 }
 
-func (w *stateWorker) completeTransaction() {
-	defer w.tran.reset()
-
-	if w.tran.err != nil {
-		for _, c := range w.tran.cbs {
-			c.complete(w.tran.err)
-		}
-		return
-	}
-
+func (w *stateWorker) completeTransaction(completedCB func(uint32, uint64)) {
 	if len(w.tran.changes) > 0 {
 		for idx := range w.stepCrowds {
 			w.stepCrowds[idx].Clear()
@@ -466,8 +384,11 @@ func (w *stateWorker) completeTransaction() {
 			w.state.Version)
 	}
 
-	for _, c := range w.tran.cbs {
-		c.complete(nil)
+	w.tran.start(w)
+
+	for key, value := range w.offsets {
+		completedCB(key, value)
+		delete(w.offsets, key)
 	}
 }
 
@@ -693,10 +614,6 @@ func (w *stateWorker) doUpdateCrowd(crowd []byte) error {
 }
 
 func (w *stateWorker) doCheckStepTTLTimeout(idx int) {
-	if w.tran.err != nil {
-		return
-	}
-
 	if idx >= len(w.state.States) {
 		return
 	}
@@ -739,7 +656,7 @@ func (w *stateWorker) doCheckStepTTLTimeout(idx int) {
 
 		value := itr.Next()
 		alreadyBM.Add(value)
-		w.tempEvents = append(w.tempEvents, metapb.UserEvent{
+		w.tran.doStepUserEvent(metapb.UserEvent{
 			TenantID:   w.state.TenantID,
 			WorkflowID: w.state.WorkflowID,
 			InstanceID: w.state.InstanceID,
@@ -751,8 +668,6 @@ func (w *stateWorker) doCheckStepTTLTimeout(idx int) {
 			break
 		}
 	}
-
-	w.tran.doUserEvents(w.tempEvents)
 }
 
 func (w *stateWorker) isDirectStep(name string) bool {

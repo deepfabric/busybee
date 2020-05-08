@@ -22,6 +22,15 @@ clientAddr = "node1:2371"
 # The embed etcd peer address, required while storeMetadata is true
 peerAddr = "node1:2381"
 
+# The maximum count of transfer replica leader operator.
+maxRebalanceLeader = 4
+
+# The maximum count of remove|add replica operator.
+maxRebalanceReplica = 2
+
+# The maximum count of replica kind operator.
+maxScheduleReplica = 8
+
 [metric]
 # The prometheus pushgateway address
 addr = "pushgateway:9091"

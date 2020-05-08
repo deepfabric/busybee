@@ -1014,7 +1014,7 @@ func TestTransaction(t *testing.T) {
 	assert.Equal(t, uint64(0), m["step_end_else"], "TestTransaction failed")
 
 	<-changed
-	time.Sleep(time.Second)
+	time.Sleep(time.Second * 10)
 	states, err = ng.InstanceCountState(wid)
 	assert.NoError(t, err, "TestTransaction failed")
 	m = make(map[string]uint64)

@@ -19,7 +19,9 @@ var (
 // AsyncConsumer async consumer
 type AsyncConsumer interface {
 	// Start start the consumer
-	Start(expect uint64, filter func([]byte) (interface{}, bool), cb func(uint32, []interface{}) (int, error))
+	Start(cb func(uint32, uint64, [][]byte))
+	// Commit commit completed offset
+	Commit(map[uint32]uint64) error
 	// Stop stop consumer
 	Stop()
 }
@@ -64,9 +66,13 @@ func newAsyncConsumerWithGroup(tid uint64, store storage.Storage, consumer []byt
 }
 
 // Start start the consumer
-func (c *asyncConsumer) Start(expect uint64, filter func([]byte) (interface{}, bool), cb func(uint32, []interface{}) (int, error)) {
+func (c *asyncConsumer) Start(cb func(uint32, uint64, [][]byte)) {
 	c.Lock()
 	defer c.Unlock()
+
+	if c.running {
+		return
+	}
 
 	c.running = true
 	for i := uint32(0); i < c.state.Partitions; i++ {
@@ -80,96 +86,70 @@ func (c *asyncConsumer) Start(expect uint64, filter func([]byte) (interface{}, b
 			key := storage.PartitionKey(c.tid, p)
 			resp := &rpcpb.QueueFetchResponse{}
 			from := uint64(0)
-			var values []interface{}
 
 			for {
-				values = values[:0]
-				for {
-					if c.stopped() {
-						logger.Infof("%s stopped", tag)
-						return
-					}
-
-					req := rpcpb.AcquireQueueScanRequest()
-					req.Key = key
-					req.CompletedOffset = from
-					req.Count = scanSize
-					req.Consumer = c.consumer
-					value, err := c.store.ExecCommandWithGroup(req, c.group)
-					if err != nil {
-						metric.IncStorageFailed()
-						logger.Errorf("%s failed with %+v, retry after 10s",
-							tag,
-							err)
-						time.Sleep(time.Second * 10)
-						continue
-					}
-
-					resp.Reset()
-					protoc.MustUnmarshal(resp, value)
-
-					// no new data and no fetched data, re-fetch after 1 seconds
-					if len(resp.Items) == 0 && len(values) == 0 {
-						time.Sleep(time.Second)
-						continue
-					}
-
-					for _, value := range resp.Items {
-						if v, ok := filter(value); ok {
-							values = append(values, v)
-						}
-					}
-
-					if resp.LastOffset > 0 {
-						from = resp.LastOffset
-					}
-
-					if uint64(len(values)) >= expect || // fetched >= expect
-						(len(resp.Items) == 0 && len(values) > 0) { // no new data
-
-						for {
-							if c.stopped() {
-								logger.Infof("%s stopped", tag)
-								return
-							}
-
-							completedIndex, err := cb(p, values)
-							if err != nil {
-								logger.Errorf("%s handle completed at %d, failed with %+v",
-									tag,
-									completedIndex,
-									err)
-								values = values[completedIndex+1:]
-								continue
-							}
-
-							break
-						}
-
-						err := c.commit(p, from)
-						if err != nil {
-							// just log it, ant commit next time
-							logger.Errorf("%s commit completed offset %d failed with %+v",
-								tag,
-								resp.LastOffset,
-								err)
-						}
-						break
-					}
+				if c.stopped() {
+					logger.Infof("%s stopped", tag)
+					return
 				}
+
+				req := rpcpb.AcquireQueueScanRequest()
+				req.Key = key
+				req.CompletedOffset = from
+				req.Count = scanSize
+				req.Consumer = c.consumer
+				value, err := c.store.ExecCommandWithGroup(req, c.group)
+				if err != nil {
+					metric.IncStorageFailed()
+					logger.Errorf("%s failed with %+v, retry after 10s",
+						tag,
+						err)
+					time.Sleep(time.Second * 10)
+					continue
+				}
+
+				resp.Reset()
+				protoc.MustUnmarshal(resp, value)
+
+				if len(resp.Items) == 0 {
+					cb(p, resp.LastOffset, resp.Items)
+					time.Sleep(time.Second)
+					continue
+				}
+
+				cb(p, resp.LastOffset, resp.Items)
+				from = resp.LastOffset
 			}
 		}(i)
 	}
 }
 
-func (c *asyncConsumer) commit(partition uint32, completed uint64) error {
-	req := rpcpb.AcquireQueueCommitRequest()
-	req.ID = c.tid
-	req.Consumer = c.consumer
-	req.Partition = partition
-	req.CompletedOffset = completed
+func (c *asyncConsumer) Commit(completed map[uint32]uint64) error {
+	if len(completed) == 0 {
+		return nil
+	}
 
-	_, err := c.store.ExecCommandWithGroup(req, c.group)
+	var err error
+	var wg sync.WaitGroup
+	wg.Add(len(completed))
+
+	cb := func(arg interface{}, data []byte, rerr error) {
+		if rerr != nil {
+			err = rerr
+		}
+		wg.Done()
+	}
+
+	for p, offset := range completed {
+		req := rpcpb.AcquireQueueCommitRequest()
+		req.ID = c.tid
+		req.Consumer = c.consumer
+		req.Partition = p
+		req.CompletedOffset = offset
+		c.store.AsyncExecCommandWithGroup(req, c.group, cb, nil)
+	}
+
+	wg.Wait()
 	return err
 }
 
