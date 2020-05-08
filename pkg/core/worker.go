@@ -19,21 +19,20 @@ import (
 )
 
 var (
-	eventsCacheSize    = uint64(10000)
-	handleEventBatch   = uint64(256)
+	eventsCacheSize    = uint64(10240)
+	handleEventBatch   = uint64(1024)
 	maxTriggerCount    = 256
 	ttlTriggerInterval = time.Minute
 )
 
 const (
 	stopAction = iota
+	initAction
 	timerAction
 	userEventAction
 	updateWorkflowAction
 	updateCrowdAction
-	flushAction
 	checkTTLEventAction
-	initAction
 )
 
 type directCtx struct {
@@ -223,15 +222,6 @@ func (w *stateWorker) checkTTLTimeout(arg interface{}) {
 	})
 }
 
-func (w *stateWorker) flushEvent() {
-	if w.queue.Len() > 0 || len(w.tran.userEvents) > 0 {
-		w.queue.Put(item{
-			action: flushAction,
-		})
-
-	}
-}
-
 func (w *stateWorker) onEvent(p uint32, offset uint64, event *metapb.Event) {
 	if w.isStopped() {
 		return
@@ -314,58 +304,67 @@ func (w *stateWorker) handleEvent(completedCB func(uint32, uint64)) bool {
 	w.buf.Clear()
 	w.tran.start(w)
 
-	size := w.queue.Len()
-	if size >= handleEventBatch {
-		size = handleEventBatch
-	}
-
-	for i := uint64(0); i < size; i++ {
-		v, err := w.queue.Get()
-		if err != nil {
-			logger.Fatalf("BUG: queue can not disposed, but %+v", err)
+	for {
+		size := w.queue.Len()
+		if size >= handleEventBatch {
+			size = handleEventBatch
 		}
 
-		value := v.(item)
-		w.setOffset(value.partition, value.offset)
+		for i := uint64(0); i < size; i++ {
+			v, err := w.queue.Get()
+			if err != nil {
+				logger.Fatalf("BUG: queue can not disposed, but %+v", err)
+			}
 
-		switch value.action {
-		case stopAction:
-			w.doClose()
-			return false
-		case initAction:
-			w.checkLastTranscation()
-			logger.Infof("worker %s init with %d crowd, [%d, %d]",
-				w.key,
-				w.totalCrowds.GetCardinality(),
-				w.totalCrowds.Minimum(),
-				w.totalCrowds.Maximum())
-		case timerAction:
-			w.tran.doStepTimerEvent(value)
-			w.completeTransaction(completedCB)
-		case checkTTLEventAction:
-			w.doCheckStepTTLTimeout(value.value.(int))
-			w.completeTransaction(completedCB)
-		case userEventAction:
-			w.tran.doStepUserEvent(value.value.(metapb.UserEvent))
-		case flushAction:
-			w.tran.doStepFlushUserEvents()
-			w.completeTransaction(completedCB)
-		case updateCrowdAction:
-			w.tran.doStepFlushUserEvents()
-			w.completeTransaction(completedCB)
+			value := v.(item)
+			w.setOffset(value.partition, value.offset)
 
-			w.doUpdateCrowd(value.value.([]byte))
-			w.tran.start(w)
-		case updateWorkflowAction:
-			w.tran.doStepFlushUserEvents()
-			w.completeTransaction(completedCB)
+			switch value.action {
+			case stopAction:
+				w.doClose()
+				return false
+			case initAction:
+				w.checkLastTranscation()
+				logger.Infof("worker %s init with %d crowd, [%d, %d]",
+					w.key,
+					w.totalCrowds.GetCardinality(),
+					w.totalCrowds.Minimum(),
+					w.totalCrowds.Maximum())
+			case timerAction:
+				w.tran.doStepTimerEvent(value)
+				w.completeTransaction(completedCB)
+			case checkTTLEventAction:
+				w.doCheckStepTTLTimeout(value.value.(int))
+				w.completeTransaction(completedCB)
+			case userEventAction:
+				w.tran.doStepUserEvent(value.value.(metapb.UserEvent))
+			case updateCrowdAction:
+				w.flushUserEvent(completedCB)
 
-			w.doUpdateWorkflow(value.value.(metapb.Workflow))
-			w.tran.start(w)
+				w.doUpdateCrowd(value.value.([]byte))
+				w.tran.start(w)
+			case updateWorkflowAction:
+				w.flushUserEvent(completedCB)
+
+				w.doUpdateWorkflow(value.value.(metapb.Workflow))
+				w.tran.start(w)
+			}
+		}
+
+		if w.queue.Len() == 0 || uint64(len(w.tran.userEvents)) >= handleEventBatch {
+			break
 		}
 	}
 
+	w.flushUserEvent(completedCB)
 	return true
+}
+
+func (w *stateWorker) flushUserEvent(completedCB func(uint32, uint64)) {
+	if len(w.tran.userEvents) > 0 {
+		w.tran.doStepFlushUserEvents()
+		w.completeTransaction(completedCB)
+	}
 }
 
 func (w *stateWorker) completeTransaction(completedCB func(uint32, uint64)) {

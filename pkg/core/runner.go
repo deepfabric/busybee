@@ -198,8 +198,7 @@ func (wr *workerRunner) startQueueConsumer() error {
 	wr.consumer = consumer
 	wr.consumer.Start(wr.onEvent)
 	logger.Infof("%s consumer started",
-		wr.key,
-		err)
+		wr.key)
 	return nil
 }
 
@@ -226,14 +225,6 @@ func (wr *workerRunner) onEvent(p uint32, lastOffset uint64, items [][]byte) {
 
 	if wr.stopped {
 		return
-	}
-
-	if len(items) == 0 {
-		for _, w := range wr.workers {
-			if !w.isStopped() {
-				w.flushEvent()
-			}
-		}
 	}
 
 	offset := lastOffset - uint64(len(items)) + 1

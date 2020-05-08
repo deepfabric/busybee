@@ -112,7 +112,6 @@ func (c *asyncConsumer) Start(cb func(uint32, uint64, [][]byte)) {
 				protoc.MustUnmarshal(resp, value)
 
 				if len(resp.Items) == 0 {
-					cb(p, resp.LastOffset, resp.Items)
 					time.Sleep(time.Second)
 					continue
 				}
