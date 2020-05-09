@@ -50,7 +50,6 @@ type workerRunner struct {
 	stopped     bool
 	eng         *engine
 	workers     map[string]*stateWorker
-	events      map[string][]metapb.Event
 	consumer    queue.AsyncConsumer
 
 	completedOffsets map[uint32]uint64
@@ -271,6 +270,7 @@ func (wr *workerRunner) run() {
 		time.Sleep(time.Second * 5)
 	}
 
+	var removedWorkers []string
 	hasEvent := true
 	for {
 		if !hasEvent {
@@ -285,20 +285,28 @@ func (wr *workerRunner) run() {
 		wr.RLock()
 		for key, w := range wr.workers {
 			if w.isStopped() {
-				delete(wr.workers, key)
-				delete(wr.events, key)
+				removedWorkers = append(removedWorkers, key)
 			} else if w.handleEvent(wr.completed) {
 				hasEvent = true
 			}
 		}
 
-		if len(wr.workers) == 0 && wr.stopped {
+		if len(wr.workers)-len(removedWorkers) == 0 && wr.stopped {
 			wr.RUnlock()
-
 			logger.Infof("%s stopped", wr.key)
 			return
 		}
 		wr.RUnlock()
+
+		if len(removedWorkers) > 0 {
+			wr.Lock()
+			for _, key := range removedWorkers {
+				delete(wr.workers, key)
+			}
+			wr.Unlock()
+
+			removedWorkers = removedWorkers[:0]
+		}
 
 		if len(wr.completedOffsets) > 0 {
 			err := wr.consumer.Commit(wr.completedOffsets)

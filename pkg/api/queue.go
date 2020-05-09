@@ -91,7 +91,7 @@ func (q *tenantQueue) stop() {
 
 func (q *tenantQueue) startPartition(partition uint32, pq *task.Queue) {
 	q.runner.RunCancelableTask(func(c context.Context) {
-		items := make([]interface{}, 16, 16)
+		items := make([]interface{}, 64, 64)
 		var events [][]byte
 
 		for {
@@ -99,7 +99,7 @@ func (q *tenantQueue) startPartition(partition uint32, pq *task.Queue) {
 			case <-c.Done():
 				return
 			default:
-				n, err := pq.Get(16, items)
+				n, err := pq.Get(64, items)
 				if err != nil {
 					log.Fatalf("BUG: queue must closed by self goroutine")
 				}
