@@ -730,40 +730,25 @@ func (eng *engine) loadRunningInstance(id uint64) (*metapb.WorkflowInstance, err
 
 func (eng *engine) getTenantRunnerByState(tid uint64, expects ...metapb.WorkerRunnerState) ([]metapb.WorkerRunner, error) {
 	tenant := eng.mustDoLoadTenantMetadata(tid)
-	start := uint64(0)
-	end := storage.TenantRunnerMetadataKey(tid, tenant.Runners)
-
 	var runners []metapb.WorkerRunner
-
-	for {
-		_, values, err := eng.store.ScanWithGroup(storage.TenantRunnerMetadataKey(tid, start), end,
-			8, metapb.TenantRunnerGroup)
+	for i := uint64(0); i < tenant.Runners; i++ {
+		value, err := eng.store.GetWithGroup(storage.TenantRunnerMetadataKey(tid, i))
 		if err != nil {
 			metric.IncStorageFailed()
 			return nil, err
 		}
 
 		if len(values) == 0 {
-			break
+			logger.Fatalf("BUG: missing tenant %d runner %d", tid, i)
 		}
 
-		for _, value := range values {
-			state := metapb.WorkerRunner{}
-			protoc.MustUnmarshal(&state, value)
-
-			for _, expect := range expects {
-				if state.State == expect {
-					runners = append(runners, state)
-					break
-				}
+		state := metapb.WorkerRunner{}
+		protoc.MustUnmarshal(&state, value)
+		for _, expect := range expects {
+			if state.State == expect {
+				runners = append(runners, state)
+				break
 			}
-
-			start = state.Index
-		}
-
-		start++
-		if start >= tenant.Runners {
-			break
 		}
 	}
 
