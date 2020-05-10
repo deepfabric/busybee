@@ -732,13 +732,13 @@ func (eng *engine) getTenantRunnerByState(tid uint64, expects ...metapb.WorkerRu
 	tenant := eng.mustDoLoadTenantMetadata(tid)
 	var runners []metapb.WorkerRunner
 	for i := uint64(0); i < tenant.Runners; i++ {
-		value, err := eng.store.GetWithGroup(storage.TenantRunnerMetadataKey(tid, i))
+		value, err := eng.store.GetWithGroup(storage.TenantRunnerMetadataKey(tid, i), metapb.TenantRunnerGroup)
 		if err != nil {
 			metric.IncStorageFailed()
 			return nil, err
 		}
 
-		if len(values) == 0 {
+		if len(value) == 0 {
 			logger.Fatalf("BUG: missing tenant %d runner %d", tid, i)
 		}
 
