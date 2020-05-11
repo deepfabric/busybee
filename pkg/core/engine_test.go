@@ -153,6 +153,61 @@ func TestStopInstanceAndRestart(t *testing.T) {
 	}
 }
 
+func TestGetInstanceWorkers(t *testing.T) {
+	store, deferFunc := storage.NewTestStorage(t, false)
+	defer deferFunc()
+
+	ng, err := NewEngine(store, notify.NewQueueBasedNotifier(store))
+	assert.NoError(t, err, "TestGetInstanceWorkers failed")
+	assert.NoError(t, ng.Start(), "TestGetInstanceWorkers failed")
+	defer ng.Stop()
+
+	wid := uint64(101)
+	tid := uint64(100)
+	op := uint64(0)
+	runners := uint64(4)
+
+	metadata := metapb.Tenant{
+		Runners: runners,
+	}
+	err = store.Set(storage.TenantMetadataKey(tid), protoc.MustMarshal(&metadata))
+	assert.NoError(t, err, "TestGetInstanceWorkers failed")
+
+	for i := uint32(0); i < 100; i++ {
+		op++
+		err := store.Set(storage.TenantRunnerWorkerKey(tid, op%runners, wid, i),
+			protoc.MustMarshal(&metapb.WorkflowInstanceWorkerState{
+				TenantID:   tid,
+				WorkflowID: wid,
+				Index:      i,
+				Runner:     op % runners,
+			}))
+		assert.NoError(t, err, "TestGetInstanceWorkers failed")
+	}
+
+	err = store.Set(storage.TenantRunnerWorkerKey(tid, 0, wid+1, 1),
+		protoc.MustMarshal(&metapb.WorkflowInstanceWorkerState{
+			TenantID:   tid,
+			WorkflowID: wid + 1,
+			Index:      1,
+			Runner:     op % runners,
+		}))
+	assert.NoError(t, err, "TestGetInstanceWorkers failed")
+
+	shards, err := ng.(*engine).getInstanceWorkersWithGroup(&metapb.WorkflowInstance{
+		Snapshot: metapb.Workflow{
+			ID:       wid,
+			TenantID: tid,
+		},
+	}, metapb.DefaultGroup)
+	assert.NoError(t, err, "TestGetInstanceWorkers failed")
+	assert.Equal(t, 100, len(shards), "TestGetInstanceWorkers failed")
+
+	for idx, shard := range shards {
+		assert.Equal(t, uint32(idx), shard.Index, "TestGetInstanceWorkers failed")
+	}
+}
+
 func TestStartInstance(t *testing.T) {
 	store, deferFunc := storage.NewTestStorage(t, false)
 	defer deferFunc()

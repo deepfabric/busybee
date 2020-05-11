@@ -20,7 +20,7 @@ func MustParseBMTo(data []byte, bm *roaring.Bitmap) {
 	if err != nil {
 		buf := make([]byte, 4096)
 		n := runtime.Stack(buf, true)
-		log.Fatalf("BUG: parse bm failed with %+v \n %s", err, string(buf[:n]))
+		log.Fatalf("BUG: parse bm %+v failed with %+v \n %s", data, err, string(buf[:n]))
 	}
 }
 

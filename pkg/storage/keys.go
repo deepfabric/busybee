@@ -138,6 +138,28 @@ func TenantRunnerWorkerMaxKey(tid uint64, runner uint64) []byte {
 	return key
 }
 
+// TenantRunnerWorkerInstanceMinKey tenant runner worker min key
+func TenantRunnerWorkerInstanceMinKey(tid uint64, runner uint64, wid uint64) []byte {
+	key := make([]byte, 26, 26)
+	key[0] = tenantRunnerPrefix
+	goetty.Uint64ToBytesTo(tid, key[1:])
+	goetty.Uint64ToBytesTo(runner, key[9:])
+	key[17] = tenantRunnerWorkerPrefix
+	goetty.Uint64ToBytesTo(wid, key[18:])
+	return key
+}
+
+// TenantRunnerWorkerInstanceMaxKey tenant runner worker min key
+func TenantRunnerWorkerInstanceMaxKey(tid uint64, runner uint64, wid uint64) []byte {
+	key := make([]byte, 26, 26)
+	key[0] = tenantRunnerPrefix
+	goetty.Uint64ToBytesTo(tid, key[1:])
+	goetty.Uint64ToBytesTo(runner, key[9:])
+	key[17] = tenantRunnerWorkerPrefix
+	goetty.Uint64ToBytesTo(wid+1, key[18:])
+	return key
+}
+
 // TenantRunnerWorkerKey tenant runner worker key
 func TenantRunnerWorkerKey(tid uint64, runner uint64, wid uint64, worker uint32) []byte {
 	key := make([]byte, 30, 30)

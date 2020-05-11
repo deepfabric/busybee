@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"math"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -756,16 +755,19 @@ func (eng *engine) getTenantRunnerByState(tid uint64, expects ...metapb.WorkerRu
 }
 
 func (eng *engine) getInstanceWorkers(instance *metapb.WorkflowInstance) ([]metapb.WorkflowInstanceWorkerState, error) {
+	return eng.getInstanceWorkersWithGroup(instance, metapb.TenantRunnerGroup)
+}
+
+func (eng *engine) getInstanceWorkersWithGroup(instance *metapb.WorkflowInstance, group metapb.Group) ([]metapb.WorkflowInstanceWorkerState, error) {
 	tenant := eng.mustDoLoadTenantMetadata(instance.Snapshot.TenantID)
 
 	var shards []metapb.WorkflowInstanceWorkerState
 	for i := uint64(0); i < tenant.Runners; i++ {
-		from := uint32(0)
-		end := storage.TenantRunnerWorkerKey(instance.Snapshot.TenantID, i, instance.Snapshot.ID, math.MaxUint32)
+		startKey := storage.TenantRunnerWorkerInstanceMinKey(instance.Snapshot.TenantID, i, instance.Snapshot.ID)
+		end := storage.TenantRunnerWorkerInstanceMaxKey(instance.Snapshot.TenantID, i, instance.Snapshot.ID)
 
 		for {
-			startKey := storage.TenantRunnerWorkerKey(instance.Snapshot.TenantID, i, instance.Snapshot.ID, from)
-			_, values, err := eng.store.ScanWithGroup(startKey, end, 4, metapb.TenantRunnerGroup)
+			_, values, err := eng.store.ScanWithGroup(startKey, end, 4, group)
 			if err != nil {
 				return nil, err
 			}
@@ -774,14 +776,16 @@ func (eng *engine) getInstanceWorkers(instance *metapb.WorkflowInstance) ([]meta
 				break
 			}
 
+			last := uint32(0)
 			for _, value := range values {
 				shard := metapb.WorkflowInstanceWorkerState{}
 				protoc.MustUnmarshal(&shard, value)
 				shards = append(shards, shard)
-				from = shard.Index
+				last = shard.Index
 			}
 
-			from++
+			last++
+			startKey = storage.TenantRunnerWorkerKey(instance.Snapshot.TenantID, i, instance.Snapshot.ID, last)
 		}
 	}
 

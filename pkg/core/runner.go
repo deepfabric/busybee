@@ -165,11 +165,19 @@ func (wr *workerRunner) loadInstanceShardStates() (int, error) {
 					wr.key)
 			}
 
-			w, err := newStateWorker(workerKey(state), state, wr.eng)
+			wkey := workerKey(state)
+			w, err := newStateWorker(wkey, state, wr.eng)
 			if err != nil {
+				logger.Infof("%s loaded %s failed with %+v",
+					wr.key,
+					wkey,
+					err)
 				return 0, err
 			}
 
+			logger.Infof("%s loaded %s",
+				wr.key,
+				wkey)
 			wr.addWorker(w)
 
 			if idx == len(values)-1 {
