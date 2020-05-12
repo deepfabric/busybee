@@ -120,6 +120,49 @@ func TestGetAndSetAndDelete(t *testing.T) {
 	assert.Equal(t, "", string(resp.BytesResp.Value), "TestGetAndSetAndDelete failed")
 }
 
+func TestSetTTL(t *testing.T) {
+	_, deferFunc := newTestServer(t)
+	defer deferFunc()
+
+	conn := createConn(t)
+	defer conn.Close()
+
+	key := []byte("key")
+	value := []byte("value")
+
+	req := rpcpb.AcquireRequest()
+	req.Type = rpcpb.Set
+	req.Set.Key = key
+	req.Set.Value = value
+	req.Set.TTL = 1
+	assert.NoError(t, conn.WriteAndFlush(req), "TestSetTTL failed")
+	data, err := conn.ReadTimeout(time.Second * 10)
+	assert.NoError(t, err, "TestSetTTL failed")
+	resp := data.(*rpcpb.Response)
+	assert.Empty(t, resp.Error.Error, "TestSetTTL failed")
+
+	req = rpcpb.AcquireRequest()
+	req.Type = rpcpb.Get
+	req.Get.Key = key
+	assert.NoError(t, conn.WriteAndFlush(req), "TestSetTTL failed")
+	data, err = conn.ReadTimeout(time.Second * 10)
+	assert.NoError(t, err, "TestSetTTL failed")
+	resp = data.(*rpcpb.Response)
+	assert.Empty(t, resp.Error.Error, "TestSetTTL failed")
+	assert.Equal(t, string(value), string(resp.BytesResp.Value), "TestSetTTL failed")
+
+	time.Sleep(time.Second)
+	req = rpcpb.AcquireRequest()
+	req.Type = rpcpb.Get
+	req.Get.Key = key
+	assert.NoError(t, conn.WriteAndFlush(req), "TestSetTTL failed")
+	data, err = conn.ReadTimeout(time.Second * 10)
+	assert.NoError(t, err, "TestSetTTL failed")
+	resp = data.(*rpcpb.Response)
+	assert.Empty(t, resp.Error.Error, "TestSetTTL failed")
+	assert.Empty(t, resp.BytesResp.Value, "TestSetTTL failed")
+}
+
 func TestBMCreate(t *testing.T) {
 	_, deferFunc := newTestServer(t)
 	defer deferFunc()

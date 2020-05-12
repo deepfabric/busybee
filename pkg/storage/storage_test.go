@@ -29,6 +29,35 @@ func TestSetAndGet(t *testing.T) {
 	assert.Equal(t, string(value), string(data), "TestSetAndGet failed")
 }
 
+func TestSetWithTTL(t *testing.T) {
+	store, deferFunc := NewTestStorage(t, true)
+	defer deferFunc()
+
+	key := []byte("key1")
+	value := []byte("value1")
+
+	err := store.SetWithTTL(key, value, 0)
+	assert.NoError(t, err, "TestSetWithTTL failed")
+
+	data, err := store.Get(key)
+	assert.NoError(t, err, "TestSetWithTTL failed")
+	assert.NotEmpty(t, data, "TestSetWithTTL failed")
+
+	_, values, err := store.Scan(key, []byte("key2"), 1)
+	assert.NoError(t, err, "TestSetWithTTL failed")
+	assert.NotEmpty(t, values, "TestSetWithTTL failed")
+
+	time.Sleep(time.Second)
+
+	data, err = store.Get(key)
+	assert.NoError(t, err, "TestSetWithTTL failed")
+	assert.NotEmpty(t, data, "TestSetWithTTL failed")
+
+	_, values, err = store.Scan(key, []byte("key2"), 1)
+	assert.NoError(t, err, "TestSetWithTTL failed")
+	assert.NotEmpty(t, values, "TestSetWithTTL failed")
+}
+
 func TestSetIf(t *testing.T) {
 	store, deferFunc := NewTestStorage(t, true)
 	defer deferFunc()
