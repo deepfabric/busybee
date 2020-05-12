@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -27,6 +28,7 @@ var (
 	ckUser     = flag.String("ck-user", "", "ck user")
 	ckPassword = flag.String("ck-pass", "", "ck pass")
 	data       = flag.String("data", "", "data path")
+	stores     = flag.Uint64("stores", 1, "Number of store count.")
 	wait       = flag.Int("wait", 0, "wait")
 	version    = flag.Bool("version", false, "Show version info")
 )
@@ -56,14 +58,20 @@ func main() {
 		}()
 	}
 
-	nemoStorage, err := nemo.NewStorage(filepath.Join(*data, "nemo"))
-	if err != nil {
-		log.Fatalf("create nemo failed with %+v", err)
+	var metaStores []beehiveStorage.MetadataStorage
+	var dataStores []beehiveStorage.DataStorage
+
+	for i := uint64(0); i < *stores; i++ {
+		store, err := nemo.NewStorage(filepath.Join(*data, fmt.Sprintf("nemo-%d", i)))
+		if err != nil {
+			log.Fatalf("create nemo failed with %+v", err)
+		}
+
+		metaStores = append(metaStores, store)
+		dataStores = append(dataStores, store)
 	}
 
-	store, err := storage.NewStorage(*data,
-		[]beehiveStorage.MetadataStorage{nemoStorage},
-		[]beehiveStorage.DataStorage{nemoStorage})
+	store, err := storage.NewStorage(*data, metaStores, dataStores)
 	if err != nil {
 		log.Fatalf("create storage failed with %+v", err)
 	}
