@@ -22,7 +22,7 @@ var (
 	eventsCacheSize    = uint64(4096)
 	handleEventBatch   = uint64(1024)
 	maxTriggerCount    = 256
-	ttlTriggerInterval = time.Minute
+	ttlTriggerInterval = time.Second
 )
 
 const (
@@ -85,7 +85,6 @@ type stateWorker struct {
 	queueGetStateKey         []byte
 
 	tempBM       *roaring.Bitmap
-	tempEvents   []metapb.UserEvent
 	tempNotifies []metapb.Notify
 
 	tran    *transaction
@@ -647,7 +646,6 @@ func (w *stateWorker) doCheckStepTTLTimeout(idx int) {
 
 	count := 0
 	itr := w.tempBM.Iterator()
-	w.tempEvents = w.tempEvents[:0]
 	for {
 		if !itr.HasNext() {
 			break
