@@ -13,6 +13,7 @@ func init() {
 	p.MustRegister(requestResultCounter)
 	p.MustRegister(storageFailedCounter)
 	p.MustRegister(workerFailedCounter)
+	p.MustRegister(userMovedCounter)
 
 	p.MustRegister(inputEventQueueSizeGauge)
 	p.MustRegister(outputEventQueueSizeGauge)

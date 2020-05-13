@@ -205,7 +205,10 @@ func (tran *transaction) onLoadKey(arg interface{}, value []byte, err error) {
 	completed := atomic.AddUint64(&tran.completed, 1)
 
 	if err != nil {
-		logger.Errorf("worker %s pre load %+v failed with %+v", arg, err)
+		logger.Errorf("worker %s pre load %+v failed with %+v",
+			tran.w.key,
+			arg,
+			err)
 	} else {
 		resp := rpcpb.AcquireBytesResponse()
 		protoc.MustUnmarshal(resp, value)
