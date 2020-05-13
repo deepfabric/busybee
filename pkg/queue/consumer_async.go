@@ -30,6 +30,7 @@ type asyncConsumer struct {
 	sync.RWMutex
 
 	tid      uint64
+	tenant   string
 	group    metapb.Group
 	store    storage.Storage
 	consumer []byte
@@ -58,6 +59,7 @@ func newAsyncConsumerWithGroup(tid uint64, store storage.Storage, consumer []byt
 
 	return &asyncConsumer{
 		tid:      tid,
+		tenant:   fmt.Sprintf("%d", tid),
 		group:    group,
 		store:    store,
 		consumer: consumer,
@@ -118,6 +120,7 @@ func (c *asyncConsumer) Start(cb func(uint32, uint64, [][]byte)) {
 
 				cb(p, resp.LastOffset, resp.Items)
 				from = resp.LastOffset
+				metric.IncEventHandled(len(resp.Items), c.tenant, c.group)
 			}
 		}(i)
 	}

@@ -38,6 +38,14 @@ var (
 			Help:      "Total number of workflow worker step failed.",
 		})
 
+	userMovedCounter = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "busybee",
+			Subsystem: "engine",
+			Name:      "user_moved_total",
+			Help:      "Total number of users that moved to next workflow step.",
+		}, []string{"tenant"})
+
 	inputEventAddedCounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "busybee",
@@ -104,6 +112,11 @@ func IncEventHandled(value int, tenant string, group metapb.Group) {
 	case metapb.TenantOutputGroup:
 		outputEventHandledCounter.WithLabelValues(tenant).Add(float64(value))
 	}
+}
+
+// IncUserMoved inc user moved
+func IncUserMoved(value uint64, tenant string) {
+	userMovedCounter.WithLabelValues(tenant).Add(float64(value))
 }
 
 // IncStorageFailed storage failed

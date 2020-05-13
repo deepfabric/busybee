@@ -19,7 +19,7 @@ import (
 )
 
 var (
-	eventsCacheSize    = uint64(10240)
+	eventsCacheSize    = uint64(4096)
 	handleEventBatch   = uint64(1024)
 	maxTriggerCount    = 256
 	ttlTriggerInterval = time.Minute
@@ -483,7 +483,7 @@ func (w *stateWorker) execNotify(tran *transaction) error {
 	logger.Infof("worker %s moved %d",
 		w.key,
 		totalMoved)
-
+	metric.IncUserMoved(totalMoved, w.tenant)
 	return nil
 }
 

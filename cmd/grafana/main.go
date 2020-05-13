@@ -19,8 +19,8 @@ import (
 )
 
 var (
-	addr   = flag.String("grafana", "http://172.21.128.1:3000", "Grafana api address")
-	key    = flag.String("key", "eyJrIjoiYlBVYVFyNGxDRllBNVAwT0x4Sk9Xem1uRWpkQXBXcjkiLCJuIjoidGVzdCIsImlkIjoxfQ==", "Grafana api key")
+	addr   = flag.String("grafana", "http://172.24.176.1:3000", "Grafana api address")
+	key    = flag.String("key", "eyJrIjoiSjFNWWQxY2JDaW1meW52ckd5MlRJd211MU5sYnZ6TngiLCJuIjoidGVzdCIsImlkIjoxfQ==", "Grafana api key")
 	folder = flag.String("folder", "Busybee", "Busybee dashboard folder")
 	ds     = flag.String("ds", "Prometheus", "Prometheus datasource name")
 )
@@ -82,6 +82,7 @@ func createDashboard(cli *grabana.Client, f *grabana.Folder) error {
 			interval.Values([]string{"30s", "1m", "5m", "10m", "30m", "1h", "6h", "12h"}),
 		),
 		workflowRow(),
+		engineRow(),
 		requestRow(),
 		errorRow(),
 		eventRow())
@@ -132,6 +133,16 @@ func eventRow() grabana.DashboardBuilderOption {
 		withGraph("Output notify handled", height, 3,
 			"sum(rate(busybee_event_output_handled_total[$interval]))",
 			"Output handled"),
+	)
+}
+
+func engineRow() grabana.DashboardBuilderOption {
+	height := 400
+	return grabana.Row(
+		"Tenant workflow engine status",
+		withGraph("Output notify handled", height, 12,
+			"sum(rate(busybee_engine_user_moved_total[$interval])) by (tenant)",
+			"User moved"),
 	)
 }
 
