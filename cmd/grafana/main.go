@@ -140,7 +140,7 @@ func engineRow() grabana.DashboardBuilderOption {
 	height := 400
 	return grabana.Row(
 		"Tenant workflow engine status",
-		withGraph("Output notify handled", height, 12,
+		withGraph("User moved", height, 12,
 			"sum(rate(busybee_engine_user_moved_total[$interval])) by (tenant)",
 			"User moved"),
 	)
