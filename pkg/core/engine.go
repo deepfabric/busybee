@@ -344,6 +344,8 @@ func (eng *engine) StartInstance(workflow metapb.Workflow, loader metapb.BMLoade
 			err)
 		return 0, err
 	}
+	logger.Infof("workflow-%d check excution succeed",
+		workflow.ID)
 
 	if err := eng.doCheckTenant(workflow.TenantID); err != nil {
 		logger.Errorf("workflow-%d start instance failed with %+v",
@@ -351,6 +353,8 @@ func (eng *engine) StartInstance(workflow metapb.Workflow, loader metapb.BMLoade
 			err)
 		return 0, err
 	}
+	logger.Infof("workflow-%d check tenant info succeed",
+		workflow.ID)
 
 	if err := eng.doCheckTenantRunner(workflow.TenantID); err != nil {
 		logger.Errorf("workflow-%d start instance failed with %+v",
@@ -358,6 +362,8 @@ func (eng *engine) StartInstance(workflow metapb.Workflow, loader metapb.BMLoade
 			err)
 		return 0, err
 	}
+	logger.Infof("workflow-%d check tenant runner succeed",
+		workflow.ID)
 
 	old, err := eng.loadInstance(workflow.ID)
 	if err != nil {
@@ -996,7 +1002,7 @@ func (eng *engine) doBootstrapWorker(state metapb.WorkflowInstanceWorkerState) {
 			continue
 		}
 
-		value.(*workerRunner).addWorker(w)
+		value.(*workerRunner).addWorker(w.key, w)
 		if state.StopAt != 0 {
 			after := time.Second * time.Duration(state.StopAt-now)
 			util.DefaultTimeoutWheel().Schedule(after, eng.stopWorker, w)
@@ -1031,9 +1037,11 @@ func (eng *engine) doStartInstanceEvent(instance *metapb.WorkflowInstance) {
 			eng.addToRetryNewInstance, instance)
 		return
 	}
-	logger.Infof("starting workflow-%d load bitmap completed with %d",
+	logger.Infof("starting workflow-%d load bitmap completed with %d, [%d, %d]",
 		instance.Snapshot.ID,
-		bm.GetCardinality())
+		bm.GetCardinality(),
+		bm.Minimum(),
+		bm.Maximum())
 
 	// load all runners, and alloc worker to these runners using RR balance
 	runners, err := eng.getTenantRunnerByState(instance.Snapshot.TenantID, metapb.WRRunning)
@@ -1053,7 +1061,14 @@ func (eng *engine) doStartInstanceEvent(instance *metapb.WorkflowInstance) {
 		len(runners))
 
 	bms := bbutil.BMSplit(bm, maxPerWorker)
+	logger.Infof("starting workflow-%d %d shards on %d runners",
+		instance.Snapshot.ID,
+		len(bms),
+		len(runners))
+
 	completed := &actionCompleted{0, uint64(len(bms))}
+	logger.Infof("starting workflow-%d completed bimap split",
+		instance.Snapshot.ID)
 	for index, bm := range bms {
 		state := metapb.WorkflowInstanceWorkerState{}
 		state.Runner = uint64(index % len(runners))
@@ -1075,7 +1090,13 @@ func (eng *engine) doStartInstanceEvent(instance *metapb.WorkflowInstance) {
 		state.States[0].TotalCrowd = bm.GetCardinality()
 		state.States[0].LoaderMeta = bbutil.MustMarshalBM(bm)
 
+		logger.Infof("starting workflow-%d create %d shard",
+			instance.Snapshot.ID,
+			index)
 		eng.addCreateWorkAction(createWorkerAction{false, state, completed})
+		logger.Infof("starting workflow-%d after screate %d shard",
+			instance.Snapshot.ID,
+			index)
 	}
 }
 

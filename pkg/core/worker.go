@@ -19,10 +19,10 @@ import (
 )
 
 var (
-	eventsCacheSize    = uint64(4096)
+	eventsCacheSize    = uint64(10240)
 	handleEventBatch   = uint64(1024)
 	maxTriggerCount    = 256
-	ttlTriggerInterval = time.Second
+	ttlTriggerInterval = time.Second * 5
 )
 
 const (
@@ -162,7 +162,7 @@ func (w *stateWorker) resetByState() error {
 		if stepState.Step.Execution.Timer != nil {
 			i := idx
 			id, err := w.eng.AddCronJob(stepState.Step.Execution.Timer.Cron, func() {
-				w.queue.Put(item{
+				w.queue.Offer(item{
 					action: timerAction,
 					value:  i,
 				})
@@ -201,9 +201,23 @@ func (w *stateWorker) resetByState() error {
 
 func (w *stateWorker) stop() {
 	atomic.StoreUint32(&w.stopped, 1)
-	w.queue.Put(item{
-		action: stopAction,
-	})
+	for {
+		if ok, _ := w.queue.Offer(item{
+			action: stopAction,
+		}); ok {
+			return
+		}
+
+		time.Sleep(time.Millisecond * 100)
+	}
+}
+
+func (w *stateWorker) workflowID() uint64 {
+	return w.state.WorkflowID
+}
+
+func (w *stateWorker) cachedEventSize() uint64 {
+	return w.queue.Len()
 }
 
 func (w *stateWorker) isStopped() bool {
@@ -215,15 +229,15 @@ func (w *stateWorker) matches(uid uint32) bool {
 }
 
 func (w *stateWorker) checkTTLTimeout(arg interface{}) {
-	w.queue.Put(item{
+	w.queue.Offer(item{
 		action: checkTTLEventAction,
 		value:  arg,
 	})
 }
 
-func (w *stateWorker) onEvent(p uint32, offset uint64, event *metapb.Event) {
+func (w *stateWorker) onEvent(p uint32, offset uint64, event *metapb.Event) (bool, error) {
 	if w.isStopped() {
-		return
+		return true, nil
 	}
 
 	switch event.Type {
@@ -232,7 +246,7 @@ func (w *stateWorker) onEvent(p uint32, offset uint64, event *metapb.Event) {
 			evt := *event.User
 			evt.WorkflowID = w.state.WorkflowID
 			evt.InstanceID = w.state.InstanceID
-			w.queue.Put(item{
+			return w.queue.Offer(item{
 				action:    userEventAction,
 				value:     evt,
 				partition: p,
@@ -242,23 +256,25 @@ func (w *stateWorker) onEvent(p uint32, offset uint64, event *metapb.Event) {
 	case metapb.UpdateCrowdType:
 		if event.UpdateCrowd.WorkflowID == w.state.WorkflowID &&
 			event.UpdateCrowd.Index == w.state.Index {
-			w.queue.Put(item{
+			return w.queue.Offer(item{
 				action: updateCrowdAction,
 				value:  event.UpdateCrowd.Crowd,
 			})
 		}
 	case metapb.UpdateWorkflowType:
 		if event.UpdateWorkflow.Workflow.ID == w.state.WorkflowID {
-			w.queue.Put(item{
+			return w.queue.Offer(item{
 				action: updateWorkflowAction,
 				value:  event.UpdateWorkflow.Workflow,
 			})
 		}
 	}
+
+	return true, nil
 }
 
 func (w *stateWorker) init() {
-	w.queue.Put(item{
+	w.queue.Offer(item{
 		action: initAction,
 	})
 }
@@ -350,7 +366,8 @@ func (w *stateWorker) handleEvent(completedCB func(uint32, uint64)) bool {
 			}
 		}
 
-		if w.queue.Len() == 0 || uint64(len(w.tran.userEvents)) >= handleEventBatch {
+		if w.queue.Len() == 0 ||
+			uint64(len(w.tran.userEvents)) >= handleEventBatch {
 			break
 		}
 	}
@@ -529,7 +546,7 @@ func (w *stateWorker) doUpdateWorkflow(workflow metapb.Workflow) error {
 		if step.Execution.Timer != nil {
 			i := idx
 			id, err := w.eng.AddCronJob(step.Execution.Timer.Cron, func() {
-				w.queue.Put(item{
+				w.queue.Offer(item{
 					action: timerAction,
 					value:  i,
 				})

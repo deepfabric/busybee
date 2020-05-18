@@ -12,6 +12,10 @@ import (
 	"github.com/fagongzi/util/protoc"
 )
 
+var (
+	wait = time.Second * 2
+)
+
 func runnerKey(state *metapb.WorkerRunner) string {
 	return fmt.Sprintf("WR[%d-%d]", state.ID, state.Index)
 }
@@ -41,6 +45,16 @@ func (eng *engine) doStopRunnerEvent(state *metapb.WorkerRunner) {
 	value.(*workerRunner).stop()
 }
 
+type worker interface {
+	onEvent(p uint32, offset uint64, event *metapb.Event) (bool, error)
+	stop()
+	workflowID() uint64
+	isStopped() bool
+	init()
+	cachedEventSize() uint64
+	handleEvent(func(p uint32, offset uint64)) bool
+}
+
 type workerRunner struct {
 	sync.RWMutex
 
@@ -49,7 +63,7 @@ type workerRunner struct {
 	runnerIndex uint64
 	stopped     bool
 	eng         *engine
-	workers     map[string]*stateWorker
+	workers     map[string]worker
 	consumer    queue.AsyncConsumer
 
 	completedOffsets map[uint32]uint64
@@ -60,7 +74,7 @@ func newWorkerRunner(tid uint64, runnerIndex uint64, key string, eng *engine) *w
 		tid:              tid,
 		runnerIndex:      runnerIndex,
 		key:              key,
-		workers:          make(map[string]*stateWorker),
+		workers:          make(map[string]worker),
 		eng:              eng,
 		completedOffsets: make(map[uint32]uint64),
 	}
@@ -95,7 +109,7 @@ func (wr *workerRunner) stop() {
 	}
 }
 
-func (wr *workerRunner) addWorker(w *stateWorker) {
+func (wr *workerRunner) addWorker(key string, w worker) {
 	wr.Lock()
 	defer wr.Unlock()
 
@@ -103,11 +117,11 @@ func (wr *workerRunner) addWorker(w *stateWorker) {
 		return
 	}
 
-	if _, ok := wr.workers[w.key]; ok {
+	if _, ok := wr.workers[key]; ok {
 		return
 	}
 
-	wr.workers[w.key] = w
+	wr.workers[key] = w
 	w.init()
 }
 
@@ -133,7 +147,7 @@ func (wr *workerRunner) removeWorkers(wid uint64) {
 	defer wr.Unlock()
 
 	for _, w := range wr.workers {
-		if w.state.WorkflowID == wid {
+		if w.workflowID() == wid {
 			w.stop()
 		}
 	}
@@ -178,7 +192,7 @@ func (wr *workerRunner) loadInstanceShardStates() (int, error) {
 			logger.Infof("%s loaded %s",
 				wr.key,
 				wkey)
-			wr.addWorker(w)
+			wr.addWorker(wkey, w)
 
 			if idx == len(values)-1 {
 				startKey = storage.TenantRunnerWorkerKey(wr.tid, wr.runnerIndex, state.WorkflowID, state.Index+1)
@@ -235,18 +249,46 @@ func (wr *workerRunner) onEvent(p uint32, lastOffset uint64, items [][]byte) {
 	}
 
 	offset := lastOffset - uint64(len(items)) + 1
+
 	for _, item := range items {
 		event := metapb.Event{}
 		protoc.MustUnmarshal(&event, item)
 
-		for _, w := range wr.workers {
-			if !w.isStopped() {
-				w.onEvent(p, offset, &event)
+		for {
+			if wr.addEventToWorkers(p, offset, &event) {
+				break
+			}
+
+			wr.RUnlock()
+			time.Sleep(wait)
+			wr.RLock()
+
+			if wr.stopped {
+				return
 			}
 		}
 
 		offset++
 	}
+}
+
+func (wr *workerRunner) addEventToWorkers(p uint32, offset uint64, event *metapb.Event) bool {
+	for wkey, w := range wr.workers {
+		if !w.isStopped() {
+			added, _ := w.onEvent(p, offset, event)
+			if !added {
+				logger.Infof("%s consume events slow down, %s exceed max cached events %d, current is %d, wait %s",
+					wr.key,
+					wkey,
+					eventsCacheSize,
+					w.cachedEventSize(),
+					wait)
+				return false
+			}
+		}
+	}
+
+	return true
 }
 
 func (wr *workerRunner) run() {
@@ -258,6 +300,7 @@ func (wr *workerRunner) run() {
 			break
 		}
 
+		logger.Infof("%s start load shard states", wr.key)
 		err := wr.loadShardStates()
 		if err == nil {
 			break

@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	defaultRPCTimeout        = time.Second * 60
+	defaultRPCTimeout        = time.Second * 30
 	reportGroup       uint64 = 13141314131413141314
 )
 
@@ -113,18 +113,18 @@ func NewStorageWithOptions(dataPath string,
 	}
 
 	h.store = store
+	h.app = server.NewApplication(server.Cfg{
+		Store:          h.store,
+		Handler:        h,
+		ExternalServer: true,
+	})
 	return h, nil
 }
 
 func (h *beeStorage) Start() error {
 	h.init()
 
-	app := server.NewApplication(server.Cfg{
-		Store:          h.store,
-		Handler:        h,
-		ExternalServer: true,
-	})
-	err := app.Start()
+	err := h.app.Start()
 	if err != nil {
 		return err
 	}
@@ -142,8 +142,6 @@ func (h *beeStorage) Start() error {
 		h.store.Meta().ShardAddr,
 		h.becomeReportLeader,
 		h.becomeReportFollower)
-
-	h.app = app
 	return nil
 }
 

@@ -61,7 +61,13 @@ func (h *beeStorage) Splited(shard bhmetapb.Shard) {
 }
 
 func (h *beeStorage) Destory(shard bhmetapb.Shard) {
-
+	if shard.Group == uint64(metapb.DefaultGroup) ||
+		shard.Group == uint64(metapb.TenantRunnerGroup) {
+		h.shardC <- shardCycle{
+			shard:  shard,
+			action: becomeFollower,
+		}
+	}
 }
 
 func (h *beeStorage) BecomeLeader(shard bhmetapb.Shard) {

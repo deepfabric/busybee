@@ -42,9 +42,12 @@ func (h *beeStorage) startingWorkflowInstance(shard bhmetapb.Shard, req *raftcmd
 	}
 
 	if h.store.MaybeLeader(shard.ID) {
+		instance := &metapb.WorkflowInstance{}
+		protoc.MustUnmarshal(instance, value)
+
 		h.eventC <- Event{
 			EventType: StartingInstanceEvent,
-			Data:      &cmd.Instance,
+			Data:      instance,
 		}
 	}
 
@@ -111,16 +114,20 @@ func (h *beeStorage) workflowInstanceStarted(shard bhmetapb.Shard, req *raftcmdp
 
 	old.StartedAt = time.Now().Unix()
 	old.State = metapb.Running
-	err = h.getStore(shard.ID).Set(req.Key, protoc.MustMarshal(old))
+	value = protoc.MustMarshal(old)
+	err = h.getStore(shard.ID).Set(req.Key, value)
 	if err != nil {
 		log.Fatalf("set workflow instance %d started failed with %+v",
 			cmd.WorkflowID, err)
 	}
 
 	if h.store.MaybeLeader(shard.ID) {
+		instance := &metapb.WorkflowInstance{}
+		protoc.MustUnmarshal(instance, value)
+
 		h.eventC <- Event{
 			EventType: RunningInstanceEvent,
-			Data:      old,
+			Data:      instance,
 		}
 	}
 
@@ -150,16 +157,20 @@ func (h *beeStorage) stopWorkflowInstance(shard bhmetapb.Shard, req *raftcmdpb.R
 	}
 
 	old.State = metapb.Stopping
-	err = h.getStore(shard.ID).Set(req.Key, protoc.MustMarshal(old))
+	value = protoc.MustMarshal(old)
+	err = h.getStore(shard.ID).Set(req.Key, value)
 	if err != nil {
 		log.Fatalf("set workflow instance %d stopped failed with %+v",
 			cmd.WorkflowID, err)
 	}
 
 	if h.store.MaybeLeader(shard.ID) {
+		instance := &metapb.WorkflowInstance{}
+		protoc.MustUnmarshal(instance, value)
+
 		h.eventC <- Event{
 			EventType: StoppingInstanceEvent,
-			Data:      old,
+			Data:      instance,
 		}
 	}
 
@@ -235,17 +246,21 @@ func (h *beeStorage) createInstanceWorker(shard bhmetapb.Shard, req *raftcmdpb.R
 		Index:      cmd.State.Index,
 	})
 
+	value := protoc.MustMarshal(&cmd.State)
 	wb := bhutil.NewWriteBatch()
-	wb.Set(req.Key, protoc.MustMarshal(&cmd.State))
+	wb.Set(req.Key, value)
 	wb.Set(key, protoc.MustMarshal(runner))
 	err := h.getStore(shard.ID).Write(wb, false)
 	if err != nil {
 		log.Fatalf("save workflow instance %+v failed with %+v", cmd, err)
 	}
 	if h.store.MaybeLeader(shard.ID) {
+		state := metapb.WorkflowInstanceWorkerState{}
+		protoc.MustUnmarshal(&state, value)
+
 		h.eventC <- Event{
 			EventType: InstanceWorkerCreatedEvent,
-			Data:      cmd.State,
+			Data:      state,
 		}
 	}
 

@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"syscall"
 	"time"
 
@@ -52,6 +53,7 @@ func main() {
 	}
 
 	if *addrPPROF != "" {
+		runtime.SetBlockProfileRate(1)
 		go func() {
 			log.Errorf("start pprof failed, errors:\n%+v",
 				http.ListenAndServe(*addrPPROF, nil))

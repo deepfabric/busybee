@@ -238,6 +238,8 @@ func (qb *queuePartitionBatch) exec(s bhstorage.DataStorage, b *batch) error {
 					log.Fatalf("exec queue add batch failed with %+v", err)
 				}
 				qb.removedOffset = low
+
+				log.Infof("tenant %d truncate to offset %d of %s", qb.id, low, qb.group.String())
 			}
 		}
 
