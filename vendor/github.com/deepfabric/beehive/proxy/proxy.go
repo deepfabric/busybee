@@ -25,6 +25,11 @@ var (
 	ErrTimeout = errors.New("Exec timeout")
 )
 
+var (
+	// RetryInterval retry interval
+	RetryInterval = time.Second
+)
+
 type doneFunc func(*raftcmdpb.Response)
 type errorDoneFunc func(*raftcmdpb.Request, error)
 
@@ -82,13 +87,13 @@ func (p *shardsProxy) Dispatch(req *raftcmdpb.Request) error {
 	// No leader, retry after a leader tick
 	if leader == "" {
 		if logger.DebugEnabled() {
-			logger.Infof("%s retry with no leader, shard %d, group %d",
+			logger.Debugf("%s retry with no leader, shard %d, group %d",
 				hex.EncodeToString(req.ID),
 				shard,
 				req.Group)
 		}
 
-		p.retryWithRaftError(req, time.Second*10)
+		p.retryWithRaftError(req, RetryInterval)
 		return nil
 	}
 
@@ -130,7 +135,7 @@ func (p *shardsProxy) done(rsp *raftcmdpb.Response) {
 		return
 	}
 
-	p.retryWithRaftError(rsp.OriginRequest, time.Second)
+	p.retryWithRaftError(rsp.OriginRequest, RetryInterval)
 }
 
 func (p *shardsProxy) errorDone(req *raftcmdpb.Request, err error) {
@@ -139,7 +144,7 @@ func (p *shardsProxy) errorDone(req *raftcmdpb.Request, err error) {
 
 func (p *shardsProxy) retryWithRaftError(req *raftcmdpb.Request, later time.Duration) {
 	if req != nil {
-		if req.StopAt >= time.Now().Unix() {
+		if time.Now().Unix() >= req.StopAt {
 			p.errorDoneCB(req, ErrTimeout)
 			return
 		}

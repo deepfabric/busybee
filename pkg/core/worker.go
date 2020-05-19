@@ -26,8 +26,7 @@ var (
 )
 
 const (
-	stopAction = iota
-	initAction
+	initAction = iota
 	timerAction
 	userEventAction
 	updateWorkflowAction
@@ -65,6 +64,7 @@ func (info *triggerInfo) maybeReset(ttl int32) {
 type stateWorker struct {
 	stopped                  uint32
 	key                      string
+	rkey                     string
 	eng                      Engine
 	buf                      *goetty.ByteBuf
 	state                    metapb.WorkflowInstanceWorkerState
@@ -102,6 +102,7 @@ func newStateWorker(key string, state metapb.WorkflowInstanceWorkerState, eng En
 
 	w := &stateWorker{
 		key:              key,
+		rkey:             runnerKey(&metapb.WorkerRunner{ID: state.TenantID, Index: state.Runner}),
 		state:            state,
 		eng:              eng,
 		buf:              goetty.NewByteBuf(32),
@@ -201,15 +202,6 @@ func (w *stateWorker) resetByState() error {
 
 func (w *stateWorker) stop() {
 	atomic.StoreUint32(&w.stopped, 1)
-	for {
-		if ok, _ := w.queue.Offer(item{
-			action: stopAction,
-		}); ok {
-			return
-		}
-
-		time.Sleep(time.Millisecond * 100)
-	}
 }
 
 func (w *stateWorker) workflowID() uint64 {
@@ -279,7 +271,10 @@ func (w *stateWorker) init() {
 	})
 }
 
-func (w *stateWorker) doClose() {
+func (w *stateWorker) close() {
+	logger.Infof("%s worker %s close", w.rkey, w.key)
+	defer logger.Infof("%s worker %s close completed", w.rkey, w.key)
+
 	w.tran.close()
 	w.resetTTLTimeout()
 	w.queue.Dispose()
@@ -294,7 +289,6 @@ func (w *stateWorker) doClose() {
 	releaseBM(w.totalCrowds)
 
 	releaseBM(w.tempBM)
-	logger.Infof("worker %s stopped", w.key)
 }
 
 func (w *stateWorker) setOffset(p uint32, offset uint64) {
@@ -312,6 +306,11 @@ func (w *stateWorker) setOffset(p uint32, offset uint64) {
 }
 
 func (w *stateWorker) handleEvent(completedCB func(uint32, uint64)) bool {
+	if w.isStopped() {
+		w.close()
+		return false
+	}
+
 	if w.queue.Len() == 0 && !w.queue.IsDisposed() {
 		return false
 	}
@@ -335,9 +334,6 @@ func (w *stateWorker) handleEvent(completedCB func(uint32, uint64)) bool {
 			w.setOffset(value.partition, value.offset)
 
 			switch value.action {
-			case stopAction:
-				w.doClose()
-				return false
 			case initAction:
 				w.checkLastTranscation()
 				logger.Infof("worker %s init with %d crowd, [%d, %d]",
@@ -496,9 +492,11 @@ func (w *stateWorker) execNotify(tran *transaction) error {
 		return err
 	}
 
-	logger.Infof("worker %s moved %d",
+	logger.Infof("%s worker %s moved %d, left %d",
+		w.rkey,
 		w.key,
-		totalMoved)
+		totalMoved,
+		w.cachedEventSize())
 	metric.IncUserMoved(totalMoved, w.tenant)
 	return nil
 }

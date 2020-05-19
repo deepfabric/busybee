@@ -22,7 +22,10 @@ func runnerKey(state *metapb.WorkerRunner) string {
 
 func (eng *engine) doStartRunnerEvent(state *metapb.WorkerRunner) {
 	key := runnerKey(state)
+	logger.Infof("handle event for start %s", key)
+
 	if _, ok := eng.runners.Load(key); ok {
+		logger.Infof("handle event for start %s, skipped by already exists", key)
 		return
 	}
 
@@ -31,23 +34,28 @@ func (eng *engine) doStartRunnerEvent(state *metapb.WorkerRunner) {
 
 	logger.Infof("%s created", key)
 	wr.start()
+	logger.Infof("handle event for start %s completed", key)
 }
 
 func (eng *engine) doStopRunnerEvent(state *metapb.WorkerRunner) {
 	key := runnerKey(state)
+	logger.Infof("handle event for stop %s", key)
 	value, ok := eng.runners.Load(key)
 	if !ok {
+		logger.Infof("handle event for stop %s, skipped by not exists", key)
 		return
 	}
 
 	logger.Infof("%s stop", key)
 	eng.runners.Delete(key)
 	value.(*workerRunner).stop()
+	logger.Infof("handle event for stop completed %s", key)
 }
 
 type worker interface {
 	onEvent(p uint32, offset uint64, event *metapb.Event) (bool, error)
 	stop()
+	close()
 	workflowID() uint64
 	isStopped() bool
 	init()
@@ -92,6 +100,9 @@ func (wr *workerRunner) start() {
 }
 
 func (wr *workerRunner) stop() {
+	logger.Infof("%s set stop flag", wr.key)
+	defer logger.Infof("%s set stop flag completed", wr.key)
+
 	wr.Lock()
 	defer wr.Unlock()
 
@@ -99,19 +110,14 @@ func (wr *workerRunner) stop() {
 		return
 	}
 
-	if wr.consumer != nil {
-		wr.consumer.Stop()
-	}
-
 	wr.stopped = true
-	for _, w := range wr.workers {
-		w.stop()
-	}
 }
 
-func (wr *workerRunner) addWorker(key string, w worker) {
-	wr.Lock()
-	defer wr.Unlock()
+func (wr *workerRunner) addWorker(key string, w worker, lock bool) {
+	if lock {
+		wr.Lock()
+		defer wr.Unlock()
+	}
 
 	if wr.stopped {
 		return
@@ -129,6 +135,10 @@ func (wr *workerRunner) removeWorker(key string) {
 	wr.Lock()
 	defer wr.Unlock()
 
+	if wr.stopped {
+		return
+	}
+
 	if w, ok := wr.workers[key]; ok {
 		w.stop()
 		return
@@ -145,6 +155,10 @@ func (wr *workerRunner) workerCount() int {
 func (wr *workerRunner) removeWorkers(wid uint64) {
 	wr.Lock()
 	defer wr.Unlock()
+
+	if wr.stopped {
+		return
+	}
 
 	for _, w := range wr.workers {
 		if w.workflowID() == wid {
@@ -192,7 +206,7 @@ func (wr *workerRunner) loadInstanceShardStates() (int, error) {
 			logger.Infof("%s loaded %s",
 				wr.key,
 				wkey)
-			wr.addWorker(wkey, w)
+			wr.addWorker(wkey, w, false)
 
 			if idx == len(values)-1 {
 				startKey = storage.TenantRunnerWorkerKey(wr.tid, wr.runnerIndex, state.WorkflowID, state.Index+1)
@@ -206,6 +220,11 @@ func (wr *workerRunner) loadInstanceShardStates() (int, error) {
 func (wr *workerRunner) startQueueConsumer() error {
 	wr.Lock()
 	defer wr.Unlock()
+
+	if wr.stopped {
+		logger.Infof("%s create queue consumer skipped by stopped", wr.key)
+		return nil
+	}
 
 	consumer, err := queue.NewAsyncConsumer(wr.tid, wr.eng.store, []byte(wr.key))
 	if err != nil {
@@ -224,6 +243,14 @@ func (wr *workerRunner) startQueueConsumer() error {
 }
 
 func (wr *workerRunner) loadShardStates() error {
+	wr.Lock()
+	defer wr.Unlock()
+
+	if wr.stopped {
+		logger.Infof("%s load instance shard states skipped by stopped", wr.key)
+		return nil
+	}
+
 	loaded, err := wr.loadInstanceShardStates()
 	if err != nil {
 		metric.IncStorageFailed()
@@ -291,16 +318,29 @@ func (wr *workerRunner) addEventToWorkers(p uint32, offset uint64, event *metapb
 	return true
 }
 
+func (wr *workerRunner) isStopped() bool {
+	wr.RLock()
+	defer wr.RUnlock()
+
+	return wr.stopped
+}
+
+func (wr *workerRunner) doStop() {
+	logger.Infof("%s do stop", wr.key)
+	defer logger.Infof("%s do stop completed", wr.key)
+
+	wr.Lock()
+	defer wr.Unlock()
+
+	wr.consumer.Stop()
+	for _, w := range wr.workers {
+		w.close()
+	}
+}
+
 func (wr *workerRunner) run() {
-	logger.Infof("%s started", wr.key)
-
+	logger.Infof("%s start load shard states", wr.key)
 	for {
-		if wr.stopped {
-			logger.Infof("%s load instance shard states skipped by stopped", wr.key)
-			break
-		}
-
-		logger.Infof("%s start load shard states", wr.key)
 		err := wr.loadShardStates()
 		if err == nil {
 			break
@@ -308,12 +348,8 @@ func (wr *workerRunner) run() {
 		time.Sleep(time.Second * 5)
 	}
 
+	logger.Infof("%s start queue consumer", wr.key)
 	for {
-		if wr.stopped {
-			logger.Infof("%s create queue consumer skipped by stopped", wr.key)
-			break
-		}
-
 		err := wr.startQueueConsumer()
 		if err == nil {
 			break
@@ -324,6 +360,11 @@ func (wr *workerRunner) run() {
 	var removedWorkers []string
 	hasEvent := true
 	for {
+		if wr.isStopped() {
+			wr.doStop()
+			return
+		}
+
 		if !hasEvent {
 			time.Sleep(time.Millisecond * 10)
 		}
@@ -336,16 +377,11 @@ func (wr *workerRunner) run() {
 		wr.RLock()
 		for key, w := range wr.workers {
 			if w.isStopped() {
+				w.close()
 				removedWorkers = append(removedWorkers, key)
 			} else if w.handleEvent(wr.completed) {
 				hasEvent = true
 			}
-		}
-
-		if len(wr.workers)-len(removedWorkers) == 0 && wr.stopped {
-			wr.RUnlock()
-			logger.Infof("%s stopped", wr.key)
-			return
 		}
 		wr.RUnlock()
 
@@ -355,17 +391,11 @@ func (wr *workerRunner) run() {
 				delete(wr.workers, key)
 			}
 			wr.Unlock()
-
 			removedWorkers = removedWorkers[:0]
 		}
 
 		if len(wr.completedOffsets) > 0 {
-			err := wr.consumer.Commit(wr.completedOffsets)
-			// just log it, commit next tick
-			if err != nil {
-				metric.IncStorageFailed()
-				logger.Errorf("%s commit offset failed with %+v", err)
-			}
+			wr.consumer.Commit(wr.completedOffsets, wr.commitCB)
 		}
 	}
 }
@@ -381,5 +411,13 @@ func (wr *workerRunner) completed(p uint32, offset uint64) {
 		}
 	} else {
 		wr.completedOffsets[p] = offset
+	}
+}
+
+func (wr *workerRunner) commitCB(err error) {
+	// just log it, commit next tick
+	if err != nil {
+		metric.IncStorageFailed()
+		logger.Errorf("%s commit offset failed with %+v", wr.key, err)
 	}
 }

@@ -302,7 +302,6 @@ func (eng *engine) tenantInitWithReplicas(metadata metapb.Tenant, replicas uint3
 		DisableSplit:  true,
 		LeastReplicas: replicas,
 	})
-
 	return eng.store.RaftStore().AddShards(shards...)
 }
 
@@ -1002,7 +1001,7 @@ func (eng *engine) doBootstrapWorker(state metapb.WorkflowInstanceWorkerState) {
 			continue
 		}
 
-		value.(*workerRunner).addWorker(w.key, w)
+		value.(*workerRunner).addWorker(w.key, w, true)
 		if state.StopAt != 0 {
 			after := time.Second * time.Duration(state.StopAt-now)
 			util.DefaultTimeoutWheel().Schedule(after, eng.stopWorker, w)

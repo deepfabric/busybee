@@ -3,12 +3,12 @@ package storage
 import (
 	"bytes"
 	"context"
-	"math"
 
 	bhmetapb "github.com/deepfabric/beehive/pb/metapb"
 	"github.com/deepfabric/beehive/raftstore"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
+	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/log"
 	"github.com/fagongzi/util/protoc"
 )
@@ -116,28 +116,7 @@ func (h *beeStorage) doLoadWorkerRunnerEvent(shard bhmetapb.Shard, leader bool) 
 		return
 	}
 
-	from := raftstore.EncodeDataKey(shard.Group, TenantRunnerMetadataKey(0, 0))
-	end := raftstore.EncodeDataKey(shard.Group, TenantRunnerMetadataKey(math.MaxUint64, math.MaxUint64))
-
-	err := h.getStore(shard.ID).Scan(from, end, func(key, value []byte) (bool, error) {
-		decodedKey := raftstore.DecodeDataKey(key)
-
-		if bytes.Compare(decodedKey, shard.Start) >= 0 {
-			if len(shard.End) == 0 || bytes.Compare(decodedKey, shard.End) < 0 {
-				switch decodedKey[17] {
-				case tenantRunnerMetadataPrefix:
-					h.doRunnerEvent(shard, value, leader)
-				}
-			} else {
-				return false, nil
-			}
-		}
-
-		return true, nil
-	}, false)
-	if err != nil {
-		log.Fatalf("scan shard data for loading failed with %+v", err)
-	}
+	h.doRunnerEvent(shard, leader)
 }
 
 func (h *beeStorage) doLoadEvent(shard bhmetapb.Shard, leader bool) {
@@ -194,13 +173,20 @@ func (h *beeStorage) doWorkflowEvent(value []byte) {
 	}
 }
 
-func (h *beeStorage) doRunnerEvent(shard bhmetapb.Shard, value []byte, leader bool) {
-	state := &metapb.WorkerRunner{}
-	protoc.MustUnmarshal(state, value)
+func (h *beeStorage) doRunnerEvent(shard bhmetapb.Shard, leader bool) {
+	tid := goetty.Byte2UInt64(shard.Start[1:])
+	runner := goetty.Byte2UInt64(shard.Start[9:])
+	state := &metapb.WorkerRunner{
+		ID:    tid,
+		Index: runner,
+	}
 
 	et := StartRunnerEvent
 	if !leader {
 		et = StopRunnerEvent
+		log.Infof("raft trigger WR[%d-%d] stop", tid, runner)
+	} else {
+		log.Infof("raft trigger WR[%d-%d] start", tid, runner)
 	}
 	h.eventC <- Event{
 		EventType: et,

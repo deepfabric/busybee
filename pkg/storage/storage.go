@@ -118,17 +118,17 @@ func NewStorageWithOptions(dataPath string,
 		Handler:        h,
 		ExternalServer: true,
 	})
+	h.init()
+
+	err = h.app.Start()
+	if err != nil {
+		return nil, err
+	}
+
 	return h, nil
 }
 
 func (h *beeStorage) Start() error {
-	h.init()
-
-	err := h.app.Start()
-	if err != nil {
-		return err
-	}
-
 	elector, err := prophet.NewElector(h.store.Prophet().GetEtcdClient())
 	if err != nil {
 		return err

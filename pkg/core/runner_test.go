@@ -44,6 +44,13 @@ func (w *testWorker) stop() {
 	w.stopped = true
 }
 
+func (w *testWorker) close() {
+	w.Lock()
+	defer w.Unlock()
+
+	w.stopped = true
+}
+
 func (w *testWorker) workflowID() uint64 {
 	return w.wid
 }
@@ -104,8 +111,8 @@ func TestOnEvent(t *testing.T) {
 		to:      101,
 		handled: make(map[uint32]interface{}),
 	}
-	r.addWorker("w1", w1)
-	r.addWorker("w2", w2)
+	r.addWorker("w1", w1, true)
+	r.addWorker("w2", w2, true)
 
 	go func() {
 		hasEvent := true

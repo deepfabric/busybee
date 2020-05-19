@@ -21,7 +21,7 @@ type AsyncConsumer interface {
 	// Start start the consumer
 	Start(cb func(uint32, uint64, [][]byte))
 	// Commit commit completed offset
-	Commit(map[uint32]uint64) error
+	Commit(map[uint32]uint64, func(error))
 	// Stop stop consumer
 	Stop()
 }
@@ -126,20 +126,15 @@ func (c *asyncConsumer) Start(cb func(uint32, uint64, [][]byte)) {
 	}
 }
 
-func (c *asyncConsumer) Commit(completed map[uint32]uint64) error {
+func (c *asyncConsumer) Commit(completed map[uint32]uint64, ucb func(error)) {
 	if len(completed) == 0 {
-		return nil
+		return
 	}
 
-	var err error
-	var wg sync.WaitGroup
-	wg.Add(len(completed))
-
-	cb := func(arg interface{}, data []byte, rerr error) {
-		if rerr != nil {
-			err = rerr
+	cb := func(arg interface{}, data []byte, err error) {
+		if ucb != nil {
+			ucb(err)
 		}
-		wg.Done()
 	}
 
 	for p, offset := range completed {
@@ -150,9 +145,6 @@ func (c *asyncConsumer) Commit(completed map[uint32]uint64) error {
 		req.CompletedOffset = offset
 		c.store.AsyncExecCommandWithGroup(req, c.group, cb, nil)
 	}
-
-	wg.Wait()
-	return err
 }
 
 func (c *asyncConsumer) Stop() {

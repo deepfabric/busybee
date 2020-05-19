@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/deepfabric/beehive/proxy"
 	"github.com/deepfabric/beehive/raftstore"
 	"github.com/deepfabric/beehive/storage"
 	"github.com/deepfabric/beehive/storage/nemo"
@@ -48,6 +49,7 @@ peerAddr = "127.0.0.1:2381"
 
 // NewTestStorage returns test storage
 func NewTestStorage(t *testing.T, start bool) (Storage, func()) {
+	proxy.RetryInterval = time.Millisecond * 10
 	os.RemoveAll(tmp)
 	s, err := nemo.NewStorage(filepath.Join(tmp, "nemo"))
 	assert.NoError(t, err, "NewTestStorage failed")
@@ -62,6 +64,7 @@ func NewTestStorage(t *testing.T, start bool) (Storage, func()) {
 	assert.NoError(t, err, "NewTestStorage failed")
 	if start {
 		assert.NoError(t, store.Start(), "NewTestStorage failed")
+		time.Sleep(time.Second)
 	}
 
 	return store, func() {
