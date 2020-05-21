@@ -332,7 +332,10 @@ func (wr *workerRunner) doStop() {
 	wr.Lock()
 	defer wr.Unlock()
 
-	wr.consumer.Stop()
+	if wr.consumer != nil {
+		wr.consumer.Stop()
+	}
+
 	for _, w := range wr.workers {
 		w.close()
 	}
