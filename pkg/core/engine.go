@@ -228,9 +228,6 @@ func (eng *engine) tenantInitWithReplicas(metadata metapb.Tenant, replicas uint3
 		return err
 	}
 
-	buf := goetty.NewByteBuf(32)
-	defer buf.Release()
-
 	var shards []hbmetapb.Shard
 	for i := uint64(0); i < metadata.Runners; i++ {
 		shards = append(shards, hbmetapb.Shard{
@@ -263,7 +260,7 @@ func (eng *engine) tenantInitWithReplicas(metadata metapb.Tenant, replicas uint3
 			Data: protoc.MustMarshal(&metapb.CallbackAction{
 				SetKV: &metapb.SetKVAction{
 					KV: metapb.KV{
-						Key: storage.QueueMetaKey(metadata.ID, i, buf),
+						Key: storage.QueueMetaKey(metadata.ID, i),
 						Value: protoc.MustMarshal(&metapb.QueueState{
 							Partitions: metadata.Input.Partitions,
 							Timeout:    metadata.Input.ConsumerTimeout,
@@ -287,7 +284,7 @@ func (eng *engine) tenantInitWithReplicas(metadata metapb.Tenant, replicas uint3
 		Data: protoc.MustMarshal(&metapb.CallbackAction{
 			SetKV: &metapb.SetKVAction{
 				KV: metapb.KV{
-					Key: storage.QueueMetaKey(metadata.ID, 0, buf),
+					Key: storage.QueueMetaKey(metadata.ID, 0),
 					Value: protoc.MustMarshal(&metapb.QueueState{
 						Partitions: metadata.Output.Partitions,
 						Timeout:    metadata.Output.ConsumerTimeout,
@@ -435,10 +432,7 @@ func (eng *engine) StartInstance(workflow metapb.Workflow, loader metapb.BMLoade
 		return 0, err
 	}
 
-	buf := goetty.NewByteBuf(32)
-	defer buf.Release()
-	key := storage.WorkflowCrowdShardKey(workflow.ID, id, 0, buf)
-
+	key := storage.WorkflowCrowdShardKey(workflow.ID, id, 0)
 	start = time.Now().Unix()
 	logger.Infof("workflow-%d start instance, do put bitmap crowd",
 		workflow.ID)
@@ -485,10 +479,7 @@ func (eng *engine) LastInstance(id uint64) (*metapb.WorkflowInstance, error) {
 }
 
 func (eng *engine) HistoryInstance(wid uint64, instanceID uint64) (*metapb.WorkflowInstanceSnapshot, error) {
-	buf := goetty.NewByteBuf(17)
-	defer buf.Release()
-
-	key := storage.WorkflowHistoryInstanceKey(wid, instanceID, buf)
+	key := storage.WorkflowHistoryInstanceKey(wid, instanceID)
 	value, err := eng.store.Get(key)
 	if err != nil {
 		return nil, err
@@ -653,10 +644,7 @@ func (eng *engine) InstanceStepState(id uint64, name string) (metapb.StepState, 
 		}
 	}
 
-	buf := goetty.NewByteBuf(32)
-	defer buf.Release()
-
-	key := storage.TempKey(uuid.NewV4().Bytes(), buf)
+	key := storage.TempKey(uuid.NewV4().Bytes())
 	loader, loaderMeta, err := eng.putBM(valueBM, key, eng.opts.tempKeyTTL)
 	if err != nil {
 		return metapb.StepState{}, err
@@ -848,7 +836,7 @@ func (eng *engine) buildSnapshot(instance *metapb.WorkflowInstance, buf *goetty.
 	}
 
 	for _, step := range instance.Snapshot.Steps {
-		key := storage.TempKey(uuid.NewV4().Bytes(), buf)
+		key := storage.TempKey(uuid.NewV4().Bytes())
 
 		loader, loadMeta, err := eng.putBM(value[step.Name], key, eng.opts.snapshotTTL)
 		if err != nil {
@@ -1173,7 +1161,7 @@ func (eng *engine) doRetryStoppingInstance(instance *metapb.WorkflowInstance, er
 }
 
 func (eng *engine) doSaveSnapshot(instance *metapb.WorkflowInstance, buf *goetty.ByteBuf) ([]metapb.WorkflowInstanceWorkerState, error) {
-	key := storage.WorkflowHistoryInstanceKey(instance.Snapshot.ID, instance.InstanceID, buf)
+	key := storage.WorkflowHistoryInstanceKey(instance.Snapshot.ID, instance.InstanceID)
 	value, err := eng.store.Get(key)
 	if err != nil {
 		return nil, err
@@ -1245,12 +1233,8 @@ func (eng *engine) doRemoveShardBitmaps(instance *metapb.WorkflowInstance) {
 			instance.Snapshot.ID,
 			instance.InstanceID)
 
-		buf := goetty.NewByteBuf(32)
-		defer buf.Release()
-
 		for i := uint32(0); i < meta.Shards; i++ {
-			buf.Clear()
-			err := eng.store.Delete(storage.ShardBitmapKey(meta.Key, i, buf))
+			err := eng.store.Delete(storage.ShardBitmapKey(meta.Key, i))
 			if err != nil {
 				logger.Errorf("remove workflow shard bitmap workflow-%d/%d/%d failed",
 					instance.Snapshot.ID,

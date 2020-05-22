@@ -141,13 +141,15 @@ func (h *beeStorage) scan(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs ma
 		buf.Write(shard.End)
 		max := buf.WrittenDataAfterMark()
 
-		if bytes.Compare(end, max) > 0 {
+		if bytes.Compare(end.Data(), max.Data()) > 0 {
 			end = max
 		}
 	}
 
+	var keys []goetty.Slice
+	var values []goetty.Slice
 	customResp := getBytesSliceResponse(attrs)
-	err := h.getStore(shard.ID).Scan(req.Key, end, func(key, value []byte) (bool, error) {
+	err := h.getStore(shard.ID).Scan(req.Key, end.Data(), func(key, value []byte) (bool, error) {
 		if !allowWriteToBuf(buf, len(value)) {
 			log.Warningf("scan skipped, buf cap %d, write at %d, value %d",
 				buf.Capacity(),
@@ -156,22 +158,28 @@ func (h *beeStorage) scan(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs ma
 			return false, nil
 		}
 
-		if uint64(len(customResp.Values)) >= customReq.Limit {
+		if uint64(len(keys)) >= customReq.Limit {
 			return false, nil
 		}
 
 		buf.MarkWrite()
 		buf.Write(raftstore.DecodeDataKey(key))
-		customResp.Keys = append(customResp.Keys, buf.WrittenDataAfterMark())
+		keys = append(keys, buf.WrittenDataAfterMark())
 
 		buf.MarkWrite()
 		buf.Write(value)
-		customResp.Values = append(customResp.Values, buf.WrittenDataAfterMark())
-
+		values = append(values, buf.WrittenDataAfterMark())
 		return true, nil
 	}, false)
 	if err != nil {
 		log.Fatalf("scan %+v failed with %+v", req.Key, err)
+	}
+
+	if len(keys) > 0 {
+		for idx := range keys {
+			customResp.Keys = append(customResp.Keys, keys[idx].Data())
+			customResp.Values = append(customResp.Values, values[idx].Data())
+		}
 	}
 
 	resp.Value = protoc.MustMarshal(customResp)

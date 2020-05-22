@@ -3,7 +3,6 @@ package notify
 import (
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
-	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/log"
 )
 
@@ -13,5 +12,5 @@ var (
 
 // Notifier service notify
 type Notifier interface {
-	Notify(uint64, *goetty.ByteBuf, []metapb.Notify, *rpcpb.Condition, ...[]byte) error
+	Notify(uint64, []metapb.Notify, *rpcpb.Condition, ...[]byte) error
 }

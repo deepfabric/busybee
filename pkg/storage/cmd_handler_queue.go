@@ -32,10 +32,9 @@ func (h *beeStorage) queueJoinGroup(shard bhmetapb.Shard, req *raftcmdpb.Request
 	store := h.getStore(shard.ID)
 	defer writeWriteBatch(store, attrs)
 
-	buf := attrs[raftstore.AttrBuf].(*goetty.ByteBuf)
-	stateKey := queueStateKey(req.Key[:len(req.Key)-4], joinReq.Group, buf)
+	stateKey := queueStateKey(req.Key[:len(req.Key)-4], joinReq.Group)
 	stateAttrKey := hack.SliceToString(stateKey)
-	metaKey := queueMetaKey(req.Key, buf)
+	metaKey := queueMetaKey(req.Key)
 
 	joinResp := getQueueJoinGroupResponse(attrs)
 
@@ -105,9 +104,9 @@ func (h *beeStorage) queueFetch(shard bhmetapb.Shard, req *raftcmdpb.Request, at
 
 	now := time.Now().Unix()
 	buf := attrs[raftstore.AttrBuf].(*goetty.ByteBuf)
-	stateKey := queueStateKey(req.Key[:len(req.Key)-4], queueFetch.Group, buf)
+	stateKey := queueStateKey(req.Key[:len(req.Key)-4], queueFetch.Group)
 	stateAttrKey := hack.SliceToString(stateKey)
-	metaKey := queueMetaKey(req.Key, buf)
+	metaKey := queueMetaKey(req.Key)
 
 	fetchResp := getQueueFetchResponse(attrs)
 
@@ -143,8 +142,8 @@ func (h *beeStorage) queueFetch(shard bhmetapb.Shard, req *raftcmdpb.Request, at
 
 		if queueFetch.Count >= 0 {
 			// do fetch new items
-			startKey := QueueItemKey(req.Key, p.Completed+1, buf)
-			endKey := QueueItemKey(req.Key, p.Completed+1+queueFetch.Count, buf)
+			startKey := QueueItemKey(req.Key, p.Completed+1)
+			endKey := QueueItemKey(req.Key, p.Completed+1+queueFetch.Count)
 
 			maxBytesPerFetch := queueFetch.MaxBytes
 			if maxBytesPerFetch == 0 {
@@ -153,7 +152,7 @@ func (h *beeStorage) queueFetch(shard bhmetapb.Shard, req *raftcmdpb.Request, at
 
 			size := uint64(0)
 			c := uint64(0)
-			var items [][]byte
+			var items []goetty.Slice
 
 			err := h.getStore(shard.ID).Scan(startKey, endKey, func(key, value []byte) (bool, error) {
 				if !allowWriteToBuf(buf, len(value)) {
@@ -187,7 +186,9 @@ func (h *beeStorage) queueFetch(shard bhmetapb.Shard, req *raftcmdpb.Request, at
 
 			if c > 0 {
 				fetchResp.LastOffset = p.Completed + c
-				fetchResp.Items = items
+				for idx := range items {
+					fetchResp.Items = append(fetchResp.Items, items[idx].Data())
+				}
 			}
 
 			state.States[queueFetch.Partition].LastFetchCount = c
@@ -197,17 +198,17 @@ func (h *beeStorage) queueFetch(shard bhmetapb.Shard, req *raftcmdpb.Request, at
 		changed = true
 	}
 
+	resp.Value = protoc.MustMarshal(fetchResp)
+
 	if changed {
-		buf.MarkWrite()
-		buf.WriteUint64(state.States[queueFetch.Partition].Completed)
-		buf.WriteInt64(now)
-		completed := buf.WrittenDataAfterMark()
+		completed := getQueueCompletedValue(attrs)
+		goetty.Uint64ToBytesTo(state.States[queueFetch.Partition].Completed, completed)
+		goetty.Int64ToBytesTo(now, completed[8:])
 
 		addToWriteBatch(stateKey, protoc.MustMarshal(state), attrs)
-		addToWriteBatch(committedOffsetKey(req.Key, queueFetch.Group, buf), completed, attrs)
+		addToWriteBatch(committedOffsetKey(req.Key, queueFetch.Group), completed, attrs)
 	}
 
-	resp.Value = protoc.MustMarshal(fetchResp)
 	return 0, 0, resp
 }
 
@@ -235,8 +236,8 @@ func (h *beeStorage) queueScan(shard bhmetapb.Shard, req *raftcmdpb.Request, att
 	}
 
 	// do fetch new items
-	startKey := QueueItemKey(req.Key, completed+1, buf)
-	endKey := QueueItemKey(req.Key, completed+1+queueScan.Count, buf)
+	startKey := QueueItemKey(req.Key, completed+1)
+	endKey := QueueItemKey(req.Key, completed+1+queueScan.Count)
 
 	maxBytesPerFetch := queueScan.MaxBytes
 	if maxBytesPerFetch == 0 {
@@ -245,7 +246,7 @@ func (h *beeStorage) queueScan(shard bhmetapb.Shard, req *raftcmdpb.Request, att
 
 	size := uint64(0)
 	c := uint64(0)
-	var items [][]byte
+	var items []goetty.Slice
 
 	err := store.Scan(startKey, endKey, func(key, value []byte) (bool, error) {
 		if !allowWriteToBuf(buf, len(value)) {
@@ -277,7 +278,9 @@ func (h *beeStorage) queueScan(shard bhmetapb.Shard, req *raftcmdpb.Request, att
 
 	if c > 0 {
 		fetchResp.LastOffset = completed + c
-		fetchResp.Items = items
+		for idx := range items {
+			fetchResp.Items = append(fetchResp.Items, items[idx].Data())
+		}
 	}
 
 	resp.Value = protoc.MustMarshal(fetchResp)
@@ -404,7 +407,7 @@ func maybeUpdateCompletedOffset(state *metapb.QueueState, now int64, req *rpcpb.
 }
 
 func loadMaxOffset(store bhstorage.DataStorage, key []byte, buf *goetty.ByteBuf) uint64 {
-	value, err := store.Get(maxAndCleanOffsetKey(key, buf))
+	value, err := store.Get(maxAndCleanOffsetKey(key))
 	if err != nil {
 		log.Fatalf("load queue max offset failed with %+v", err)
 	}
@@ -417,7 +420,7 @@ func loadMaxOffset(store bhstorage.DataStorage, key []byte, buf *goetty.ByteBuf)
 }
 
 func loadLastCompletedOffset(store bhstorage.DataStorage, key []byte, consumer []byte, buf *goetty.ByteBuf) (uint64, bool) {
-	value, err := store.Get(committedOffsetKey(key, consumer, buf))
+	value, err := store.Get(committedOffsetKey(key, consumer))
 	if err != nil {
 		log.Fatalf("load consumer last completed offset failed with %+v", err)
 	}
@@ -430,12 +433,12 @@ func loadLastCompletedOffset(store bhstorage.DataStorage, key []byte, consumer [
 }
 
 func mustPutCompletedOffset(store bhstorage.DataStorage, key []byte, consumer []byte, buf *goetty.ByteBuf, value uint64) {
-	completedKey := committedOffsetKey(key, consumer, buf)
+	completedKey := committedOffsetKey(key, consumer)
 
 	buf.MarkWrite()
 	buf.WriteUint64(value)
 	buf.WriteInt64(time.Now().Unix())
-	err := store.Set(completedKey, buf.WrittenDataAfterMark())
+	err := store.Set(completedKey, buf.WrittenDataAfterMark().Data())
 	if err != nil {
 		log.Fatalf("save consumer last completed offset failed with %+v", err)
 	}

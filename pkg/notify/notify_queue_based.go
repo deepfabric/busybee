@@ -4,7 +4,6 @@ import (
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/deepfabric/busybee/pkg/storage"
-	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/util/protoc"
 )
 
@@ -30,7 +29,7 @@ func NewQueueBasedNotifierWithGroup(store storage.Storage, group metapb.Group) N
 	}
 }
 
-func (n *queueNotifier) Notify(id uint64, buf *goetty.ByteBuf, notifies []metapb.Notify, cond *rpcpb.Condition, kvs ...[]byte) error {
+func (n *queueNotifier) Notify(id uint64, notifies []metapb.Notify, cond *rpcpb.Condition, kvs ...[]byte) error {
 	var items [][]byte
 	for idx := range notifies {
 		items = append(items, protoc.MustMarshal(&notifies[idx]))

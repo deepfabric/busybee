@@ -173,7 +173,7 @@ func (wr *workerRunner) loadInstanceShardStates() (int, error) {
 	loaded := 0
 
 	for {
-		_, values, err := wr.eng.store.ScanWithGroup(startKey, endKey, 4, metapb.TenantRunnerGroup)
+		keys, values, err := wr.eng.store.ScanWithGroup(startKey, endKey, 4, metapb.TenantRunnerGroup)
 		if err != nil {
 			return 0, err
 		}
@@ -184,9 +184,13 @@ func (wr *workerRunner) loadInstanceShardStates() (int, error) {
 
 		loaded += len(values)
 		for idx, value := range values {
-			state := metapb.WorkflowInstanceWorkerState{}
-			protoc.MustUnmarshal(&state, value)
+			state2 := &metapb.WorkflowInstanceWorkerState{}
+			err := state2.Unmarshal(value)
+			if err != nil {
+				logger.Fatalf("load key %+v, value %d bytes failed, %+v", keys[idx], len(value), value[:10])
+			}
 
+			state := *state2
 			if state.Runner != wr.runnerIndex || state.TenantID != wr.tid {
 				logger.Fatalf("BUG: invalid instance shard state %+v on runner %s",
 					state,

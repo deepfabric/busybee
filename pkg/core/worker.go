@@ -483,10 +483,10 @@ func (w *stateWorker) execNotify(tran *transaction) error {
 
 	w.cond.Reset()
 	w.cond.Key = w.conditionKey
-	w.cond.Value = condValue
+	w.cond.Value = condValue.Data()
 	w.cond.Cmp = rpcpb.LT
-	err := w.eng.Notifier().Notify(w.state.TenantID, w.buf, w.tempNotifies, w.cond,
-		w.conditionKey, condValue,
+	err := w.eng.Notifier().Notify(w.state.TenantID, w.tempNotifies, w.cond,
+		w.conditionKey, condValue.Data(),
 		w.queueStateKey, protoc.MustMarshal(&w.state))
 	if err != nil {
 		return err

@@ -52,9 +52,23 @@ var (
 	attrTempBM               = "temp.BM"
 	attrTempWorkflowInstance = "temp.wf.instance"
 
-	attrQueueWriteBatchKey = "queue.wb"
-	attrQueueStates        = "queue.states"
+	attrQueueWriteBatchKey  = "queue.wb"
+	attrQueueStates         = "queue.states"
+	attrQueueCompletedValue = "queue.completed.value"
 )
+
+func getQueueCompletedValue(attrs map[string]interface{}) []byte {
+	var value []byte
+
+	if v, ok := attrs[attrQueueCompletedValue]; ok {
+		value = v.([]byte)
+	} else {
+		value = make([]byte, 16, 16)
+		attrs[attrQueueCompletedValue] = value
+	}
+
+	return value
+}
 
 func getTempWorkflowInstance(attrs map[string]interface{}) *metapb.WorkflowInstance {
 	var value *metapb.WorkflowInstance

@@ -175,7 +175,7 @@ func (l *kvShardLoader) doPut(value putCtx, buf *goetty.ByteBuf) {
 		value.index)
 
 	buf.Clear()
-	key := storage.ShardBitmapKey(value.key, value.index, buf)
+	key := storage.ShardBitmapKey(value.key, value.index)
 	err := l.store.SetWithTTL(key, value.data, int64(value.ttl))
 	if err != nil {
 		logger.Infof("put bitmap shard %s/%d failed with %+v, retry later",
@@ -199,7 +199,7 @@ func (l *kvShardLoader) doLoad(value loadCtx, buf *goetty.ByteBuf) {
 		value.index)
 
 	buf.Clear()
-	key := storage.ShardBitmapKey(value.key, value.index, buf)
+	key := storage.ShardBitmapKey(value.key, value.index)
 	data, err := l.store.Get(key)
 	if err != nil {
 		logger.Errorf("load bitmap shard %s/%d failed with %+v, retry later",

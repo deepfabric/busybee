@@ -1,11 +1,11 @@
 package storage
 
 import (
-	"fmt"
 	"math"
 	"time"
 
 	"github.com/deepfabric/beehive/pb/raftcmdpb"
+	"github.com/deepfabric/beehive/raftstore"
 	bhstorage "github.com/deepfabric/beehive/storage"
 	"github.com/deepfabric/busybee/pkg/metric"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
@@ -41,15 +41,14 @@ func (qb *queueBatch) addReq(req *raftcmdpb.Request, resp *raftcmdpb.Response, b
 		protoc.MustUnmarshal(msg, req.Cmd)
 		id := goetty.Byte2UInt64(msg.Key)
 		target := goetty.Byte2UInt32(msg.Key[8:])
-
 		prefix := req.Key[:len(req.Key)-len(msg.Key)]
 
 		if !qb.loaded {
-			key := QueueMetaKey(id, target, qb.buf)
+			key := QueueMetaKey(id, target)
 			qb.buf.MarkWrite()
 			qb.buf.Write(prefix)
 			qb.buf.Write(key)
-			value, err := b.bs.getStore(b.shard).Get(qb.buf.WrittenDataAfterMark())
+			value, err := b.bs.getStore(b.shard).Get(qb.buf.WrittenDataAfterMark().Data())
 			if err != nil {
 				log.Fatalf("load queue meta failed with %+v", err)
 			}
@@ -81,7 +80,7 @@ func (qb *queueBatch) addReq(req *raftcmdpb.Request, resp *raftcmdpb.Response, b
 
 			pb, ok := qb.pbs[target]
 			if !ok {
-				pb = newPartitionBatch(b, qb, metapb.Group(req.Group), id, target, prefix, qb.buf)
+				pb = newPartitionBatch(b, qb, metapb.Group(req.Group), id, target, qb.buf)
 				qb.pbs[target] = pb
 			}
 
@@ -90,7 +89,7 @@ func (qb *queueBatch) addReq(req *raftcmdpb.Request, resp *raftcmdpb.Response, b
 
 		n := len(msg.KVS) / 2
 		for i := 0; i < n; i++ {
-			b.wb.Set(queueKVKey(prefix, id, msg.KVS[2*i], qb.buf), msg.KVS[2*i+1])
+			b.wb.Set(queueKVKey(prefix, id, msg.KVS[2*i]), msg.KVS[2*i+1])
 		}
 
 		value := getUint64Response(attrs)
@@ -138,7 +137,7 @@ func (qb *queueBatch) matchCondition(req *rpcpb.QueueAddRequest, b *batch, id ui
 		return true
 	}
 
-	value, err := b.bs.getStore(b.shard).Get(queueKVKey(prefix, id, cond.Key, qb.buf))
+	value, err := b.bs.getStore(b.shard).Get(queueKVKey(prefix, id, cond.Key))
 	if err != nil {
 		log.Fatalf("load max queue offset failed with %+v", err)
 	}
@@ -150,9 +149,10 @@ type queuePartitionBatch struct {
 	loaded        bool
 	maxOffset     uint64
 	removedOffset uint64
-	pairs         [][]byte
 
+	n                      int
 	qb                     *queueBatch
+	b                      *batch
 	id                     uint64
 	group                  metapb.Group
 	buf                    *goetty.ByteBuf
@@ -163,22 +163,20 @@ type queuePartitionBatch struct {
 	maxAndCleanOffsetValue []byte
 }
 
-func newPartitionBatch(b *batch, qb *queueBatch, group metapb.Group, id uint64, partition uint32, prefix []byte, buf *goetty.ByteBuf) *queuePartitionBatch {
-	buf.MarkWrite()
-	buf.Write(prefix)
-	buf.Write(PartitionKey(id, partition))
-	queueKey := copyKey(buf.WrittenDataAfterMark())
+func newPartitionBatch(b *batch, qb *queueBatch, group metapb.Group, id uint64, partition uint32, buf *goetty.ByteBuf) *queuePartitionBatch {
+	queueKey := raftstore.EncodeDataKey(uint64(group), PartitionKey(id, partition))
 
 	pb := &queuePartitionBatch{
 		maxAndCleanOffsetValue: make([]byte, 16, 16),
 		buf:                    buf,
 		qb:                     qb,
+		b:                      b,
 		id:                     id,
 		group:                  group,
 		queueKey:               queueKey,
-		consumerStartKey:       copyKey(consumerStartKey(queueKey, buf)),
-		consumerEndKey:         copyKey(consumerEndKey(queueKey, buf)),
-		maxAndCleanOffsetKey:   copyKey(maxAndCleanOffsetKey(queueKey, buf)),
+		consumerStartKey:       consumerStartKey(queueKey),
+		consumerEndKey:         consumerEndKey(queueKey),
+		maxAndCleanOffsetKey:   maxAndCleanOffsetKey(queueKey),
 	}
 
 	return pb
@@ -201,14 +199,12 @@ func (qb *queuePartitionBatch) add(b *batch, item []byte) {
 	}
 
 	qb.maxOffset++
-	qb.pairs = append(qb.pairs, QueueItemKey(qb.queueKey, qb.maxOffset, qb.buf), item)
+	qb.b.keys = append(qb.b.keys, queueItemKey(qb.queueKey, qb.maxOffset, qb.buf))
+	qb.b.values = append(qb.b.values, item)
+	qb.n++
 }
 
 func (qb *queuePartitionBatch) exec(s bhstorage.DataStorage, b *batch) error {
-	if len(qb.pairs)%2 != 0 {
-		return fmt.Errorf("queue batch pairs len must pow of 2, but %d", len(qb.pairs))
-	}
-
 	if qb.maxOffset > 0 {
 		// clean [last clean offset, minimum committed offset in all consumers]
 		if qb.maxOffset-qb.removedOffset >= qb.qb.metadata.CleanBatch {
@@ -231,8 +227,8 @@ func (qb *queuePartitionBatch) exec(s bhstorage.DataStorage, b *batch) error {
 			}
 
 			if found && low > qb.removedOffset {
-				from := QueueItemKey(qb.queueKey, qb.removedOffset, qb.buf)
-				to := QueueItemKey(qb.queueKey, low+1, qb.buf)
+				from := QueueItemKey(qb.queueKey, qb.removedOffset)
+				to := QueueItemKey(qb.queueKey, low+1)
 				err = s.RangeDelete(from, to)
 				if err != nil {
 					log.Fatalf("exec queue add batch failed with %+v", err)
@@ -248,13 +244,8 @@ func (qb *queuePartitionBatch) exec(s bhstorage.DataStorage, b *batch) error {
 		b.wb.Set(qb.maxAndCleanOffsetKey, qb.maxAndCleanOffsetValue)
 	}
 
-	n := len(qb.pairs) / 2
-	for i := 0; i < n; i++ {
-		b.wb.Set(qb.pairs[2*i], qb.pairs[2*i+1])
-	}
-
 	metric.SetEventQueueSize(qb.maxOffset-qb.removedOffset, qb.qb.tenant, qb.group)
-	metric.IncEventAdded(n, qb.qb.tenant, qb.group)
+	metric.IncEventAdded(qb.n, qb.qb.tenant, qb.group)
 	return nil
 }
 
@@ -262,5 +253,5 @@ func (qb *queuePartitionBatch) reset() {
 	qb.loaded = false
 	qb.maxOffset = 0
 	qb.removedOffset = 0
-	qb.pairs = qb.pairs[:0]
+	qb.n = 0
 }

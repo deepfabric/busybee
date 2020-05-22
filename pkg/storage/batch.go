@@ -6,6 +6,7 @@ import (
 	bhstorage "github.com/deepfabric/beehive/storage"
 	bhutil "github.com/deepfabric/beehive/util"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
+	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/log"
 )
 
@@ -30,6 +31,8 @@ type batch struct {
 	changedBytes int64
 	bs           *beeStorage
 	wb           *bhutil.WriteBatch
+	keys         []goetty.Slice
+	values       [][]byte
 
 	types []batchType
 	fn    map[rpcpb.Type]batchType
@@ -83,6 +86,10 @@ func (b *batch) Execute() (uint64, int64, error) {
 		}
 	}
 
+	for idx := range b.keys {
+		b.wb.Set(b.keys[idx].Data(), b.values[idx])
+	}
+
 	err := s.Write(b.wb, false)
 	if err != nil {
 		return 0, 0, err
@@ -95,6 +102,8 @@ func (b *batch) Reset() {
 	b.shard = 0
 	b.writtenBytes = 0
 	b.changedBytes = 0
+	b.keys = b.keys[:0]
+	b.values = b.values[:0]
 	b.wb.Reset()
 
 	for _, tp := range b.types {

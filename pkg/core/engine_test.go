@@ -69,8 +69,7 @@ func TestTenantInit(t *testing.T) {
 	})
 	assert.Equal(t, 5, c, "TestTenantInit failed")
 
-	buf := goetty.NewByteBuf(32)
-	data, err := store.GetWithGroup(storage.QueueMetaKey(tid, 0, buf), metapb.TenantOutputGroup)
+	data, err := store.GetWithGroup(storage.QueueMetaKey(tid, 0), metapb.TenantOutputGroup)
 	assert.NoError(t, err, "TestTenantInit failed")
 	assert.NotEmpty(t, data, "TestTenantInit failed")
 }
@@ -146,8 +145,7 @@ func TestStopInstanceAndRestart(t *testing.T) {
 			assert.Equal(t, uint32(9), bm.Maximum(), "TestStopInstance failed")
 		}
 
-		buf := goetty.NewByteBuf(32)
-		value, err = ng.Storage().Get(storage.WorkflowHistoryInstanceKey(instance.Snapshot.ID, instance.InstanceID, buf))
+		value, err = ng.Storage().Get(storage.WorkflowHistoryInstanceKey(instance.Snapshot.ID, instance.InstanceID))
 		assert.NoError(t, err, "TestStopInstance failed")
 		assert.NotEmpty(t, value, "TestStopInstance failed")
 	}
@@ -311,10 +309,9 @@ func TestStartInstance(t *testing.T) {
 
 	time.Sleep(time.Second)
 
-	buf := goetty.NewByteBuf(32)
 	req := rpcpb.AcquireScanRequest()
-	req.Start = storage.QueueItemKey(storage.PartitionKey(10001, 0), 1, buf)
-	req.End = storage.QueueItemKey(storage.PartitionKey(10001, 0), 100, buf)
+	req.Start = storage.QueueItemKey(storage.PartitionKey(10001, 0), 1)
+	req.End = storage.QueueItemKey(storage.PartitionKey(10001, 0), 100)
 	req.Limit = 100
 	value, err := store.ExecCommandWithGroup(req, metapb.TenantOutputGroup)
 	assert.NoError(t, err, "TestTriggerDirect failed")
@@ -451,10 +448,9 @@ func TestTriggerDirect(t *testing.T) {
 	assert.NoError(t, err, "TestTriggerDirect failed")
 	time.Sleep(time.Second)
 
-	buf := goetty.NewByteBuf(32)
 	req := rpcpb.AcquireScanRequest()
-	req.Start = storage.QueueItemKey(storage.PartitionKey(10001, 0), 1, buf)
-	req.End = storage.QueueItemKey(storage.PartitionKey(10001, 0), 100, buf)
+	req.Start = storage.QueueItemKey(storage.PartitionKey(10001, 0), 1)
+	req.End = storage.QueueItemKey(storage.PartitionKey(10001, 0), 100)
 	req.Limit = 100
 	value, err := store.ExecCommandWithGroup(req, metapb.TenantOutputGroup)
 	assert.NoError(t, err, "TestTriggerDirect failed")
@@ -1517,7 +1513,7 @@ type testCheckerNotifier struct {
 	notifies []metapb.Notify
 }
 
-func (nt *testCheckerNotifier) Notify(id uint64, buf *goetty.ByteBuf, values []metapb.Notify, conds *rpcpb.Condition, kvs ...[]byte) error {
+func (nt *testCheckerNotifier) Notify(id uint64, values []metapb.Notify, conds *rpcpb.Condition, kvs ...[]byte) error {
 	nt.notifies = append(nt.notifies, values...)
 	return nil
 }
@@ -1727,11 +1723,10 @@ func TestStepCountAndNotiesMatched(t *testing.T) {
 	buf := goetty.NewByteBuf(32)
 	partitionKey := storage.PartitionKey(tid, 0)
 	from := uint64(0)
-	buf2 := goetty.NewByteBuf(32)
-	endKey := storage.QueueItemKey(partitionKey, math.MaxUint32, buf2)
+	endKey := storage.QueueItemKey(partitionKey, math.MaxUint32)
 	for {
 		buf.Clear()
-		keys, values, err := ng.Storage().ScanWithGroup(storage.QueueItemKey(partitionKey, from, buf), endKey, 256, metapb.TenantOutputGroup)
+		keys, values, err := ng.Storage().ScanWithGroup(storage.QueueItemKey(partitionKey, from), endKey, 256, metapb.TenantOutputGroup)
 		assert.NoError(t, err, "TestStepCountAndNotiesMatched failed")
 		if err != nil {
 			break
@@ -1781,8 +1776,8 @@ func newErrorNotify(max int, delegate notify.Notifier) notify.Notifier {
 	}
 }
 
-func (nt *errorNotify) Notify(id uint64, buf *goetty.ByteBuf, notifies []metapb.Notify, cond *rpcpb.Condition, kvs ...[]byte) error {
-	err := nt.delegate.Notify(id, buf, notifies, cond, kvs...)
+func (nt *errorNotify) Notify(id uint64, notifies []metapb.Notify, cond *rpcpb.Condition, kvs ...[]byte) error {
+	err := nt.delegate.Notify(id, notifies, cond, kvs...)
 
 	if nt.times >= nt.max {
 		return err
@@ -1871,10 +1866,9 @@ func TestNotifyWithErrorRetry(t *testing.T) {
 
 	time.Sleep(time.Second * 8)
 
-	buf := goetty.NewByteBuf(32)
 	req := rpcpb.AcquireScanRequest()
-	req.Start = storage.QueueItemKey(storage.PartitionKey(10001, 0), 1, buf)
-	req.End = storage.QueueItemKey(storage.PartitionKey(10001, 0), 100, buf)
+	req.Start = storage.QueueItemKey(storage.PartitionKey(10001, 0), 1)
+	req.End = storage.QueueItemKey(storage.PartitionKey(10001, 0), 100)
 	req.Limit = 100
 	value, err := store.ExecCommandWithGroup(req, metapb.TenantOutputGroup)
 	assert.NoError(t, err, "TestNotifyWithErrorRetry failed")
@@ -1988,7 +1982,7 @@ func TestStepWithPreLoad(t *testing.T) {
 		assert.NoError(t, err, "TestStepWithPreLoad failed")
 	}
 
-	time.Sleep(time.Second * 2)
+	time.Sleep(time.Second * 5)
 
 	states, err := ng.InstanceCountState(wid)
 	assert.NoError(t, err, "TestStepWithPreLoad failed")

@@ -121,6 +121,17 @@ func UInt16ToBytes(v uint16) []byte {
 	return ret
 }
 
+// Slice the slice of byte buf
+type Slice struct {
+	from, to int // [from, to)
+	buf      *ByteBuf
+}
+
+// Data data
+func (s Slice) Data() []byte {
+	return s.buf.buf[s.from:s.to]
+}
+
 // ByteBuf a buf with byte arrays
 //
 // | discardable bytes  |   readable bytes   |   writeable bytes  |
@@ -255,9 +266,14 @@ func (b *ByteBuf) MarkWrite() {
 	b.markedIndex = b.writerIndex
 }
 
-// WrittenDataAfterMark returns the data after mark write
-func (b *ByteBuf) WrittenDataAfterMark() []byte {
-	return b.buf[b.markedIndex:b.writerIndex]
+// WrittenDataAfterMark returns the data referance after mark write
+func (b *ByteBuf) WrittenDataAfterMark() Slice {
+	return Slice{b.markedIndex, b.writerIndex, b}
+}
+
+// Slice returns a read only bytebuf slice
+func (b *ByteBuf) Slice(from, to int) Slice {
+	return Slice{from, to, b}
 }
 
 // MarkN mark a index offset based by currently read index

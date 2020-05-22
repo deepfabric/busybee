@@ -30,12 +30,13 @@ const (
 )
 
 // TempKey returns the temp key
-func TempKey(key []byte, buf *goetty.ByteBuf) []byte {
-	buf.MarkWrite()
-	buf.WriteByte(tempPrefix)
-	buf.WriteInt64(time.Now().Unix())
-	buf.Write(key)
-	return buf.WrittenDataAfterMark()
+func TempKey(value []byte) []byte {
+	n := 1 + 8 + len(value)
+	key := make([]byte, n, n)
+	key[0] = tempPrefix
+	goetty.Int64ToBytesTo(time.Now().Unix(), key[1:])
+	copy(key[9:], value)
+	return key
 }
 
 // PartitionKey returns partition key
@@ -73,30 +74,31 @@ func WorkflowCurrentInstanceKey(id uint64) []byte {
 }
 
 // WorkflowHistoryInstanceKey returns workflow instance history key
-func WorkflowHistoryInstanceKey(wid, instanceID uint64, buf *goetty.ByteBuf) []byte {
-	buf.MarkWrite()
-	buf.WriteByte(workflowHistoryPrefix)
-	buf.WriteUInt64(wid)
-	buf.WriteUInt64(instanceID)
-	return buf.WrittenDataAfterMark()
+func WorkflowHistoryInstanceKey(wid, instanceID uint64) []byte {
+	key := make([]byte, 17, 17)
+	key[0] = workflowHistoryPrefix
+	goetty.Uint64ToBytesTo(wid, key[1:])
+	goetty.Uint64ToBytesTo(instanceID, key[9:])
+	return key
 }
 
 // ShardBitmapKey returns bitmap shard key
-func ShardBitmapKey(key []byte, index uint32, buf *goetty.ByteBuf) []byte {
-	buf.MarkWrite()
-	buf.Write(key)
-	buf.WriteUInt32(index)
-	return buf.WrittenDataAfterMark()
+func ShardBitmapKey(value []byte, index uint32) []byte {
+	n := len(value)
+	key := make([]byte, n+4, n+4)
+	copy(key, value)
+	goetty.Uint32ToBytesTo(index, key[n:])
+	return key
 }
 
 // WorkflowCrowdShardKey returns workflow instance crow shard key
-func WorkflowCrowdShardKey(wid, instanceID uint64, version uint32, buf *goetty.ByteBuf) []byte {
-	buf.MarkWrite()
-	buf.WriteByte(workflowCrowdPrefix)
-	buf.WriteUInt64(wid)
-	buf.WriteUInt64(instanceID)
-	buf.WriteUInt32(version)
-	return buf.WrittenDataAfterMark()
+func WorkflowCrowdShardKey(wid, instanceID uint64, version uint32) []byte {
+	key := make([]byte, 21, 21)
+	key[0] = workflowCrowdPrefix
+	goetty.Uint64ToBytesTo(wid, key[1:])
+	goetty.Uint64ToBytesTo(instanceID, key[9:])
+	goetty.Uint32ToBytesTo(version, key[17:])
+	return key
 }
 
 // TenantRunnerKey tenant runner key
@@ -205,15 +207,25 @@ func ProfileKey(tenantID uint64, uid uint32) []byte {
 	return key
 }
 
-func maxAndCleanOffsetKey(src []byte, buf *goetty.ByteBuf) []byte {
-	buf.MarkWrite()
-	buf.Write(src)
-	buf.WriteByte(queueOffsetField)
-	return buf.WrittenDataAfterMark()
+func maxAndCleanOffsetKey(src []byte) []byte {
+	n := len(src)
+	key := make([]byte, n+1, n+1)
+	copy(key, src)
+	key[n] = queueOffsetField
+	return key
 }
 
 // QueueItemKey store the item at the offset in the queue
-func QueueItemKey(src []byte, offset uint64, buf *goetty.ByteBuf) []byte {
+func QueueItemKey(src []byte, offset uint64) []byte {
+	n := len(src)
+	key := make([]byte, n+9, n+9)
+	copy(key, src)
+	key[n] = queueItemField
+	goetty.Uint64ToBytesTo(offset, key[n+1:])
+	return key
+}
+
+func queueItemKey(src []byte, offset uint64, buf *goetty.ByteBuf) goetty.Slice {
 	buf.MarkWrite()
 	buf.Write(src)
 	buf.WriteByte(queueItemField)
@@ -222,71 +234,78 @@ func QueueItemKey(src []byte, offset uint64, buf *goetty.ByteBuf) []byte {
 }
 
 // QueueMetaKey returns concurrency queue meta key
-func QueueMetaKey(id uint64, partition uint32, buf *goetty.ByteBuf) []byte {
-	buf.MarkWrite()
-	buf.WriteUInt64(id)
-	buf.WriteUInt32(partition)
-	buf.WriteByte(queueMetaField)
-	return buf.WrittenDataAfterMark()
+func QueueMetaKey(id uint64, partition uint32) []byte {
+	key := make([]byte, 13, 13)
+	goetty.Uint64ToBytesTo(id, key)
+	goetty.Uint32ToBytesTo(partition, key[8:])
+	key[12] = queueMetaField
+	return key
 }
 
 // QueueStateKey returns concurrency queue key
-func QueueStateKey(id uint64, group []byte, buf *goetty.ByteBuf) []byte {
-	buf.MarkWrite()
-	buf.WriteUInt64(id)
-	buf.WriteByte(queueStateField)
-	buf.Write(group)
-	return buf.WrittenDataAfterMark()
+func QueueStateKey(id uint64, group []byte) []byte {
+	n := len(group)
+	key := make([]byte, n+9, n+9)
+	goetty.Uint64ToBytesTo(id, key)
+	key[8] = queueStateField
+	copy(key[9:], group)
+	return key
 }
 
-func queueMetaKey(src []byte, buf *goetty.ByteBuf) []byte {
-	buf.MarkWrite()
-	buf.Write(src)
-	buf.WriteByte(queueMetaField)
-	return buf.WrittenDataAfterMark()
+func queueMetaKey(src []byte) []byte {
+	n := len(src)
+	key := make([]byte, n+1, n+1)
+	copy(key, src)
+	key[n] = queueMetaField
+	return key
 }
 
-func queueStateKey(src []byte, group []byte, buf *goetty.ByteBuf) []byte {
-	buf.MarkWrite()
-	buf.Write(src)
-	buf.WriteByte(queueStateField)
-	buf.Write(group)
-	return buf.WrittenDataAfterMark()
+func queueStateKey(src []byte, group []byte) []byte {
+	n1 := len(src)
+	n2 := len(group)
+
+	key := make([]byte, n1+n2+1, n1+n2+1)
+	copy(key, src)
+	key[n1] = queueStateField
+	copy(key[n1+1:], group)
+	return key
 }
 
-func committedOffsetKey(src []byte, consumer []byte, buf *goetty.ByteBuf) []byte {
-	buf.MarkWrite()
-	buf.Write(src)
-	buf.WriteByte(queueCommittedField)
-	buf.Write(consumer)
-	return buf.WrittenDataAfterMark()
+func committedOffsetKey(src []byte, consumer []byte) []byte {
+	n1 := len(src)
+	n2 := len(consumer)
+
+	key := make([]byte, n1+n2+1, n1+n2+1)
+	copy(key, src)
+	key[n1] = queueCommittedField
+	copy(key[n1+1:], consumer)
+	return key
 }
 
-func queueKVKey(prefix []byte, id uint64, key []byte, buf *goetty.ByteBuf) []byte {
-	buf.MarkWrite()
-	buf.Write(prefix)
-	buf.WriteUInt64(id)
-	buf.WriteByte(queueKVField)
-	buf.Write(key)
-	return buf.WrittenDataAfterMark()
+func queueKVKey(prefix []byte, id uint64, src []byte) []byte {
+	n1 := len(prefix)
+	n2 := len(src)
+
+	key := make([]byte, n1+n2+9, n1+n2+9)
+	copy(key, prefix)
+	goetty.Uint64ToBytesTo(id, key[n1:])
+	key[n1+8] = queueKVField
+	copy(key[n1+9:], src)
+	return key
 }
 
-func consumerStartKey(src []byte, buf *goetty.ByteBuf) []byte {
-	buf.MarkWrite()
-	buf.Write(src)
-	buf.WriteByte(queueCommittedField)
-	return buf.WrittenDataAfterMark()
+func consumerStartKey(src []byte) []byte {
+	n := len(src)
+	key := make([]byte, n+1, n+1)
+	copy(key, src)
+	key[n] = queueCommittedField
+	return key
 }
 
-func consumerEndKey(src []byte, buf *goetty.ByteBuf) []byte {
-	buf.MarkWrite()
-	buf.Write(src)
-	buf.WriteByte(queueCommittedField + 1)
-	return buf.WrittenDataAfterMark()
-}
-
-func copyKey(src []byte) []byte {
-	dst := make([]byte, len(src), len(src))
-	copy(dst, src)
-	return dst
+func consumerEndKey(src []byte) []byte {
+	n := len(src)
+	key := make([]byte, n+1, n+1)
+	copy(key, src)
+	key[n] = queueCommittedField + 1
+	return key
 }

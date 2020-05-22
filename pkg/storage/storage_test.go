@@ -549,8 +549,7 @@ func TestPutToQueueWithClean(t *testing.T) {
 	store, deferFunc := NewTestStorage(t, true)
 	defer deferFunc()
 
-	buf := goetty.NewByteBuf(32)
-	store.Set(QueueMetaKey(10, 0, buf), protoc.MustMarshal(&metapb.QueueState{
+	store.Set(QueueMetaKey(10, 0), protoc.MustMarshal(&metapb.QueueState{
 		Partitions: 2,
 		CleanBatch: 3,
 		MaxAlive:   1,
@@ -560,7 +559,7 @@ func TestPutToQueueWithClean(t *testing.T) {
 	err := store.PutToQueue(10, 0, metapb.DefaultGroup, values...)
 	assert.NoError(t, err, "TestPutToQueueWithClean failed")
 
-	value, err := store.Get(maxAndCleanOffsetKey(PartitionKey(10, 0), buf))
+	value, err := store.Get(maxAndCleanOffsetKey(PartitionKey(10, 0)))
 	assert.NoError(t, err, "TestPutToQueueWithClean failed")
 	assert.Equal(t, uint64(3), goetty.Byte2UInt64(value), "TestPutToQueueWithClean failed")
 	assert.Equal(t, uint64(0), goetty.Byte2UInt64(value[8:]), "TestPutToQueueWithClean failed")
@@ -573,40 +572,40 @@ func TestPutToQueueWithClean(t *testing.T) {
 
 	goetty.Uint64ToBytesTo(1, g1Value)
 	goetty.Int64ToBytesTo(now, g1Value[8:])
-	err = store.Set(committedOffsetKey(PartitionKey(10, 0), g1, buf), g1Value)
+	err = store.Set(committedOffsetKey(PartitionKey(10, 0), g1), g1Value)
 	assert.NoError(t, err, "TestPutToQueueWithClean failed")
 
 	goetty.Uint64ToBytesTo(2, g2Value)
 	goetty.Int64ToBytesTo(now, g2Value[8:])
-	err = store.Set(committedOffsetKey(PartitionKey(10, 0), g2, buf), g2Value)
+	err = store.Set(committedOffsetKey(PartitionKey(10, 0), g2), g2Value)
 	assert.NoError(t, err, "TestPutToQueueWithClean failed")
 
 	err = store.PutToQueue(10, 0, metapb.DefaultGroup, values[0])
 	assert.NoError(t, err, "TestPutToQueueWithClean failed")
-	value, err = store.Get(maxAndCleanOffsetKey(PartitionKey(10, 0), buf))
+	value, err = store.Get(maxAndCleanOffsetKey(PartitionKey(10, 0)))
 	assert.NoError(t, err, "TestPutToQueueWithClean failed")
 	assert.Equal(t, uint64(4), goetty.Byte2UInt64(value), "TestPutToQueueWithClean failed")
 	assert.Equal(t, uint64(0), goetty.Byte2UInt64(value[8:]), "TestPutToQueueWithClean failed")
 
 	goetty.Uint64ToBytesTo(1, g1Value)
 	goetty.Int64ToBytesTo(now-1, g1Value[8:])
-	err = store.Set(committedOffsetKey(PartitionKey(10, 0), g1, buf), g1Value)
+	err = store.Set(committedOffsetKey(PartitionKey(10, 0), g1), g1Value)
 	assert.NoError(t, err, "TestPutToQueueWithClean failed")
 
 	goetty.Uint64ToBytesTo(2, g2Value)
 	goetty.Int64ToBytesTo(now-1, g2Value[8:])
-	err = store.Set(committedOffsetKey(PartitionKey(10, 0), g2, buf), g2Value)
+	err = store.Set(committedOffsetKey(PartitionKey(10, 0), g2), g2Value)
 	assert.NoError(t, err, "TestPutToQueueWithClean failed")
 
 	err = store.PutToQueue(10, 0, metapb.DefaultGroup, values[0])
 	assert.NoError(t, err, "TestPutToQueueWithClean failed")
-	value, err = store.Get(maxAndCleanOffsetKey(PartitionKey(10, 0), buf))
+	value, err = store.Get(maxAndCleanOffsetKey(PartitionKey(10, 0)))
 	assert.NoError(t, err, "TestPutToQueueWithClean failed")
 	assert.Equal(t, uint64(5), goetty.Byte2UInt64(value), "TestPutToQueueWithClean failed")
 	assert.Equal(t, uint64(1), goetty.Byte2UInt64(value[8:]), "TestPutToQueueWithClean failed")
 
-	keys, _, err := store.Scan(QueueItemKey(PartitionKey(10, 0), 0, buf),
-		QueueItemKey(PartitionKey(10, 0), 100, buf),
+	keys, _, err := store.Scan(QueueItemKey(PartitionKey(10, 0), 0),
+		QueueItemKey(PartitionKey(10, 0), 100),
 		100)
 	assert.NoError(t, err, "TestPutToQueueWithClean failed")
 	assert.Equal(t, 4, len(keys), "TestPutToQueueWithClean failed")
@@ -616,8 +615,7 @@ func TestPutToQueue(t *testing.T) {
 	store, deferFunc := NewTestStorage(t, true)
 	defer deferFunc()
 
-	buf := goetty.NewByteBuf(32)
-	store.Set(QueueMetaKey(10, 0, buf), protoc.MustMarshal(&metapb.QueueState{
+	store.Set(QueueMetaKey(10, 0), protoc.MustMarshal(&metapb.QueueState{
 		Partitions: 2,
 	}))
 
@@ -661,7 +659,7 @@ func TestPutToQueue(t *testing.T) {
 	assert.NoError(t, err, "TestPutToQueue failed")
 
 	for i := uint64(1); i < 4; i++ {
-		data, err := store.Get(QueueItemKey(PartitionKey(10, 0), i, buf))
+		data, err := store.Get(QueueItemKey(PartitionKey(10, 0), i))
 		assert.NoError(t, err, "TestPutToQueue failed")
 
 		evt := &metapb.Event{}
@@ -676,8 +674,7 @@ func TestPutToQueueWithAlloc(t *testing.T) {
 	store, deferFunc := NewTestStorage(t, true)
 	defer deferFunc()
 
-	buf := goetty.NewByteBuf(32)
-	store.Set(QueueMetaKey(10, 0, buf), protoc.MustMarshal(&metapb.QueueState{
+	store.Set(QueueMetaKey(10, 0), protoc.MustMarshal(&metapb.QueueState{
 		Partitions: 3,
 	}))
 
@@ -686,7 +683,7 @@ func TestPutToQueueWithAlloc(t *testing.T) {
 	assert.NoError(t, err, "TestPutToQueueWithAlloc failed")
 
 	for i := uint32(0); i < 3; i++ {
-		data, err := store.Get(QueueItemKey(PartitionKey(10, i), 1, buf))
+		data, err := store.Get(QueueItemKey(PartitionKey(10, i), 1))
 		assert.NoError(t, err, "TestPutToQueueWithAlloc failed")
 		assert.Equal(t, values[i], data, "TestPutToQueue failed")
 	}
@@ -696,8 +693,7 @@ func TestPutToQueueWithKV(t *testing.T) {
 	store, deferFunc := NewTestStorage(t, true)
 	defer deferFunc()
 
-	buf := goetty.NewByteBuf(32)
-	store.Set(QueueMetaKey(10, 0, buf), protoc.MustMarshal(&metapb.QueueState{
+	store.Set(QueueMetaKey(10, 0), protoc.MustMarshal(&metapb.QueueState{
 		Partitions: 2,
 	}))
 
@@ -720,7 +716,7 @@ func TestPutToQueueWithKV(t *testing.T) {
 	}, key, value)
 	assert.NoError(t, err, "TestPutToQueueWithKV failed")
 
-	data, err := store.Get(QueueItemKey(PartitionKey(10, 0), 1, buf))
+	data, err := store.Get(QueueItemKey(PartitionKey(10, 0), 1))
 	assert.NoError(t, err, "TestPutToQueueWithKV failed")
 
 	evt := &metapb.Event{}
@@ -738,8 +734,7 @@ func TestPutToQueueWithAllocAndKV(t *testing.T) {
 	store, deferFunc := NewTestStorage(t, true)
 	defer deferFunc()
 
-	buf := goetty.NewByteBuf(32)
-	store.Set(QueueMetaKey(10, 0, buf), protoc.MustMarshal(&metapb.QueueState{
+	store.Set(QueueMetaKey(10, 0), protoc.MustMarshal(&metapb.QueueState{
 		Partitions: 3,
 	}))
 
@@ -750,7 +745,7 @@ func TestPutToQueueWithAllocAndKV(t *testing.T) {
 	assert.NoError(t, err, "TestPutToQueueWithAllocAndKV failed")
 
 	for i := uint32(0); i < 3; i++ {
-		data, err := store.Get(QueueItemKey(PartitionKey(10, i), 1, buf))
+		data, err := store.Get(QueueItemKey(PartitionKey(10, i), 1))
 		assert.NoError(t, err, "TestPutToQueueWithAllocAndKV failed")
 		assert.Equal(t, values[i], data, "TestPutToQueueWithAllocAndKV failed")
 	}
@@ -773,8 +768,7 @@ func TestQueueFetchWithNoConsumers(t *testing.T) {
 		},
 		Timeout: 60,
 	}
-	buf := goetty.NewByteBuf(32)
-	key := QueueMetaKey(tid, 0, buf)
+	key := QueueMetaKey(tid, 0)
 	err := store.Set(key, protoc.MustMarshal(state))
 	assert.NoError(t, err, "TestQueueFetchWithNoConsumers failed")
 
@@ -799,8 +793,7 @@ func TestQueueFetchWithInvalidConsumer(t *testing.T) {
 		},
 		Timeout: 60,
 	}
-	buf := goetty.NewByteBuf(32)
-	key := QueueStateKey(tid, g1, buf)
+	key := QueueStateKey(tid, g1)
 	err := store.Set(key, protoc.MustMarshal(state))
 	assert.NoError(t, err, "TestQueueFetchWithInvalidConsumer failed")
 
@@ -826,8 +819,7 @@ func TestQueueFetchWithInvalidPartition(t *testing.T) {
 		},
 		Timeout: 60,
 	}
-	buf := goetty.NewByteBuf(32)
-	key := QueueStateKey(tid, g1, buf)
+	key := QueueStateKey(tid, g1)
 	err := store.Set(key, protoc.MustMarshal(state))
 	assert.NoError(t, err, "TestQueueFetchWithInvalidPartition failed")
 
@@ -853,8 +845,7 @@ func TestQueueJoin(t *testing.T) {
 		},
 		Timeout: 60,
 	}
-	buf := goetty.NewByteBuf(32)
-	key := QueueMetaKey(tid, 0, buf)
+	key := QueueMetaKey(tid, 0)
 
 	err := store.Set(key, protoc.MustMarshal(state))
 	assert.NoError(t, err, "TestQueueJoin failed")
@@ -903,8 +894,7 @@ func TestQueueFetchAfterJoin(t *testing.T) {
 		},
 		Timeout: 60,
 	}
-	buf := goetty.NewByteBuf(32)
-	key := QueueMetaKey(tid, 0, buf)
+	key := QueueMetaKey(tid, 0)
 	err := store.Set(key, protoc.MustMarshal(state))
 	assert.NoError(t, err, "TestQueueFetchAfterJoin failed")
 
@@ -965,12 +955,11 @@ func TestQueueFetchWithRebalancing(t *testing.T) {
 		},
 		Timeout: 60,
 	}
-	buf := goetty.NewByteBuf(32)
-	key := QueueStateKey(tid, g1, buf)
+	key := QueueStateKey(tid, g1)
 	err := store.Set(key, protoc.MustMarshal(state))
 	assert.NoError(t, err, "TestQueueFetchWithRebalancing failed")
 
-	store.Set(QueueMetaKey(tid, 0, buf), protoc.MustMarshal(state))
+	store.Set(QueueMetaKey(tid, 0), protoc.MustMarshal(state))
 
 	err = store.PutToQueue(tid, 0, metapb.DefaultGroup, []byte("1"))
 	assert.NoError(t, err, "TestQueueFetchWithRebalancing failed")
@@ -1031,8 +1020,7 @@ func TestQueueFetchWithRemoveTimeoutConsumer(t *testing.T) {
 		},
 		Timeout: 60,
 	}
-	buf := goetty.NewByteBuf(32)
-	key := QueueMetaKey(tid, 0, buf)
+	key := QueueMetaKey(tid, 0)
 	err := store.Set(key, protoc.MustMarshal(state))
 	assert.NoError(t, err, "TestQueueConcurrencyFetchWithRemoveTimeoutConsumer failed")
 
@@ -1107,8 +1095,7 @@ func TestQueueJoinAfterClearConsumers(t *testing.T) {
 		},
 		Timeout: 60,
 	}
-	buf := goetty.NewByteBuf(32)
-	key := QueueStateKey(tid, g1, buf)
+	key := QueueStateKey(tid, g1)
 	err := store.Set(key, protoc.MustMarshal(state))
 	assert.NoError(t, err, "TestQueueJoinAfterClearConsumers failed")
 
@@ -1169,8 +1156,7 @@ func TestQueueFetchWithCommitOffset(t *testing.T) {
 		},
 		Timeout: 60,
 	}
-	buf := goetty.NewByteBuf(32)
-	key := QueueStateKey(tid, g1, buf)
+	key := QueueStateKey(tid, g1)
 	err := store.Set(key, protoc.MustMarshal(state))
 	assert.NoError(t, err, "TestQueueConcurrencyFetchWithCommitOffset failed")
 
@@ -1246,8 +1232,7 @@ func TestQueueFetchWithStaleCommitOffset(t *testing.T) {
 		},
 		Timeout: 60,
 	}
-	buf := goetty.NewByteBuf(32)
-	key := QueueStateKey(tid, g1, buf)
+	key := QueueStateKey(tid, g1)
 	err := store.Set(key, protoc.MustMarshal(state))
 	assert.NoError(t, err, "TestQueueConcurrencyFetchWithStaleCommitOffset failed")
 
@@ -1305,8 +1290,7 @@ func TestQueueScan(t *testing.T) {
 	tid := uint64(1)
 	c1 := []byte("consumer-01")
 
-	buf := goetty.NewByteBuf(32)
-	store.Set(QueueMetaKey(tid, 0, buf), protoc.MustMarshal(&metapb.QueueState{
+	store.Set(QueueMetaKey(tid, 0), protoc.MustMarshal(&metapb.QueueState{
 		Partitions: 1,
 	}))
 
@@ -1341,8 +1325,7 @@ func TestQueueScanWithCompletedOffset(t *testing.T) {
 	tid := uint64(1)
 	c1 := []byte("consumer-01")
 
-	buf := goetty.NewByteBuf(32)
-	store.Set(QueueMetaKey(tid, 0, buf), protoc.MustMarshal(&metapb.QueueState{
+	store.Set(QueueMetaKey(tid, 0), protoc.MustMarshal(&metapb.QueueState{
 		Partitions: 1,
 	}))
 
@@ -1354,7 +1337,7 @@ func TestQueueScanWithCompletedOffset(t *testing.T) {
 	value := make([]byte, 16, 16)
 	goetty.Uint64ToBytesTo(1, value)
 	goetty.Int64ToBytesTo(now, value[8:])
-	err = store.Set(committedOffsetKey(PartitionKey(tid, 0), c1, buf), value)
+	err = store.Set(committedOffsetKey(PartitionKey(tid, 0), c1), value)
 	assert.NoError(t, err, "TestQueueScan failed")
 
 	req := rpcpb.AcquireQueueScanRequest()
@@ -1380,12 +1363,11 @@ func TestQueueCommit(t *testing.T) {
 	tid := uint64(1)
 	c1 := []byte("consumer-01")
 
-	buf := goetty.NewByteBuf(32)
-	store.Set(QueueMetaKey(tid, 0, buf), protoc.MustMarshal(&metapb.QueueState{
+	store.Set(QueueMetaKey(tid, 0), protoc.MustMarshal(&metapb.QueueState{
 		Partitions: 1,
 	}))
 
-	key := committedOffsetKey(PartitionKey(tid, 0), c1, buf)
+	key := committedOffsetKey(PartitionKey(tid, 0), c1)
 
 	req := rpcpb.AcquireQueueCommitRequest()
 	req.ID = tid
@@ -1415,8 +1397,7 @@ func TestQueueCommit(t *testing.T) {
 }
 
 func getTestQueueuState(t *testing.T, store Storage, tid uint64, g []byte) *metapb.QueueState {
-	buf := goetty.NewByteBuf(32)
-	key := QueueStateKey(tid, g, buf)
+	key := QueueStateKey(tid, g)
 	data, err := store.Get(key)
 	assert.NoError(t, err, "getQueueuState failed")
 
