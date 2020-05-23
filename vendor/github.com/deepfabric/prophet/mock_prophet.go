@@ -281,3 +281,17 @@ func (mr *MockProphetMockRecorder) GetEtcdClient() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEtcdClient", reflect.TypeOf((*MockProphet)(nil).GetEtcdClient))
 }
+
+// StorageNode mocks base method
+func (m *MockProphet) StorageNode() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "StorageNode")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// StorageNode indicates an expected call of StorageNode
+func (mr *MockProphetMockRecorder) StorageNode() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StorageNode", reflect.TypeOf((*MockProphet)(nil).StorageNode))
+}

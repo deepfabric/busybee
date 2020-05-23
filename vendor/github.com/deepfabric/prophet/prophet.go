@@ -48,6 +48,8 @@ type Prophet interface {
 	GetRPC() RPC
 	// GetEtcdClient returns the internal etcd instance
 	GetEtcdClient() *clientv3.Client
+	// StorageNode returns true if the current node is storage node
+	StorageNode() bool
 }
 
 type defaultProphet struct {
@@ -139,4 +141,8 @@ func (p *defaultProphet) GetRPC() RPC {
 
 func (p *defaultProphet) GetEtcdClient() *clientv3.Client {
 	return p.opts.client
+}
+
+func (p *defaultProphet) StorageNode() bool {
+	return p.opts.cfg.StorageNode
 }

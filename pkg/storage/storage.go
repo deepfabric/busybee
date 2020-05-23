@@ -129,6 +129,10 @@ func NewStorageWithOptions(dataPath string,
 }
 
 func (h *beeStorage) Start() error {
+	if !h.store.Prophet().StorageNode() {
+		return nil
+	}
+
 	elector, err := prophet.NewElector(h.store.Prophet().GetEtcdClient())
 	if err != nil {
 		return err
