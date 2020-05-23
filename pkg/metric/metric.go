@@ -19,4 +19,5 @@ func init() {
 	p.MustRegister(outputEventQueueSizeGauge)
 	p.MustRegister(workflowShardsCountGauge)
 	p.MustRegister(workflowCountGauge)
+	p.MustRegister(runnersCountGauge)
 }

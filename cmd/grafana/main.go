@@ -147,20 +147,23 @@ func engineRow() grabana.DashboardBuilderOption {
 }
 
 func workflowRow() grabana.DashboardBuilderOption {
-	height := 400
+	height := 250
 	return grabana.Row(
 		"Tenant workflow status",
-		withTable("workflow count", height, 3,
+		withTable("workflow count", height, 4,
 			"sum(busybee_engine_workflow_total) by (status)",
 			"{{ status }}"),
-		withTable("workflow shard count", height, 3,
+		withTable("workflow shard count", height, 4,
 			"sum(busybee_engine_workflow_shard_total)",
 			"workers"),
+		withTable("runners count", height, 4,
+			"sum(busybee_engine_runner_total)",
+			"runners"),
 
-		withTable("Input queue size", height, 3,
+		withTable("Input queue size", height, 6,
 			"sum(busybee_event_input_queue_size) by (tenant)",
 			"tenant-{{ tenant }}"),
-		withTable("Output queue size", height, 3,
+		withTable("Output queue size", height, 6,
 			"sum(busybee_event_output_queue_size) by (tenant)",
 			"tenant-{{ tenant }}"),
 	)

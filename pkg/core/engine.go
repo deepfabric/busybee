@@ -166,13 +166,16 @@ func (eng *engine) initReport() {
 				return
 			case <-timer.C:
 				c := 0
+				rc := 0
 				eng.runners.Range(func(key, value interface{}) bool {
 					c += value.(*workerRunner).workerCount()
+					rc++
 					return true
 				})
 
 				logger.Debugf("%d running instance state shards", c)
 				metric.SetWorkflowShardsCount(c)
+				metric.SetRunnersCount(rc)
 			}
 		}
 	})

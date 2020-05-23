@@ -22,6 +22,14 @@ var (
 			Help:      "Total number of workflow instance shards.",
 		})
 
+	runnersCountGauge = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Namespace: "busybee",
+			Subsystem: "engine",
+			Name:      "runner_total",
+			Help:      "Total number of runners.",
+		})
+
 	inputEventQueueSizeGauge = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "busybee",
@@ -60,4 +68,9 @@ func SetWorkflowCount(starting, started, stopping, stopped int) {
 // SetWorkflowShardsCount set workflow shard count
 func SetWorkflowShardsCount(value int) {
 	workflowShardsCountGauge.Set(float64(value))
+}
+
+// SetRunnersCount set runners count
+func SetRunnersCount(value int) {
+	runnersCountGauge.Set(float64(value))
 }
