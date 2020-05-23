@@ -6,7 +6,7 @@ require (
 	github.com/K-Phoen/grabana v0.4.1
 	github.com/RoaringBitmap/roaring v0.4.21
 	github.com/buger/jsonparser v0.0.0-20191204142016-1a29609e0929
-	github.com/deepfabric/beehive v0.0.0-20200528021730-b9c88595d7ac
+	github.com/deepfabric/beehive v0.0.0-20200523093228-203228014797
 	github.com/deepfabric/prophet v0.0.0-20200522084413-da41c4d5a047
 	github.com/fagongzi/expr v0.0.0-20200421084105-c984390ff815
 	github.com/fagongzi/goetty v1.6.0
