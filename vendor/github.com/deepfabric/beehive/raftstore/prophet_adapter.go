@@ -152,7 +152,7 @@ func (s *store) createInitShard(start, end []byte) prophet.Resource {
 	s.mustSaveShards(shard)
 
 	logger.Infof("create init shard %d succeed", shard.ID)
-	return newResourceAdapter(shard)
+	return newResourceAdapter(shard, s)
 }
 
 func (s *store) removeInitShardIfAlreadyBootstrapped(initShards ...prophet.Resource) {
@@ -229,12 +229,14 @@ func (ca *containerAdapter) Unmarshal(data []byte) error {
 }
 
 type resourceAdapter struct {
-	meta metapb.Shard
+	meta  metapb.Shard
+	store *store
 }
 
-func newResourceAdapter(meta metapb.Shard) prophet.Resource {
+func newResourceAdapter(meta metapb.Shard, store *store) prophet.Resource {
 	return &resourceAdapter{
-		meta: meta,
+		meta:  meta,
+		store: store,
 	}
 }
 
@@ -287,6 +289,7 @@ func (ra *resourceAdapter) Clone() prophet.Resource {
 	value := &resourceAdapter{}
 	data, _ := ra.Marshal()
 	value.Unmarshal(data)
+	value.store = ra.store
 	return value
 }
 
@@ -297,6 +300,22 @@ func (ra *resourceAdapter) Marshal() ([]byte, error) {
 func (ra *resourceAdapter) Unmarshal(data []byte) error {
 	protoc.MustUnmarshal(&ra.meta, data)
 	return nil
+}
+
+func (ra *resourceAdapter) SupportRebalance() bool {
+	if ra.store.opts.shardAllowRebalanceFunc != nil {
+		return ra.store.opts.shardAllowRebalanceFunc(ra.meta)
+	}
+
+	return true
+}
+
+func (ra *resourceAdapter) SupportTransferLeader() bool {
+	if ra.store.opts.shardAllowTransferLeaderFunc != nil {
+		return ra.store.opts.shardAllowTransferLeaderFunc(ra.meta)
+	}
+
+	return true
 }
 
 type prophetAdapter struct {
@@ -310,7 +329,9 @@ func newProphetAdapter(s *store) prophet.Adapter {
 }
 
 func (pa *prophetAdapter) NewResource() prophet.Resource {
-	return &resourceAdapter{}
+	return &resourceAdapter{
+		store: pa.s,
+	}
 }
 
 func (pa *prophetAdapter) NewContainer() prophet.Container {
@@ -343,7 +364,7 @@ func (pa *prophetAdapter) FetchResourceHB(id uint64) *prophet.ResourceHeartbeatR
 	}
 
 	req := new(prophet.ResourceHeartbeatReq)
-	req.Resource = newResourceAdapter(pr.ps.shard)
+	req.Resource = newResourceAdapter(pr.ps.shard, pa.s)
 	req.LeaderPeer = &prophet.Peer{ID: pr.peer.ID, ContainerID: pr.peer.StoreID}
 	req.PendingPeers = pr.collectPendingPeers()
 	req.DownPeers = pr.collectDownPeers(pa.s.opts.maxPeerDownTime)

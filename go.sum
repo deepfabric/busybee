@@ -57,6 +57,12 @@ github.com/deepfabric/beehive v0.0.0-20200520072329-d24052c0c16c h1:9uBCyxqGf+FW
 github.com/deepfabric/beehive v0.0.0-20200520072329-d24052c0c16c/go.mod h1:S5hw6UkdLblecOHEZlaHF4wtF63gTTyyzoW1MEw0bUU=
 github.com/deepfabric/beehive v0.0.0-20200521015733-31687f6be517 h1:Rw9glT72TBXIvA5zv3jKLD5QOs17W4lX+YxGTDFPLR4=
 github.com/deepfabric/beehive v0.0.0-20200521015733-31687f6be517/go.mod h1:j9MzhNE5WSZgfn22Op/ABEEvDHf0MFMZPesF6e1Rex4=
+github.com/deepfabric/beehive v0.0.0-20200522090432-d3638bfe5ad7 h1:rkI4iQHFZYJNKymvbRBAJF14QIuBrsVkTxx/riLhJHg=
+github.com/deepfabric/beehive v0.0.0-20200522090432-d3638bfe5ad7/go.mod h1:nI9gvWDa/VJI/oLJU2jnyMe/Cnc/WWGWl4NB5iPZbs8=
+github.com/deepfabric/beehive v0.0.0-20200525010803-af28d45dc7aa h1:vriobqpOeGSKtt8hZ+TNXUtDbwU/dzHQ5+E9zF3TxpY=
+github.com/deepfabric/beehive v0.0.0-20200525010803-af28d45dc7aa/go.mod h1:nI9gvWDa/VJI/oLJU2jnyMe/Cnc/WWGWl4NB5iPZbs8=
+github.com/deepfabric/beehive v0.0.0-20200525014907-419f74b97347 h1:6elR5YuVfJszNjaZ3okjNHUOClzUMFWmBIJ9pglFalE=
+github.com/deepfabric/beehive v0.0.0-20200525014907-419f74b97347/go.mod h1:nI9gvWDa/VJI/oLJU2jnyMe/Cnc/WWGWl4NB5iPZbs8=
 github.com/deepfabric/c-nemo v0.0.0-20200217131733-d8d20abdb6f7 h1:ZuOizeGleJvUp8ZTj9TsWyo70X9nJNfM+Lvw0UeMLVw=
 github.com/deepfabric/c-nemo v0.0.0-20200217131733-d8d20abdb6f7/go.mod h1:xHI4efz5VNLAaNzIpEzcWlG03PcKRA+S7J1LkYbCG9Q=
 github.com/deepfabric/etcd v3.3.17+incompatible h1:JDSLn0ZFr4Jtxko12SkJNl+yWRenHPeqlhUQ+PkMwew=
@@ -67,6 +73,8 @@ github.com/deepfabric/prophet v0.0.0-20200414050845-eafd59e2a17e h1:cTBbA6tfBg32
 github.com/deepfabric/prophet v0.0.0-20200414050845-eafd59e2a17e/go.mod h1:TVX3H+3KeR5oAN4TNtMTJ9nLY4TXwgzaAhklt+81J+k=
 github.com/deepfabric/prophet v0.0.0-20200521015609-72f948ff1cd9 h1:BSswcp2qtS+3gN1sqllf5JPffSeYyz8YpdvsiMZVVSI=
 github.com/deepfabric/prophet v0.0.0-20200521015609-72f948ff1cd9/go.mod h1:TVX3H+3KeR5oAN4TNtMTJ9nLY4TXwgzaAhklt+81J+k=
+github.com/deepfabric/prophet v0.0.0-20200522084413-da41c4d5a047 h1:vB2D033tFSJH9GMw1Pe8nWGxF+j0ojGPaeRACdQzvYA=
+github.com/deepfabric/prophet v0.0.0-20200522084413-da41c4d5a047/go.mod h1:TVX3H+3KeR5oAN4TNtMTJ9nLY4TXwgzaAhklt+81J+k=
 github.com/dgraph-io/badger v1.6.0 h1:DshxFxZWXUcO0xX476VJC07Xsr6ZCBVRHKZ93Oh7Evo=
 github.com/dgraph-io/badger v1.6.0/go.mod h1:zwt7syl517jmP8s94KqSxTlM6IMsdhYy6psNgSztDR4=
 github.com/dgrijalva/jwt-go v3.2.0+incompatible h1:7qlOGliEKZXTDg6OTjfoBKDXWrumCAMpl/TFQ4/5kLM=
