@@ -5,10 +5,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/deepfabric/beehive/util"
 	"github.com/deepfabric/busybee/pkg/metric"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
+	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/deepfabric/busybee/pkg/queue"
 	"github.com/deepfabric/busybee/pkg/storage"
+	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/util/protoc"
 )
 
@@ -73,6 +76,8 @@ type workerRunner struct {
 	eng         *engine
 	workers     map[string]worker
 	consumer    queue.AsyncConsumer
+	lockKey     []byte
+	lockValue   []byte
 
 	completedOffsets map[uint32]uint64
 }
@@ -85,6 +90,8 @@ func newWorkerRunner(tid uint64, runnerIndex uint64, key string, eng *engine) *w
 		workers:          make(map[string]worker),
 		eng:              eng,
 		completedOffsets: make(map[uint32]uint64),
+		lockKey:          []byte(key),
+		lockValue:        goetty.Uint64ToBytes(eng.store.RaftStore().Meta().ID),
 	}
 }
 
@@ -173,7 +180,7 @@ func (wr *workerRunner) loadInstanceShardStates() (int, error) {
 	loaded := 0
 
 	for {
-		keys, values, err := wr.eng.store.ScanWithGroup(startKey, endKey, 4, metapb.TenantRunnerGroup)
+		_, values, err := wr.eng.store.ScanWithGroup(startKey, endKey, 4, metapb.TenantRunnerGroup)
 		if err != nil {
 			return 0, err
 		}
@@ -184,13 +191,8 @@ func (wr *workerRunner) loadInstanceShardStates() (int, error) {
 
 		loaded += len(values)
 		for idx, value := range values {
-			state2 := &metapb.WorkflowInstanceWorkerState{}
-			err := state2.Unmarshal(value)
-			if err != nil {
-				logger.Fatalf("load key %+v, value %d bytes failed, %+v", keys[idx], len(value), value[:10])
-			}
-
-			state := *state2
+			state := metapb.WorkflowInstanceWorkerState{}
+			protoc.MustUnmarshal(&state, value)
 			if state.Runner != wr.runnerIndex || state.TenantID != wr.tid {
 				logger.Fatalf("BUG: invalid instance shard state %+v on runner %s",
 					state,
@@ -345,7 +347,94 @@ func (wr *workerRunner) doStop() {
 	}
 }
 
+func (wr *workerRunner) dlock() {
+	resp := rpcpb.AcquireBoolResponse()
+
+	for {
+		if wr.isStopped() {
+			return
+		}
+
+		req := rpcpb.AcquireSetIfRequest()
+		req.Key = wr.lockKey
+		req.Value = wr.lockValue
+		req.Conditions = []rpcpb.ConditionGroup{
+			{
+				Conditions: []rpcpb.Condition{{Cmp: rpcpb.NotExists}},
+			},
+			{
+				Conditions: []rpcpb.Condition{{Cmp: rpcpb.Equal, Value: wr.lockValue}},
+			},
+		}
+		req.TTL = 10
+
+		value, err := wr.eng.store.ExecCommand(req)
+		if err != nil {
+			metric.IncStorageFailed()
+			logger.Errorf("%s get lock failed with %+v", wr.key, err)
+			continue
+		}
+
+		resp.Reset()
+		protoc.MustUnmarshal(resp, value)
+
+		if resp.Value {
+			wr.keepLock(nil)
+			logger.Infof("%s distributed lock completed", wr.key)
+			return
+		}
+
+		time.Sleep(time.Second * 5)
+	}
+}
+
+func (wr *workerRunner) keepLock(arg interface{}) {
+	if wr.isStopped() {
+		return
+	}
+
+	req := rpcpb.AcquireSetIfRequest()
+	req.Key = wr.lockKey
+	req.Value = wr.lockValue
+	req.Conditions = []rpcpb.ConditionGroup{
+		{
+			Conditions: []rpcpb.Condition{{Cmp: rpcpb.NotExists}},
+		},
+		{
+			Conditions: []rpcpb.Condition{{Cmp: rpcpb.Equal, Value: wr.lockValue}},
+		},
+	}
+	req.TTL = 10
+	wr.eng.store.AsyncExecCommand(req, wr.onLockResponse, nil)
+}
+
+func (wr *workerRunner) onLockResponse(arg interface{}, value []byte, err error) {
+	retry := time.Second * 5
+	if err != nil {
+		logger.Infof("%s keep distributed lock failed with %+v", wr.key, err)
+		retry = 0
+	}
+
+	util.DefaultTimeoutWheel().Schedule(retry, wr.keepLock, nil)
+}
+
+func (wr *workerRunner) dunlock() {
+	req := rpcpb.AcquireDeleteIfRequest()
+	req.Key = wr.lockKey
+	req.Conditions = []rpcpb.ConditionGroup{
+		{
+			Conditions: []rpcpb.Condition{{Cmp: rpcpb.Exists}, {Cmp: rpcpb.Equal, Value: wr.lockValue}},
+		},
+	}
+
+	wr.eng.store.ExecCommand(req)
+	logger.Infof("%s distributed lock released", wr.key)
+}
+
 func (wr *workerRunner) run() {
+	wr.dlock()
+	defer wr.dunlock()
+
 	logger.Infof("%s start load shard states", wr.key)
 	for {
 		err := wr.loadShardStates()

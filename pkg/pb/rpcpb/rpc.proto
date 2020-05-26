@@ -324,6 +324,7 @@ message QueueFetchRequest {
     uint64 completedOffset = 7;
     uint64 count           = 8;
     uint64 maxBytes        = 9;
+    bool   noCommit        = 10;
 }
 
 // QueueScanRequest queue scan request

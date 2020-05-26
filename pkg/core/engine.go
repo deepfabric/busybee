@@ -129,8 +129,7 @@ type engine struct {
 	runner     *task.Runner
 	cronRunner *cron.Cron
 
-	runners sync.Map // key -> worker runner
-	// workers                sync.Map // key -> work runner key
+	runners                sync.Map // key -> worker runner
 	eventC                 chan storage.Event
 	retryNewInstanceC      chan *metapb.WorkflowInstance
 	retryStoppingInstanceC chan *metapb.WorkflowInstance
@@ -731,7 +730,7 @@ func (eng *engine) getTenantRunnerByState(tid uint64, expects ...metapb.WorkerRu
 		}
 
 		if len(value) == 0 {
-			logger.Fatalf("BUG: missing tenant %d runner %d", tid, i)
+			return nil, fmt.Errorf("missing tenant %d runner %d", tid, i)
 		}
 
 		state := metapb.WorkerRunner{}

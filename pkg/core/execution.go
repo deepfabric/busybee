@@ -174,7 +174,9 @@ type directExecution struct {
 }
 
 func (e *directExecution) Execute(ctx expr.Ctx, tran *transaction, target who) error {
-	tran.stepChanged(changedCtx{e.step, e.nextStep, target, 0})
+	if e.nextStep != "" {
+		tran.stepChanged(changedCtx{e.step, e.nextStep, target, 0})
+	}
 	return nil
 }
 

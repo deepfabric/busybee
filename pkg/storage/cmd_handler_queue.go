@@ -141,9 +141,14 @@ func (h *beeStorage) queueFetch(shard bhmetapb.Shard, req *raftcmdpb.Request, at
 		p.State == metapb.PSRunning {
 
 		if queueFetch.Count >= 0 {
+			completed := p.Completed
+			if completed < queueFetch.CompletedOffset {
+				completed = queueFetch.CompletedOffset
+			}
+
 			// do fetch new items
-			startKey := QueueItemKey(req.Key, p.Completed+1)
-			endKey := QueueItemKey(req.Key, p.Completed+1+queueFetch.Count)
+			startKey := QueueItemKey(req.Key, completed+1)
+			endKey := QueueItemKey(req.Key, completed+1+queueFetch.Count)
 
 			maxBytesPerFetch := queueFetch.MaxBytes
 			if maxBytesPerFetch == 0 {
@@ -185,7 +190,7 @@ func (h *beeStorage) queueFetch(shard bhmetapb.Shard, req *raftcmdpb.Request, at
 			}
 
 			if c > 0 {
-				fetchResp.LastOffset = p.Completed + c
+				fetchResp.LastOffset = completed + c
 				for idx := range items {
 					fetchResp.Items = append(fetchResp.Items, items[idx].Data())
 				}
@@ -357,7 +362,7 @@ func maybeUpdateCompletedOffset(state *metapb.QueueState, now int64, req *rpcpb.
 		}
 
 		// rebalancing, commit last completed
-		if req.CompletedOffset > p.Completed {
+		if req.CompletedOffset > p.Completed && !req.NoCommit {
 			state.States[req.Partition].Completed = req.CompletedOffset
 		}
 		state.States[req.Partition].LastFetchCount = 0
@@ -368,7 +373,7 @@ func maybeUpdateCompletedOffset(state *metapb.QueueState, now int64, req *rpcpb.
 
 	// normal consumer
 	if p.State == metapb.PSRunning {
-		if req.CompletedOffset <= p.Completed {
+		if req.CompletedOffset <= p.Completed || req.NoCommit {
 			return false
 		}
 
@@ -378,7 +383,7 @@ func maybeUpdateCompletedOffset(state *metapb.QueueState, now int64, req *rpcpb.
 		return true
 	}
 
-	if req.CompletedOffset > p.Completed {
+	if req.CompletedOffset > p.Completed && !req.NoCommit {
 		log.Warningf("%s the newest consumer in rebalancing, but completed offset %d > prev completed %d",
 			string(req.Group),
 			req.CompletedOffset,

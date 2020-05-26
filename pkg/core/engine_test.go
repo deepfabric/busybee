@@ -352,6 +352,134 @@ func TestStartInstance(t *testing.T) {
 	assert.Equal(t, 0, len(metadata.Workers), "TestStartInstance failed")
 }
 
+func TestTriggerEnd(t *testing.T) {
+	store, deferFunc := storage.NewTestStorage(t, false)
+	defer deferFunc()
+
+	ng, err := NewEngine(store, notify.NewQueueBasedNotifier(store))
+	assert.NoError(t, err, "TestTriggerEnd failed")
+	assert.NoError(t, ng.Start(), "TestTriggerEnd failed")
+	defer ng.Stop()
+
+	tid := uint64(10001)
+	wid := uint64(10000)
+
+	err = ng.(*engine).tenantInitWithReplicas(metapb.Tenant{
+		ID: tid,
+		Input: metapb.TenantQueue{
+			Partitions:      1,
+			ConsumerTimeout: 60,
+		},
+		Output: metapb.TenantQueue{
+			Partitions:      1,
+			ConsumerTimeout: 60,
+		},
+	}, 1)
+	assert.NoError(t, err, "TestTriggerEnd failed")
+	time.Sleep(time.Second * 2)
+
+	bm := roaring.BitmapOf(1)
+	_, err = ng.StartInstance(metapb.Workflow{
+		ID:       wid,
+		TenantID: tid,
+		StopAt:   time.Now().Add(time.Second * 10).Unix(),
+		Name:     "test_wf",
+		Steps: []metapb.Step{
+			{
+				Name: "step_start",
+				Execution: metapb.Execution{
+					Type: metapb.Branch,
+					Branches: []metapb.ConditionExecution{
+						{
+							Condition: metapb.Expr{
+								Value: []byte("{num: event.uid} == 1"),
+							},
+							NextStep: "step_end_1",
+						},
+						{
+							Condition: metapb.Expr{
+								Value: []byte("1 == 1"),
+							},
+							NextStep: "step_end_else",
+						},
+					},
+				},
+			},
+			{
+				Name: "step_end_1",
+				Execution: metapb.Execution{
+					Type:   metapb.Direct,
+					Direct: &metapb.DirectExecution{},
+				},
+			},
+			{
+				Name: "step_end_else",
+				Execution: metapb.Execution{
+					Type:   metapb.Direct,
+					Direct: &metapb.DirectExecution{},
+				},
+			},
+		},
+	}, metapb.RawLoader, util.MustMarshalBM(bm))
+	assert.NoError(t, err, "TestTriggerEnd failed")
+
+	assert.NoError(t, waitTestWorkflow(ng, wid, metapb.Running), "TestTriggerEnd failed")
+
+	err = ng.Storage().PutToQueue(10001, 0, metapb.TenantInputGroup, protoc.MustMarshal(&metapb.Event{
+		Type: metapb.UserType,
+		User: &metapb.UserEvent{
+			TenantID: 10001,
+			UserID:   1,
+			Data: []metapb.KV{
+				{
+					Key:   []byte("uid"),
+					Value: []byte("1"),
+				},
+			},
+		},
+	}))
+	assert.NoError(t, err, "TestTriggerEnd failed")
+
+	time.Sleep(time.Second)
+
+	states, err := ng.InstanceCountState(10000)
+	assert.NoError(t, err, "TestTriggerEnd failed")
+	m := make(map[string]uint64)
+	for _, state := range states.States {
+		m[state.Step] = state.Count
+	}
+	assert.Equal(t, uint64(0), m["step_start"], "TestTriggerEnd failed")
+	assert.Equal(t, uint64(1), m["step_end_1"], "TestTriggerEnd failed")
+	assert.Equal(t, uint64(0), m["step_end_else"], "TestTriggerEnd failed")
+
+	err = ng.Storage().PutToQueue(10001, 0, metapb.TenantInputGroup, protoc.MustMarshal(&metapb.Event{
+		Type: metapb.UserType,
+		User: &metapb.UserEvent{
+			TenantID: 10001,
+			UserID:   1,
+			Data: []metapb.KV{
+				{
+					Key:   []byte("uid"),
+					Value: []byte("1"),
+				},
+			},
+		},
+	}))
+	assert.NoError(t, err, "TestTriggerEnd failed")
+
+	time.Sleep(time.Second)
+
+	states, err = ng.InstanceCountState(10000)
+	assert.NoError(t, err, "TestTriggerEnd failed")
+	m = make(map[string]uint64)
+	for _, state := range states.States {
+		m[state.Step] = state.Count
+	}
+	assert.Equal(t, uint64(0), m["step_start"], "TestTriggerEnd failed")
+	assert.Equal(t, uint64(1), m["step_end_1"], "TestTriggerEnd failed")
+	assert.Equal(t, uint64(0), m["step_end_else"], "TestTriggerEnd failed")
+
+}
 func TestTriggerDirect(t *testing.T) {
 	store, deferFunc := storage.NewTestStorage(t, false)
 	defer deferFunc()

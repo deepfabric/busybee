@@ -390,7 +390,8 @@ func (w *stateWorker) completeTransaction(completedCB func(uint32, uint64)) {
 		w.retryDo("exec notify", w.tran, w.execNotify)
 		w.retryDo("exec update state", w.tran, w.execUpdate)
 
-		logger.Debugf("worker %s state update to version %d",
+		logger.Debugf("%s %s state update to version %d",
+			w.rkey,
 			w.key,
 			w.state.Version)
 	}
@@ -411,7 +412,8 @@ func (w *stateWorker) checkLastTranscation() {
 	for {
 		value, err := w.eng.Storage().GetWithGroup(w.queueGetStateKey, metapb.TenantOutputGroup)
 		if err != nil {
-			logger.Errorf("worker %s load last transaction failed with %+v, retry later",
+			logger.Errorf("%s %s load last transaction failed with %+v, retry later",
+				w.rkey,
 				w.key,
 				err)
 			time.Sleep(time.Second * 1)
@@ -419,7 +421,8 @@ func (w *stateWorker) checkLastTranscation() {
 		}
 
 		if len(value) == 0 {
-			logger.Infof("worker %s has no last transcation",
+			logger.Infof("%s %s has no last transcation",
+				w.rkey,
 				w.key)
 			break
 		}
@@ -433,8 +436,10 @@ func (w *stateWorker) checkLastTranscation() {
 		w.state = last
 		err = w.resetByState()
 		if err != nil {
-			logger.Fatalf("worker %s reset state failed with %+v",
-				w.key, err)
+			logger.Fatalf("%s %s reset state failed with %+v",
+				w.rkey,
+				w.key,
+				err)
 		}
 
 		w.retryDo("update state by last trnasaction", nil, w.execUpdate)
@@ -468,7 +473,8 @@ func (w *stateWorker) execNotify(tran *transaction) error {
 					break
 				}
 
-				logger.Debugf("worker %s move %d from %s to %s",
+				logger.Debugf("%s %s move %d from %s to %s",
+					w.rkey,
 					w.key,
 					iter.Next(),
 					changed.from,
@@ -492,7 +498,7 @@ func (w *stateWorker) execNotify(tran *transaction) error {
 		return err
 	}
 
-	logger.Infof("%s worker %s moved %d, left %d",
+	logger.Infof("%s %s moved %d, %d events left",
 		w.rkey,
 		w.key,
 		totalMoved,
