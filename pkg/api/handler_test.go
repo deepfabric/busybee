@@ -421,7 +421,7 @@ func TestProfile(t *testing.T) {
 	assert.NoError(t, err, "TestProfile failed")
 	resp = data.(*rpcpb.Response)
 	assert.Empty(t, resp.Error.Error, "TestProfile failed")
-	assert.Equal(t, string(value), string(resp.BytesResp.Value), "TestProfile failed")
+	assert.Equal(t, string(value), string(resp.BytesResp.Value), "TestProfile failed, %s, %s", string(value), string(resp.BytesResp.Value))
 
 	req = rpcpb.AcquireRequest()
 	req.Type = rpcpb.GetProfile

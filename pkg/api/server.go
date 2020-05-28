@@ -33,7 +33,9 @@ func NewAPIServer(addr string, engine core.Engine) (Server, error) {
 		addr: addr,
 		svr: goetty.NewServer(addr,
 			goetty.WithServerDecoder(decoder),
-			goetty.WithServerEncoder(encoder)),
+			goetty.WithServerEncoder(encoder),
+			goetty.WithServerReadBufSize(1024*1024),
+			goetty.WithServerWriteBufSize(1024*1024)),
 		engine: engine,
 	}, nil
 }

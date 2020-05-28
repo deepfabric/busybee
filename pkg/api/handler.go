@@ -254,23 +254,13 @@ func (s *server) doCrowdInstance(ctx ctx) error {
 }
 
 func (s *server) doUpdateMapping(ctx ctx) error {
-	err := s.engine.Service().UpdateMapping(&ctx.req.UpdateMapping)
-	if err != nil {
-		return err
-	}
-
-	s.onResp(ctx, nil, nil)
+	s.engine.Service().UpdateMapping(&ctx.req.UpdateMapping, s.onResp, ctx)
 	return nil
 }
 
 func (s *server) doGetMapping(ctx ctx) error {
-	value, err := s.engine.Service().GetIDValue(ctx.req.GetMapping.ID,
-		ctx.req.GetMapping.From, ctx.req.GetMapping.To)
-	if err != nil {
-		return err
-	}
-
-	s.onResp(ctx, value, nil)
+	s.engine.Service().GetIDValue(ctx.req.GetMapping.ID,
+		ctx.req.GetMapping.From, ctx.req.GetMapping.To, s.onResp, ctx)
 	return nil
 }
 
@@ -297,26 +287,16 @@ func (s *server) doGetIDSet(ctx ctx) error {
 }
 
 func (s *server) doUpdateProfile(ctx ctx) error {
-	err := s.engine.Service().UpdateProfile(ctx.req.UpdateProfile.ID,
+	s.engine.Service().UpdateProfile(ctx.req.UpdateProfile.ID,
 		ctx.req.UpdateProfile.UserID,
-		ctx.req.UpdateProfile.Value)
-	if err != nil {
-		return err
-	}
-
-	s.onResp(ctx, nil, nil)
+		ctx.req.UpdateProfile.Value, s.onResp, ctx)
 	return nil
 }
 
 func (s *server) doGetProfile(ctx ctx) error {
-	value, err := s.engine.Service().GetProfileField(ctx.req.GetProfile.ID,
+	s.engine.Service().GetProfileField(ctx.req.GetProfile.ID,
 		ctx.req.GetProfile.UserID,
-		ctx.req.GetProfile.Field)
-	if err != nil {
-		return err
-	}
-
-	s.onResp(ctx, value, nil)
+		ctx.req.GetProfile.Field, s.onResp, ctx)
 	return nil
 }
 
@@ -389,7 +369,7 @@ func (s *server) onResp(arg interface{}, value []byte, err error) {
 			rpcpb.UpdateMapping, rpcpb.UpdateProfile, rpcpb.AddEvent,
 			rpcpb.ResetID:
 			// empty response
-		case rpcpb.Get, rpcpb.GetIDSet:
+		case rpcpb.Get, rpcpb.GetIDSet, rpcpb.GetMapping:
 			protoc.MustUnmarshal(&resp.BytesResp, value)
 		case rpcpb.BMRange:
 			protoc.MustUnmarshal(&resp.Uint32SliceResp, value)
@@ -398,7 +378,7 @@ func (s *server) onResp(arg interface{}, value []byte, err error) {
 		case rpcpb.BMContains, rpcpb.SetIf, rpcpb.DeleteIf:
 			protoc.MustUnmarshal(&resp.BoolResp, value)
 		case rpcpb.InstanceCountState, rpcpb.InstanceCrowdState,
-			rpcpb.GetMapping, rpcpb.GetProfile, rpcpb.LastInstance,
+			rpcpb.GetProfile, rpcpb.LastInstance,
 			rpcpb.HistoryInstance:
 			resp.BytesResp.Value = value
 		case rpcpb.Scan, rpcpb.ScanMapping:

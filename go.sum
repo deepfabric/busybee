@@ -63,6 +63,8 @@ github.com/deepfabric/beehive v0.0.0-20200525010803-af28d45dc7aa h1:vriobqpOeGSK
 github.com/deepfabric/beehive v0.0.0-20200525010803-af28d45dc7aa/go.mod h1:nI9gvWDa/VJI/oLJU2jnyMe/Cnc/WWGWl4NB5iPZbs8=
 github.com/deepfabric/beehive v0.0.0-20200525014907-419f74b97347 h1:6elR5YuVfJszNjaZ3okjNHUOClzUMFWmBIJ9pglFalE=
 github.com/deepfabric/beehive v0.0.0-20200525014907-419f74b97347/go.mod h1:nI9gvWDa/VJI/oLJU2jnyMe/Cnc/WWGWl4NB5iPZbs8=
+github.com/deepfabric/beehive v0.0.0-20200528021730-b9c88595d7ac h1:tH1HHFfec7EbBkjm2n1/3XjDoJe/yj2gblZ1t0nuloI=
+github.com/deepfabric/beehive v0.0.0-20200528021730-b9c88595d7ac/go.mod h1:nI9gvWDa/VJI/oLJU2jnyMe/Cnc/WWGWl4NB5iPZbs8=
 github.com/deepfabric/c-nemo v0.0.0-20200217131733-d8d20abdb6f7 h1:ZuOizeGleJvUp8ZTj9TsWyo70X9nJNfM+Lvw0UeMLVw=
 github.com/deepfabric/c-nemo v0.0.0-20200217131733-d8d20abdb6f7/go.mod h1:xHI4efz5VNLAaNzIpEzcWlG03PcKRA+S7J1LkYbCG9Q=
 github.com/deepfabric/etcd v3.3.17+incompatible h1:JDSLn0ZFr4Jtxko12SkJNl+yWRenHPeqlhUQ+PkMwew=

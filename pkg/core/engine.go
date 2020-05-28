@@ -988,7 +988,7 @@ func (eng *engine) doBootstrapWorker(state metapb.WorkflowInstanceWorkerState) {
 			continue
 		}
 
-		value.(*workerRunner).addWorker(w.key, w, true)
+		value.(*workerRunner).addWorker(w.key, w)
 		if state.StopAt != 0 {
 			after := time.Second * time.Duration(state.StopAt-now)
 			util.DefaultTimeoutWheel().Schedule(after, eng.stopWorker, w)

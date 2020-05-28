@@ -32,6 +32,8 @@ raftAddr = "127.0.0.1:10001"
 # The RPC address to serve requests
 rpcAddr = "127.0.0.1:10002"
 
+groups = 4
+
 [prophet]
 # The application and prophet RPC address, send heartbeats, alloc id, watch event, etc. required
 rpcAddr = "127.0.0.1:9527"

@@ -3,15 +3,13 @@ package core
 import (
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
-	"github.com/deepfabric/beehive/util"
 	"github.com/deepfabric/busybee/pkg/metric"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
-	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/deepfabric/busybee/pkg/queue"
 	"github.com/deepfabric/busybee/pkg/storage"
-	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/util/protoc"
 )
 
@@ -67,17 +65,13 @@ type worker interface {
 }
 
 type workerRunner struct {
-	sync.RWMutex
-
 	key         string
 	tid         uint64
 	runnerIndex uint64
-	stopped     bool
+	stopped     uint32
 	eng         *engine
-	workers     map[string]worker
+	workers     sync.Map // map[string]worker
 	consumer    queue.AsyncConsumer
-	lockKey     []byte
-	lockValue   []byte
 
 	completedOffsets map[uint32]uint64
 }
@@ -87,91 +81,70 @@ func newWorkerRunner(tid uint64, runnerIndex uint64, key string, eng *engine) *w
 		tid:              tid,
 		runnerIndex:      runnerIndex,
 		key:              key,
-		workers:          make(map[string]worker),
 		eng:              eng,
 		completedOffsets: make(map[uint32]uint64),
-		lockKey:          []byte(key),
-		lockValue:        goetty.Uint64ToBytes(eng.store.RaftStore().Meta().ID),
 	}
 }
 
 func (wr *workerRunner) start() {
-	wr.Lock()
-	defer wr.Unlock()
-
-	if wr.stopped {
-		return
+	if atomic.CompareAndSwapUint32(&wr.stopped, 0, 1) {
+		go wr.run()
 	}
-
-	go wr.run()
 }
 
 func (wr *workerRunner) stop() {
-	logger.Infof("%s set stop flag", wr.key)
-	defer logger.Infof("%s set stop flag completed", wr.key)
-
-	wr.Lock()
-	defer wr.Unlock()
-
-	if wr.stopped {
-		return
-	}
-
-	wr.stopped = true
+	atomic.CompareAndSwapUint32(&wr.stopped, 1, 0)
 }
 
-func (wr *workerRunner) addWorker(key string, w worker, lock bool) {
-	if lock {
-		wr.Lock()
-		defer wr.Unlock()
-	}
+func (wr *workerRunner) isStopped() bool {
+	return atomic.LoadUint32(&wr.stopped) == 0
+}
 
-	if wr.stopped {
+func (wr *workerRunner) addWorker(key string, w worker) {
+	if wr.isStopped() {
 		return
 	}
 
-	if _, ok := wr.workers[key]; ok {
+	if _, ok := wr.workers.Load(key); ok {
 		return
 	}
 
-	wr.workers[key] = w
+	wr.workers.Store(key, w)
 	w.init()
 }
 
 func (wr *workerRunner) removeWorker(key string) {
-	wr.Lock()
-	defer wr.Unlock()
-
-	if wr.stopped {
+	if wr.isStopped() {
 		return
 	}
 
-	if w, ok := wr.workers[key]; ok {
-		w.stop()
+	if w, ok := wr.workers.Load(key); ok {
+		w.(worker).stop()
 		return
 	}
 }
 
 func (wr *workerRunner) workerCount() int {
-	wr.RLock()
-	defer wr.RUnlock()
-
-	return len(wr.workers)
+	c := 0
+	wr.workers.Range(func(k, v interface{}) bool {
+		c++
+		return true
+	})
+	return c
 }
 
 func (wr *workerRunner) removeWorkers(wid uint64) {
-	wr.Lock()
-	defer wr.Unlock()
-
-	if wr.stopped {
+	if wr.isStopped() {
 		return
 	}
 
-	for _, w := range wr.workers {
+	wr.workers.Range(func(k, v interface{}) bool {
+		w := v.(worker)
 		if w.workflowID() == wid {
 			w.stop()
 		}
-	}
+		return true
+	})
 }
 
 func (wr *workerRunner) loadInstanceShardStates() (int, error) {
@@ -212,7 +185,7 @@ func (wr *workerRunner) loadInstanceShardStates() (int, error) {
 			logger.Infof("%s loaded %s",
 				wr.key,
 				wkey)
-			wr.addWorker(wkey, w, false)
+			wr.addWorker(wkey, w)
 
 			if idx == len(values)-1 {
 				startKey = storage.TenantRunnerWorkerKey(wr.tid, wr.runnerIndex, state.WorkflowID, state.Index+1)
@@ -224,10 +197,7 @@ func (wr *workerRunner) loadInstanceShardStates() (int, error) {
 }
 
 func (wr *workerRunner) startQueueConsumer() error {
-	wr.Lock()
-	defer wr.Unlock()
-
-	if wr.stopped {
+	if wr.isStopped() {
 		logger.Infof("%s create queue consumer skipped by stopped", wr.key)
 		return nil
 	}
@@ -249,10 +219,7 @@ func (wr *workerRunner) startQueueConsumer() error {
 }
 
 func (wr *workerRunner) loadShardStates() error {
-	wr.Lock()
-	defer wr.Unlock()
-
-	if wr.stopped {
+	if wr.isStopped() {
 		logger.Infof("%s load instance shard states skipped by stopped", wr.key)
 		return nil
 	}
@@ -274,10 +241,7 @@ func (wr *workerRunner) loadShardStates() error {
 }
 
 func (wr *workerRunner) onEvent(p uint32, lastOffset uint64, items [][]byte) {
-	wr.RLock()
-	defer wr.RUnlock()
-
-	if wr.stopped {
+	if wr.isStopped() {
 		return
 	}
 
@@ -292,11 +256,8 @@ func (wr *workerRunner) onEvent(p uint32, lastOffset uint64, items [][]byte) {
 				break
 			}
 
-			wr.RUnlock()
 			time.Sleep(wait)
-			wr.RLock()
-
-			if wr.stopped {
+			if wr.isStopped() {
 				return
 			}
 		}
@@ -306,135 +267,44 @@ func (wr *workerRunner) onEvent(p uint32, lastOffset uint64, items [][]byte) {
 }
 
 func (wr *workerRunner) addEventToWorkers(p uint32, offset uint64, event *metapb.Event) bool {
-	for wkey, w := range wr.workers {
+	allAdded := true
+	wr.workers.Range(func(k, v interface{}) bool {
+		w := v.(worker)
 		if !w.isStopped() {
 			added, _ := w.onEvent(p, offset, event)
 			if !added {
-				logger.Infof("%s consume events slow down, %s exceed max cached events %d, current is %d, wait %s",
+				logger.Infof("%+v consume events slow down, %s exceed max cached events %d, current is %d, wait %s",
 					wr.key,
-					wkey,
+					k,
 					eventsCacheSize,
 					w.cachedEventSize(),
 					wait)
+				allAdded = false
 				return false
 			}
 		}
-	}
+		return true
+	})
 
-	return true
-}
-
-func (wr *workerRunner) isStopped() bool {
-	wr.RLock()
-	defer wr.RUnlock()
-
-	return wr.stopped
+	return allAdded
 }
 
 func (wr *workerRunner) doStop() {
 	logger.Infof("%s do stop", wr.key)
 	defer logger.Infof("%s do stop completed", wr.key)
 
-	wr.Lock()
-	defer wr.Unlock()
-
 	if wr.consumer != nil {
 		wr.consumer.Stop()
 	}
 
-	for _, w := range wr.workers {
+	wr.workers.Range(func(k, v interface{}) bool {
+		w := v.(worker)
 		w.close()
-	}
-}
-
-func (wr *workerRunner) dlock() {
-	resp := rpcpb.AcquireBoolResponse()
-
-	for {
-		if wr.isStopped() {
-			return
-		}
-
-		req := rpcpb.AcquireSetIfRequest()
-		req.Key = wr.lockKey
-		req.Value = wr.lockValue
-		req.Conditions = []rpcpb.ConditionGroup{
-			{
-				Conditions: []rpcpb.Condition{{Cmp: rpcpb.NotExists}},
-			},
-			{
-				Conditions: []rpcpb.Condition{{Cmp: rpcpb.Equal, Value: wr.lockValue}},
-			},
-		}
-		req.TTL = 10
-
-		value, err := wr.eng.store.ExecCommand(req)
-		if err != nil {
-			metric.IncStorageFailed()
-			logger.Errorf("%s get lock failed with %+v", wr.key, err)
-			continue
-		}
-
-		resp.Reset()
-		protoc.MustUnmarshal(resp, value)
-
-		if resp.Value {
-			wr.keepLock(nil)
-			logger.Infof("%s distributed lock completed", wr.key)
-			return
-		}
-
-		time.Sleep(time.Second * 5)
-	}
-}
-
-func (wr *workerRunner) keepLock(arg interface{}) {
-	if wr.isStopped() {
-		return
-	}
-
-	req := rpcpb.AcquireSetIfRequest()
-	req.Key = wr.lockKey
-	req.Value = wr.lockValue
-	req.Conditions = []rpcpb.ConditionGroup{
-		{
-			Conditions: []rpcpb.Condition{{Cmp: rpcpb.NotExists}},
-		},
-		{
-			Conditions: []rpcpb.Condition{{Cmp: rpcpb.Equal, Value: wr.lockValue}},
-		},
-	}
-	req.TTL = 10
-	wr.eng.store.AsyncExecCommand(req, wr.onLockResponse, nil)
-}
-
-func (wr *workerRunner) onLockResponse(arg interface{}, value []byte, err error) {
-	retry := time.Second * 5
-	if err != nil {
-		logger.Infof("%s keep distributed lock failed with %+v", wr.key, err)
-		retry = 0
-	}
-
-	util.DefaultTimeoutWheel().Schedule(retry, wr.keepLock, nil)
-}
-
-func (wr *workerRunner) dunlock() {
-	req := rpcpb.AcquireDeleteIfRequest()
-	req.Key = wr.lockKey
-	req.Conditions = []rpcpb.ConditionGroup{
-		{
-			Conditions: []rpcpb.Condition{{Cmp: rpcpb.Exists}, {Cmp: rpcpb.Equal, Value: wr.lockValue}},
-		},
-	}
-
-	wr.eng.store.ExecCommand(req)
-	logger.Infof("%s distributed lock released", wr.key)
+		return true
+	})
 }
 
 func (wr *workerRunner) run() {
-	wr.dlock()
-	defer wr.dunlock()
-
 	logger.Infof("%s start load shard states", wr.key)
 	for {
 		err := wr.loadShardStates()
@@ -453,7 +323,6 @@ func (wr *workerRunner) run() {
 		time.Sleep(time.Second * 5)
 	}
 
-	var removedWorkers []string
 	hasEvent := true
 	for {
 		if wr.isStopped() {
@@ -470,25 +339,16 @@ func (wr *workerRunner) run() {
 		}
 
 		hasEvent = false
-		wr.RLock()
-		for key, w := range wr.workers {
+		wr.workers.Range(func(k, v interface{}) bool {
+			w := v.(worker)
 			if w.isStopped() {
 				w.close()
-				removedWorkers = append(removedWorkers, key)
+				wr.workers.Delete(k)
 			} else if w.handleEvent(wr.completed) {
 				hasEvent = true
 			}
-		}
-		wr.RUnlock()
-
-		if len(removedWorkers) > 0 {
-			wr.Lock()
-			for _, key := range removedWorkers {
-				delete(wr.workers, key)
-			}
-			wr.Unlock()
-			removedWorkers = removedWorkers[:0]
-		}
+			return true
+		})
 
 		if len(wr.completedOffsets) > 0 {
 			wr.consumer.Commit(wr.completedOffsets, wr.commitCB)
