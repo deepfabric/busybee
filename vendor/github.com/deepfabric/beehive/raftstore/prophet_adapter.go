@@ -382,7 +382,10 @@ func (pa *prophetAdapter) FetchContainerHB() *prophet.ContainerHeartbeatReq {
 	req := new(prophet.ContainerHeartbeatReq)
 	req.Container = pa.s.meta.Clone()
 	req.Busy = false
-	req.SendingSnapCount = pa.s.opts.trans.SendingSnapshotCount()
+	// maybe transport not started
+	if pa.s.opts.trans != nil {
+		req.SendingSnapCount = pa.s.opts.trans.SendingSnapshotCount()
+	}
 
 	pa.s.foreachPR(func(pr *peerReplica) bool {
 		if pr.isLeader() {
