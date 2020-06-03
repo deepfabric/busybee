@@ -14,6 +14,7 @@ var (
 	attrRequestCommitFetch           = "req.queue.commit"
 	attrRequestQueueConcurrencyFetch = "req.queue.fetch.concurrency"
 	attrRequestQueueJoinGroup        = "req.queue.join.group"
+	attrRequestQueueDelete           = "req.queue.delete"
 	attrRequestSet                   = "req.kv.set"
 	attrRequestSetIf                 = "req.kv.setif"
 	attrRequestGet                   = "req.kv.get"
@@ -526,6 +527,20 @@ func getDeleteRequest(attrs map[string]interface{}) *rpcpb.DeleteRequest {
 	} else {
 		value = &rpcpb.DeleteRequest{}
 		attrs[attrRequestDelete] = value
+	}
+
+	value.Reset()
+	return value
+}
+
+func getQueueDeleteRequest(attrs map[string]interface{}) *rpcpb.QueueDeleteRequest {
+	var value *rpcpb.QueueDeleteRequest
+
+	if v, ok := attrs[attrRequestQueueDelete]; ok {
+		value = v.(*rpcpb.QueueDeleteRequest)
+	} else {
+		value = &rpcpb.QueueDeleteRequest{}
+		attrs[attrRequestQueueDelete] = value
 	}
 
 	value.Reset()

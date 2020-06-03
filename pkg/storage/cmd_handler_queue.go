@@ -217,6 +217,33 @@ func (h *beeStorage) queueFetch(shard bhmetapb.Shard, req *raftcmdpb.Request, at
 	return 0, 0, resp
 }
 
+func (h *beeStorage) queueDelete(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs map[string]interface{}) (uint64, int64, *raftcmdpb.Response) {
+	resp := pb.AcquireResponse()
+	deleteReq := getQueueDeleteRequest(attrs)
+	protoc.MustUnmarshal(deleteReq, req.Cmd)
+
+	store := h.getStore(shard.ID)
+	buf := attrs[raftstore.AttrBuf].(*goetty.ByteBuf)
+
+	from := queueItemKey(req.Key, deleteReq.From, buf)
+	to := queueItemKey(req.Key, deleteReq.To+1, buf)
+
+	err := store.RangeDelete(from.Data(), to.Data())
+	if err != nil {
+		log.Fatalf("delete queue items failed with %+v", err)
+	}
+
+	buf.MarkWrite()
+	buf.WriteUInt64(deleteReq.To)
+	err = store.Set(removedOffsetKey(req.Key), buf.WrittenDataAfterMark().Data())
+	if err != nil {
+		log.Fatalf("delete queue items failed with %+v", err)
+	}
+
+	resp.Value = rpcpb.EmptyRespBytes
+	return 0, 0, resp
+}
+
 func (h *beeStorage) queueScan(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs map[string]interface{}) *raftcmdpb.Response {
 	resp := pb.AcquireResponse()
 	queueScan := getQueueScanRequest(attrs)
@@ -412,7 +439,7 @@ func maybeUpdateCompletedOffset(state *metapb.QueueState, now int64, req *rpcpb.
 }
 
 func loadMaxOffset(store bhstorage.DataStorage, key []byte, buf *goetty.ByteBuf) uint64 {
-	value, err := store.Get(maxAndCleanOffsetKey(key))
+	value, err := store.Get(maxOffsetKey(key))
 	if err != nil {
 		log.Fatalf("load queue max offset failed with %+v", err)
 	}

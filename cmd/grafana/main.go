@@ -19,7 +19,7 @@ import (
 )
 
 var (
-	addr   = flag.String("grafana", "http://172.24.176.1:3000", "Grafana api address")
+	addr   = flag.String("grafana", "http://172.26.112.1:3000", "Grafana api address")
 	key    = flag.String("key", "eyJrIjoiSjFNWWQxY2JDaW1meW52ckd5MlRJd211MU5sYnZ6TngiLCJuIjoidGVzdCIsImlkIjoxfQ==", "Grafana api key")
 	folder = flag.String("folder", "Busybee", "Busybee dashboard folder")
 	ds     = flag.String("ds", "Prometheus", "Prometheus datasource name")
@@ -160,12 +160,25 @@ func workflowRow() grabana.DashboardBuilderOption {
 			"sum(busybee_engine_runner_total)",
 			"runners"),
 
-		withTable("Input queue size", height, 6,
-			"sum(busybee_event_input_queue_size) by (tenant)",
-			"tenant-{{ tenant }}"),
-		withTable("Output queue size", height, 6,
-			"sum(busybee_event_output_queue_size) by (tenant)",
-			"tenant-{{ tenant }}"),
+		withTable("Input queue max offset", height, 4,
+			"sum(busybee_queue_input_max) by (tenant, partition)",
+			"{{ tenant }}/{{ partition }}"),
+		withTable("Input queue removed offset", height, 4,
+			"sum(busybee_queue_input_removed) by (tenant, partition)",
+			"{{ tenant }}/{{ partition }}"),
+		withTable("Input queue consumer offset", height, 4,
+			"sum(busybee_queue_input_consumer) by (tenant, partition, consumer)",
+			"{{ tenant }}/{{ partition }}/{{ consumer }}"),
+
+		withTable("Output queue max offset", height, 4,
+			"sum(busybee_queue_output_max) by (tenant, partition)",
+			"{{ tenant }}/{{ partition }}"),
+		withTable("Output queue removed offset", height, 4,
+			"sum(busybee_queue_output_removed) by (tenant, partition)",
+			"{{ tenant }}/{{ partition }}"),
+		withTable("Output queue consumer offset", height, 4,
+			"sum(busybee_queue_output_consumer) by (tenant, partition, consumer)",
+			"{{ tenant }}/{{ partition }}/{{ consumer }}"),
 	)
 }
 

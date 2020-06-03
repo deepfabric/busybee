@@ -47,6 +47,7 @@ var (
 	queueJoinPool                sync.Pool
 	queueScanPool                sync.Pool
 	queueCommitPool              sync.Pool
+	queueDeletePool              sync.Pool
 	tenantInitPool               sync.Pool
 	updateMappingPool            sync.Pool
 	scanMappingPool              sync.Pool
@@ -512,6 +513,21 @@ func AcquireQueueCommitRequest() *QueueCommitRequest {
 func ReleaseQueueCommitRequest(value *QueueCommitRequest) {
 	value.Reset()
 	queueCommitPool.Put(value)
+}
+
+// AcquireQueueDeleteRequest returns value from pool
+func AcquireQueueDeleteRequest() *QueueDeleteRequest {
+	value := queueDeletePool.Get()
+	if value == nil {
+		return &QueueDeleteRequest{}
+	}
+	return value.(*QueueDeleteRequest)
+}
+
+// ReleaseQueueDeleteRequest returns the value to pool
+func ReleaseQueueDeleteRequest(value *QueueDeleteRequest) {
+	value.Reset()
+	queueDeletePool.Put(value)
 }
 
 // AcquireUpdateMappingRequest returns value from pool

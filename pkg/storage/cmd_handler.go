@@ -32,6 +32,7 @@ func (h *beeStorage) init() {
 	h.AddWriteFunc("queue-join", uint64(rpcpb.QueueJoin), h.queueJoinGroup)
 	h.AddWriteFunc("queue-commit", uint64(rpcpb.QueueCommit), h.queueCommit)
 	h.AddWriteFunc("queue-fetch", uint64(rpcpb.QueueFetch), h.queueFetch)
+	h.AddWriteFunc("queue-delete", uint64(rpcpb.QueueDelete), h.queueDelete)
 
 	h.runner.RunCancelableTask(h.handleShardCycle)
 }
@@ -247,6 +248,16 @@ func (h *beeStorage) BuildRequest(req *raftcmdpb.Request, cmd interface{}) error
 		req.Type = raftcmdpb.Write
 		req.Cmd = protoc.MustMarshal(msg)
 		rpcpb.ReleaseQueueCommitRequest(msg)
+	case *rpcpb.QueueDeleteRequest:
+		msg := cmd.(*rpcpb.QueueDeleteRequest)
+		if len(msg.Key) == 0 {
+			msg.Key = PartitionKey(msg.ID, msg.Partition)
+		}
+		req.Key = msg.Key
+		req.CustemType = uint64(rpcpb.QueueDelete)
+		req.Type = raftcmdpb.Write
+		req.Cmd = protoc.MustMarshal(msg)
+		rpcpb.ReleaseQueueDeleteRequest(msg)
 	case *rpcpb.UpdateMappingRequest:
 		msg := cmd.(*rpcpb.UpdateMappingRequest)
 		req.Key = MappingIDKey(msg.ID, msg.UserID)

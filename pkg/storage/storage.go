@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
 	"github.com/deepfabric/prophet"
+	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/log"
 	"github.com/fagongzi/util/protoc"
 	"github.com/fagongzi/util/task"
@@ -288,40 +290,176 @@ func (h *beeStorage) RaftStore() raftstore.Store {
 }
 
 func (h *beeStorage) becomeReportLeader() {
-	h.startWorkflowScan()
+	h.startScanAndCleanJob()
 }
 
 func (h *beeStorage) becomeReportFollower() {
-	h.stopWorkflowScan()
+	h.stopScanAndCleanJob()
 }
 
-func (h *beeStorage) startWorkflowScan() {
+func (h *beeStorage) startScanAndCleanJob() {
 	if h.scanTaskID > 0 {
 		h.runner.StopCancelableTask(h.scanTaskID)
 	}
 
-	h.scanTaskID, _ = h.runner.RunCancelableTask(h.doWorkflowScan)
+	h.scanTaskID, _ = h.runner.RunCancelableTask(h.doScanAndCleanJob)
 }
 
-func (h *beeStorage) stopWorkflowScan() {
+func (h *beeStorage) stopScanAndCleanJob() {
 	if h.scanTaskID > 0 {
 		h.runner.StopCancelableTask(h.scanTaskID)
 	}
 }
 
-func (h *beeStorage) doWorkflowScan(ctx context.Context) {
-	log.Infof("workflow scan worker started")
-	timer := time.NewTicker(time.Second * 10)
+func (h *beeStorage) doScanAndCleanJob(ctx context.Context) {
+	log.Infof("scan and clean job started")
+	timer := time.NewTicker(time.Second * 30)
 	defer timer.Stop()
 
 	for {
 		select {
 		case <-ctx.Done():
-			log.Infof("workflow scan worker stopped")
+			log.Infof("scan and clean job stopped")
 			return
 		case <-timer.C:
-			log.Infof("start scan workflow")
+			log.Infof("do scan workflow")
 			h.scanWorkflow()
+
+			log.Infof("do scan tenant")
+			h.scanTenants()
+		}
+	}
+}
+
+func (h *beeStorage) scanTenants() {
+	start := uint64(0)
+	end := TenantMetadataKey(math.MaxUint64)
+	metadata := &metapb.Tenant{}
+
+	for {
+		_, values, err := h.Scan(TenantMetadataKey(start), end, 16)
+		if err != nil {
+			metric.IncStorageFailed()
+			log.Errorf("scan queues failed with %+v",
+				err)
+			return
+		}
+
+		if len(values) == 0 {
+			break
+		}
+
+		for idx, value := range values {
+			metadata.Reset()
+			protoc.MustUnmarshal(metadata, value)
+
+			h.cleanQueues(metadata.ID, metapb.TenantInputGroup, metadata.Input.Partitions, metadata.Input.MaxAlive)
+			h.cleanQueues(metadata.ID, metapb.TenantOutputGroup, metadata.Output.Partitions, metadata.Output.MaxAlive)
+
+			if idx == len(values)-1 {
+				start = metadata.ID + 1
+			}
+		}
+	}
+}
+
+func (h *beeStorage) cleanQueues(tid uint64, group metapb.Group, n uint32, maxAlive int64) {
+	tenant := fmt.Sprintf("t-%d", tid)
+
+	for i := uint32(0); i < n; i++ {
+		key := PartitionKey(tid, i)
+		partition := fmt.Sprintf("p-%d", i)
+
+		v, err := h.GetWithGroup(maxOffsetKey(key), group)
+		if err != nil {
+			log.Errorf("scan queues failed with %+v", err)
+			return
+		}
+		if len(v) == 0 {
+			return
+		}
+		max := goetty.Byte2UInt64(v)
+
+		v, err = h.GetWithGroup(removedOffsetKey(key), group)
+		if err != nil {
+			log.Errorf("scan queues failed with %+v", err)
+			return
+		}
+		removed := uint64(0)
+		if len(v) > 0 {
+			removed = goetty.Byte2UInt64(v)
+		}
+
+		log.Infof("%d/%s/%d offset (%d, %d]",
+			tid,
+			group.String(),
+			i,
+			removed,
+			max)
+		metric.SetEventQueueSize(max, removed,
+			tenant,
+			partition,
+			group)
+
+		now := time.Now().Unix()
+		low := uint64(math.MaxUint64)
+		found := false
+		start := consumerStartKey(key)
+		for {
+			keys, values, err := h.ScanWithGroup(start, consumerEndKey(key), 8, group)
+			if err != nil {
+				metric.IncStorageFailed()
+				log.Errorf("scan tenant queues failed with %+v",
+					err)
+				return
+			}
+
+			if len(values) == 0 {
+				break
+			}
+
+			for idx, value := range values {
+				v := goetty.Byte2UInt64(value)
+				ts := goetty.Byte2Int64(value[8:])
+
+				metric.SetQueueConsumerCompleted(v,
+					tenant,
+					partition,
+					string(decodeConsumerFromCommittedOffsetKey(keys[idx])),
+					group)
+				if (now-ts >= maxAlive) && v < low {
+					low = v
+					found = true
+				}
+
+				start = keys[idx]
+			}
+
+			start = append(start, 0)
+		}
+
+		if found && low > removed {
+			req := rpcpb.AcquireQueueDeleteRequest()
+			req.Key = key
+			req.From = removed
+			req.To = low
+			_, err := h.ExecCommandWithGroup(req, group)
+
+			if err != nil {
+				log.Errorf("scan tenant queues failed with %+v", err)
+				return
+			}
+
+			log.Infof("%d/%s/%d removed offset changed to (%d, %d]",
+				tid,
+				group.String(),
+				i,
+				low,
+				max)
+			metric.SetEventQueueSize(max, low,
+				tenant,
+				partition,
+				group)
 		}
 	}
 }

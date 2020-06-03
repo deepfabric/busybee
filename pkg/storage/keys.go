@@ -21,12 +21,13 @@ const (
 	workflowCrowdPrefix        byte = 9
 	tempPrefix                 byte = 10
 
-	queueOffsetField    byte = 0
-	queueItemField      byte = 1
-	queueCommittedField byte = 2
-	queueKVField        byte = 3
-	queueStateField     byte = 4
-	queueMetaField      byte = 5
+	queueMaxOffsetField     byte = 0
+	queueRemovedOffsetField byte = 1
+	queueItemField          byte = 2
+	queueCommittedField     byte = 3
+	queueKVField            byte = 4
+	queueStateField         byte = 5
+	queueMetaField          byte = 6
 )
 
 // TempKey returns the temp key
@@ -207,11 +208,19 @@ func ProfileKey(tenantID uint64, uid uint32) []byte {
 	return key
 }
 
-func maxAndCleanOffsetKey(src []byte) []byte {
+func maxOffsetKey(src []byte) []byte {
 	n := len(src)
 	key := make([]byte, n+1, n+1)
 	copy(key, src)
-	key[n] = queueOffsetField
+	key[n] = queueMaxOffsetField
+	return key
+}
+
+func removedOffsetKey(src []byte) []byte {
+	n := len(src)
+	key := make([]byte, n+1, n+1)
+	copy(key, src)
+	key[n] = queueRemovedOffsetField
 	return key
 }
 
@@ -280,6 +289,10 @@ func committedOffsetKey(src []byte, consumer []byte) []byte {
 	key[n1] = queueCommittedField
 	copy(key[n1+1:], consumer)
 	return key
+}
+
+func decodeConsumerFromCommittedOffsetKey(src []byte) []byte {
+	return src[13:]
 }
 
 func queueKVKey(prefix []byte, id uint64, src []byte) []byte {

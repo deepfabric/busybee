@@ -44,6 +44,7 @@ enum Type {
     QueueJoin             = 302;
     QueueScan             = 303;
     QueueCommit           = 304;
+    QueueDelete           = 305;
     
     TenantInit    = 400;
     UpdateMapping = 401;
@@ -98,6 +99,7 @@ message Request {
     DeleteIfRequest              deleteIf        = 35 [(gogoproto.nullable) = false];
     QueueScanRequest             queueScan       = 36 [(gogoproto.nullable) = false];
     QueueCommitRequest           queueCommit     = 37 [(gogoproto.nullable) = false];
+    QueueDeleteRequest           queueDelete     = 38 [(gogoproto.nullable) = false];
 }
 
 // Response the busybee response
@@ -346,6 +348,16 @@ message QueueCommitRequest {
     bytes  consumer        = 4;
     uint64 completedOffset = 5;
 }
+
+// QueueDeleteRequest queue delete range
+message QueueDeleteRequest { 
+    bytes  key        = 1; 
+    uint64 id         = 2 [(gogoproto.customname) = "ID"];
+    uint32 partition  = 3;
+    uint64 from       = 4;
+    uint64 to         = 5;
+}
+
 
 // QueueFetchResponse fetch response
 message QueueFetchResponse {

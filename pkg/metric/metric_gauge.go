@@ -30,31 +30,76 @@ var (
 			Help:      "Total number of runners.",
 		})
 
-	inputEventQueueSizeGauge = prometheus.NewGaugeVec(
+	inputQueueMaxGauge = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "busybee",
-			Subsystem: "event",
-			Name:      "input_queue_size",
-			Help:      "Total size of input event queue size.",
-		}, []string{"tenant"})
+			Subsystem: "queue",
+			Name:      "input_max",
+			Help:      "Value of input event queue max offset.",
+		}, []string{"tenant", "partition"})
 
-	outputEventQueueSizeGauge = prometheus.NewGaugeVec(
+	inputQueueRemovedGauge = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "busybee",
-			Subsystem: "event",
-			Name:      "output_queue_size",
-			Help:      "Total size of oupt event queue size.",
-		}, []string{"tenant"})
+			Subsystem: "queue",
+			Name:      "input_removed",
+			Help:      "Value of input event queue removed offset.",
+		}, []string{"tenant", "partition"})
+
+	inputQueueConsumerGauge = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "busybee",
+			Subsystem: "queue",
+			Name:      "input_consumer",
+			Help:      "Value of consumer already completed offset.",
+		}, []string{"tenant", "partition", "consumer"})
+
+	outputQueueMaxGauge = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "busybee",
+			Subsystem: "queue",
+			Name:      "output_max",
+			Help:      "Value of output event queue max offset.",
+		}, []string{"tenant", "partition"})
+
+	outputQueueRemovedGauge = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "busybee",
+			Subsystem: "queue",
+			Name:      "output_removed",
+			Help:      "Value of output event queue removed offset.",
+		}, []string{"tenant", "partition"})
+
+	outputQueueConsumerGauge = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "busybee",
+			Subsystem: "queue",
+			Name:      "output_consumer",
+			Help:      "Value of consumer already completed offset.",
+		}, []string{"tenant", "partition", "consumer"})
 )
 
 // SetEventQueueSize set event queue size
-func SetEventQueueSize(value uint64, tenant string, group metapb.Group) {
+func SetEventQueueSize(max, removed uint64, tenant string, partition string, group metapb.Group) {
 	switch group {
 	case metapb.TenantInputGroup:
-		inputEventQueueSizeGauge.WithLabelValues(tenant).Set(float64(value))
+		inputQueueMaxGauge.WithLabelValues(tenant, partition).Set(float64(max))
+		inputQueueRemovedGauge.WithLabelValues(tenant, partition).Set(float64(removed))
 	case metapb.TenantOutputGroup:
-		outputEventQueueSizeGauge.WithLabelValues(tenant).Set(float64(value))
+		outputQueueMaxGauge.WithLabelValues(tenant, partition).Set(float64(max))
+		outputQueueRemovedGauge.WithLabelValues(tenant, partition).Set(float64(removed))
 	}
+}
+
+// SetQueueConsumerCompleted set completed offset
+func SetQueueConsumerCompleted(value uint64, tenant, partition, consumer string, group metapb.Group) {
+	switch group {
+	case metapb.TenantInputGroup:
+		inputQueueConsumerGauge.WithLabelValues(tenant, partition, consumer).Set(float64(value))
+	case metapb.TenantOutputGroup:
+		outputQueueConsumerGauge.WithLabelValues(tenant, partition, consumer).Set(float64(value))
+	}
+
 }
 
 // SetWorkflowCount set workflow count
