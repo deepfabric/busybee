@@ -206,7 +206,7 @@ func (h *beeStorage) queueFetch(shard bhmetapb.Shard, req *raftcmdpb.Request, at
 	resp.Value = protoc.MustMarshal(fetchResp)
 
 	if changed {
-		completed := getQueueCompletedValue(attrs)
+		completed := make([]byte, 16, 16)
 		goetty.Uint64ToBytesTo(state.States[queueFetch.Partition].Completed, completed)
 		goetty.Int64ToBytesTo(now, completed[8:])
 
