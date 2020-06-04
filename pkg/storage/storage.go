@@ -101,10 +101,27 @@ func NewStorageWithOptions(dataPath string,
 		runner: task.NewRunner(),
 	}
 
+	opts = append(opts, raftstore.WithDisableRaftLogCompactProtect(uint64(metapb.TenantInputGroup),
+		uint64(metapb.TenantOutputGroup),
+		uint64(metapb.TenantRunnerGroup)))
 	opts = append(opts, raftstore.WithShardStateAware(h))
 	opts = append(opts, raftstore.WithWriteBatchFunc(h.WriteBatch))
 	opts = append(opts, raftstore.WithReadBatchFunc(h.ReadBatch))
 	opts = append(opts, raftstore.WithShardAddHandleFun(h.addShardCallback))
+	opts = append(opts, raftstore.WithProphetOptions(prophet.WithResourceSortCompareFunc(func(res1 prophet.Resource, res2 prophet.Resource) int {
+		shard1 := res1.(raftstore.ShardResource).Meta()
+		shard2 := res2.(raftstore.ShardResource).Meta()
+
+		if shard1.Group == shard2.Group {
+			return 0
+		}
+
+		if shard1.Group < shard2.Group {
+			return -1
+		}
+
+		return 1
+	})))
 
 	store, err := beehive.CreateRaftStoreFromFile(dataPath,
 		metadataStorages,

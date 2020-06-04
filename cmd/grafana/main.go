@@ -20,7 +20,7 @@ import (
 
 var (
 	addr   = flag.String("grafana", "http://172.26.112.1:3000", "Grafana api address")
-	key    = flag.String("key", "eyJrIjoiSjFNWWQxY2JDaW1meW52ckd5MlRJd211MU5sYnZ6TngiLCJuIjoidGVzdCIsImlkIjoxfQ==", "Grafana api key")
+	key    = flag.String("key", "eyJrIjoiaTFSUFRxWlY1WFNnMmk1WDBXWTJHZHhoUmVZWVB5QXgiLCJuIjoiayIsImlkIjoxfQ==", "Grafana api key")
 	folder = flag.String("folder", "Busybee", "Busybee dashboard folder")
 	ds     = flag.String("ds", "Prometheus", "Prometheus datasource name")
 )

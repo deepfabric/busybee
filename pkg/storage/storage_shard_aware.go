@@ -3,6 +3,7 @@ package storage
 import (
 	"bytes"
 	"context"
+	"time"
 
 	bhmetapb "github.com/deepfabric/beehive/pb/metapb"
 	"github.com/deepfabric/beehive/raftstore"
@@ -32,14 +33,6 @@ func (h *beeStorage) addShardCallback(shard bhmetapb.Shard) error {
 	protoc.MustUnmarshal(action, shard.Data)
 
 	if action.SetKV != nil {
-		req := rpcpb.AcquireSetRequest()
-		req.Key = action.SetKV.KV.Key
-		req.Value = action.SetKV.KV.Value
-		_, err := h.ExecCommandWithGroup(req, action.SetKV.Group)
-		if err != nil {
-			return err
-		}
-
 		if shard.Group == uint64(metapb.TenantRunnerGroup) &&
 			h.store.MaybeLeader(shard.ID) {
 			h.shardC <- shardCycle{
@@ -47,6 +40,25 @@ func (h *beeStorage) addShardCallback(shard bhmetapb.Shard) error {
 				action: becomeLeader,
 			}
 		}
+
+		for {
+			req := rpcpb.AcquireSetRequest()
+			req.Key = action.SetKV.KV.Key
+			req.Value = action.SetKV.KV.Value
+			_, err := h.ExecCommandWithGroup(req, action.SetKV.Group)
+			if err != nil {
+				log.Errorf("shard %d set kv failed with %+v, retry after 5s",
+					shard.ID,
+					err)
+				time.Sleep(time.Second * 5)
+				continue
+			}
+
+			break
+		}
+
+		log.Errorf("shard %d set kv completed",
+			shard.ID)
 	}
 
 	return nil

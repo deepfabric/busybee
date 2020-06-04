@@ -108,7 +108,7 @@ github.com/coreos/go-systemd/journal
 github.com/coreos/pkg/capnslog
 # github.com/davecgh/go-spew v1.1.1
 github.com/davecgh/go-spew/spew
-# github.com/deepfabric/beehive v0.0.0-20200601061555-3391263d5bfd
+# github.com/deepfabric/beehive v0.0.0-20200604062126-c71bb99799b6
 github.com/deepfabric/beehive
 github.com/deepfabric/beehive/grafana
 github.com/deepfabric/beehive/metric
@@ -127,7 +127,7 @@ github.com/deepfabric/beehive/util
 github.com/deepfabric/c-nemo
 # github.com/deepfabric/go-nemo v0.0.0-20200217132256-1a30b09e0871
 github.com/deepfabric/go-nemo
-# github.com/deepfabric/prophet v0.0.0-20200523103135-80d8fba9c0f3
+# github.com/deepfabric/prophet v0.0.0-20200604013630-b96ed259abb7
 github.com/deepfabric/prophet
 # github.com/dgrijalva/jwt-go v3.2.0+incompatible
 github.com/dgrijalva/jwt-go
