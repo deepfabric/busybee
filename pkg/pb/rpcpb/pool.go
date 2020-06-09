@@ -49,6 +49,7 @@ var (
 	queueCommitPool              sync.Pool
 	queueDeletePool              sync.Pool
 	tenantInitPool               sync.Pool
+	tenantInitStateUpdatePool    sync.Pool
 	updateMappingPool            sync.Pool
 	scanMappingPool              sync.Pool
 
@@ -168,6 +169,21 @@ func AcquireTenantInitRequest() *TenantInitRequest {
 func ReleaseTenantInitRequest(value *TenantInitRequest) {
 	value.Reset()
 	tenantInitPool.Put(value)
+}
+
+// AcquireTenantInitStateUpdateRequest returns value from pool
+func AcquireTenantInitStateUpdateRequest() *TenantInitStateUpdateRequest {
+	value := tenantInitStateUpdatePool.Get()
+	if value == nil {
+		return &TenantInitStateUpdateRequest{}
+	}
+	return value.(*TenantInitStateUpdateRequest)
+}
+
+// ReleaseTenantInitStateUpdateRequest returns the value to pool
+func ReleaseTenantInitStateUpdateRequest(value *TenantInitStateUpdateRequest) {
+	value.Reset()
+	tenantInitStateUpdatePool.Put(value)
 }
 
 // AcquireBytesSliceResponse returns value from pool

@@ -33,6 +33,7 @@ func (h *beeStorage) init() {
 	h.AddWriteFunc("queue-commit", uint64(rpcpb.QueueCommit), h.queueCommit)
 	h.AddWriteFunc("queue-fetch", uint64(rpcpb.QueueFetch), h.queueFetch)
 	h.AddWriteFunc("queue-delete", uint64(rpcpb.QueueDelete), h.queueDelete)
+	h.AddWriteFunc("tenant-init-update", uint64(rpcpb.TenantInitStateUpdate), h.updateTenantInitState)
 
 	h.runner.RunCancelableTask(h.handleShardCycle)
 }
@@ -265,6 +266,13 @@ func (h *beeStorage) BuildRequest(req *raftcmdpb.Request, cmd interface{}) error
 		req.Type = raftcmdpb.Write
 		req.Cmd = protoc.MustMarshal(msg)
 		rpcpb.ReleaseUpdateMappingRequest(msg)
+	case *rpcpb.TenantInitStateUpdateRequest:
+		msg := cmd.(*rpcpb.TenantInitStateUpdateRequest)
+		req.Key = TenantMetadataKey(msg.ID)
+		req.CustemType = uint64(rpcpb.TenantInitStateUpdate)
+		req.Type = raftcmdpb.Write
+		req.Cmd = protoc.MustMarshal(msg)
+		rpcpb.ReleaseTenantInitStateUpdateRequest(msg)
 	default:
 		log.Fatalf("not support request %+v(%+T)", cmd, cmd)
 	}

@@ -792,6 +792,21 @@ func TestQueueJoin(t *testing.T) {
 	assert.Equal(t, uint32(0), resp.Index, "TestQueueJoin failed")
 	assert.Equal(t, 2, len(resp.Partitions), "TestQueueJoin failed")
 	assert.Equal(t, 2, len(resp.Versions), "TestQueueJoin failed")
+
+	k := PartitionKey(tid, 0)
+	_, values, err := store.Scan(consumerStartKey(k), consumerEndKey(k), 8)
+	if err != nil {
+		assert.NoError(t, err, "TestQueueJoin failed")
+	}
+	assert.Equal(t, 1, len(values), "TestQueueJoin failed %+v, %+v", consumerStartKey(k), consumerEndKey(k))
+
+	k = PartitionKey(tid, 1)
+	_, values, err = store.Scan(consumerStartKey(k), consumerEndKey(k), 8)
+	if err != nil {
+		assert.NoError(t, err, "TestQueueJoin failed")
+	}
+	assert.Equal(t, 1, len(values), "TestQueueJoin failed %+v, %+v", consumerStartKey(k), consumerEndKey(k))
+
 	pvs := []uint32{0, 1}
 	vs := []uint64{0, 0}
 	for idx := range resp.Partitions {
@@ -804,15 +819,39 @@ func TestQueueJoin(t *testing.T) {
 
 	versionValues := []uint64{0, 0}
 	consumerValues := []uint32{0, 0}
-	stateValues := []metapb.PartitonState{metapb.PSRebalancing, metapb.PSRebalancing}
 	for i := 0; i < 2; i++ {
 		assert.Equal(t, versionValues[i], state.States[i].Version, "TestQueueJoin failed")
 		assert.Equal(t, consumerValues[i], state.States[i].Consumer, "TestQueueJoin failed")
-		assert.Equal(t, stateValues[i], state.States[i].State, "TestQueueJoin failed")
-		assert.Equal(t, uint64(0), state.States[i].Completed, "TestQueueJoin failed")
-		assert.Equal(t, uint64(0), state.States[i].LastFetchCount, "TestQueueJoin failed")
 		assert.True(t, state.States[i].LastFetchTS > 0, "TestQueueJoin failed")
 	}
+
+	err = store.Set(committedOffsetKey(PartitionKey(tid, 0), g1), goetty.Uint64ToBytes(10))
+	assert.NoError(t, err, "TestQueueJoin failed")
+
+	err = store.Set(committedOffsetKey(PartitionKey(tid, 1), g1), goetty.Uint64ToBytes(10))
+	assert.NoError(t, err, "TestQueueJoin failed")
+
+	v, err := store.Get(committedOffsetKey(PartitionKey(tid, 0), g1))
+	assert.NoError(t, err, "TestQueueJoin failed")
+	assert.Equal(t, uint64(10), goetty.Byte2UInt64(v), "TestQueueJoin failed")
+
+	v, err = store.Get(committedOffsetKey(PartitionKey(tid, 1), g1))
+	assert.NoError(t, err, "TestQueueJoin failed")
+	assert.Equal(t, uint64(10), goetty.Byte2UInt64(v), "TestQueueJoin failed")
+
+	req.Reset()
+	req.ID = tid
+	req.Group = g1
+
+	getTestJoinResp(t, store, req)
+
+	v, err = store.Get(committedOffsetKey(PartitionKey(tid, 0), g1))
+	assert.NoError(t, err, "TestQueueJoin failed")
+	assert.Equal(t, uint64(10), goetty.Byte2UInt64(v), "TestQueueJoin failed")
+
+	v, err = store.Get(committedOffsetKey(PartitionKey(tid, 1), g1))
+	assert.NoError(t, err, "TestQueueJoin failed")
+	assert.Equal(t, uint64(10), goetty.Byte2UInt64(v), "TestQueueJoin failed")
 }
 
 func TestQueueFetchAfterJoin(t *testing.T) {
@@ -857,75 +896,11 @@ func TestQueueFetchAfterJoin(t *testing.T) {
 
 	versionValues := []uint64{0, 0}
 	consumerValues := []uint32{0, 0}
-	countValues := []uint64{2, 0}
-	stateValues := []metapb.PartitonState{metapb.PSRunning, metapb.PSRebalancing}
 	for i := 0; i < 2; i++ {
 		assert.Equal(t, versionValues[i], state.States[i].Version, "TestQueueFetchAfterJoin failed")
 		assert.Equal(t, consumerValues[i], state.States[i].Consumer, "TestQueueFetchAfterJoin failed")
-		assert.Equal(t, stateValues[i], state.States[i].State, "TestQueueFetchAfterJoin failed")
-		assert.Equal(t, uint64(0), state.States[i].Completed, "TestQueueFetchAfterJoin failed")
-		assert.Equal(t, countValues[i], state.States[i].LastFetchCount, "TestQueueFetchAfterJoin failed")
 		assert.True(t, state.States[i].LastFetchTS > 0, "TestQueueFetchAfterJoin failed")
 	}
-}
-
-func TestQueueFetchWithRebalancing(t *testing.T) {
-	store, deferFunc := NewTestStorage(t, true)
-	defer deferFunc()
-
-	tid := uint64(1)
-	g1 := []byte("g1")
-	state := &metapb.QueueState{
-		Consumers:  1,
-		Partitions: 1,
-		States: []metapb.Partiton{
-			{
-				Consumer:       0,
-				Version:        1,
-				State:          metapb.PSRebalancing,
-				LastFetchCount: 10,
-				LastFetchTS:    time.Now().Unix(),
-			},
-		},
-		Timeout: 60,
-	}
-	key := QueueStateKey(tid, g1)
-	err := store.Set(key, protoc.MustMarshal(state))
-	assert.NoError(t, err, "TestQueueFetchWithRebalancing failed")
-
-	store.Set(QueueMetaKey(tid, 0), protoc.MustMarshal(state))
-
-	err = store.PutToQueue(tid, 0, metapb.DefaultGroup, []byte("1"))
-	assert.NoError(t, err, "TestQueueFetchWithRebalancing failed")
-
-	req := rpcpb.AcquireQueueFetchRequest()
-	req.Reset()
-	req.ID = tid
-	req.Group = g1
-	req.Consumer = 0
-	req.Version = 1
-	req.Partition = 0
-
-	resp := getTestFetchResp(t, store, req)
-	assert.Equal(t, uint64(0), resp.LastOffset, "TestQueueFetchWithRebalancing failed")
-	assert.Empty(t, resp.Items, "TestQueueFetchWithRebalancing failed")
-	assert.False(t, resp.Removed, "TestQueueFetchWithRebalancing failed")
-
-	state.States[0].LastFetchCount = 0
-	err = store.Set(key, protoc.MustMarshal(state))
-	assert.NoError(t, err, "TestQueueFetchWithRebalancing failed")
-
-	req.Reset()
-	req.ID = tid
-	req.Group = g1
-	req.Consumer = 0
-	req.Version = 1
-	req.Partition = 0
-	req.Count = 10
-	resp = getTestFetchResp(t, store, req)
-	assert.Equal(t, uint64(1), resp.LastOffset, "TestQueueFetchWithRebalancing failed")
-	assert.Equal(t, 1, len(resp.Items), "TestQueueFetchWithRebalancing failed")
-	assert.False(t, resp.Removed, "TestQueueFetchWithRebalancing failed")
 }
 
 func TestQueueFetchWithRemoveTimeoutConsumer(t *testing.T) {
@@ -942,13 +917,11 @@ func TestQueueFetchWithRemoveTimeoutConsumer(t *testing.T) {
 			{
 				Consumer:    0,
 				Version:     0,
-				State:       metapb.PSRunning,
 				LastFetchTS: time.Now().Unix() - 60 - 1,
 			},
 			{
 				Consumer:    1,
 				Version:     1,
-				State:       metapb.PSRunning,
 				LastFetchTS: time.Now().Unix(),
 			},
 		},
@@ -974,13 +947,9 @@ func TestQueueFetchWithRemoveTimeoutConsumer(t *testing.T) {
 
 		versionValues := []uint64{1, 2}
 		consumerValues := []uint32{0, 0}
-		stateValues := []metapb.PartitonState{metapb.PSRebalancing, metapb.PSRebalancing}
 		for i := 0; i < 2; i++ {
 			assert.Equal(t, versionValues[i], state.States[i].Version, "TestQueueConcurrencyFetchWithRemoveTimeoutConsumer failed")
 			assert.Equal(t, consumerValues[i], state.States[i].Consumer, "TestQueueConcurrencyFetchWithRemoveTimeoutConsumer failed")
-			assert.Equal(t, stateValues[i], state.States[i].State, "TestQueueConcurrencyFetchWithRemoveTimeoutConsumer failed")
-			assert.Equal(t, uint64(0), state.States[i].Completed, "TestQueueConcurrencyFetchWithRemoveTimeoutConsumer failed")
-			assert.Equal(t, uint64(0), state.States[i].LastFetchCount, "TestQueueConcurrencyFetchWithRemoveTimeoutConsumer failed")
 			assert.True(t, state.States[i].LastFetchTS > 0, "TestQueueConcurrencyFetchWithRemoveTimeoutConsumer failed")
 		}
 	}
@@ -1017,13 +986,11 @@ func TestQueueJoinAfterClearConsumers(t *testing.T) {
 			{
 				Consumer:    0,
 				Version:     1,
-				State:       metapb.PSRebalancing,
 				LastFetchTS: now - 60 - 1,
 			},
 			{
 				Consumer:    0,
 				Version:     2,
-				State:       metapb.PSRebalancing,
 				LastFetchTS: now,
 			},
 		},
@@ -1053,167 +1020,10 @@ func TestQueueJoinAfterClearConsumers(t *testing.T) {
 
 	versionValues := []uint64{1, 2}
 	consumerValues := []uint32{0, 0}
-	stateValues := []metapb.PartitonState{metapb.PSRebalancing, metapb.PSRebalancing}
 	for i := 0; i < 2; i++ {
 		assert.Equal(t, versionValues[i], state.States[i].Version, "TestQueueJoin failed")
 		assert.Equal(t, consumerValues[i], state.States[i].Consumer, "TestQueueJoin failed")
-		assert.Equal(t, stateValues[i], state.States[i].State, "TestQueueJoin failed")
-		assert.Equal(t, uint64(0), state.States[i].Completed, "TestQueueJoin failed")
-		assert.Equal(t, uint64(0), state.States[i].LastFetchCount, "TestQueueJoin failed")
 		assert.True(t, state.States[i].LastFetchTS >= now, "TestQueueJoin failed")
-	}
-}
-
-func TestQueueFetchWithCommitOffset(t *testing.T) {
-	store, deferFunc := NewTestStorage(t, true)
-	defer deferFunc()
-
-	tid := uint64(1)
-	g1 := []byte("g1")
-
-	state := &metapb.QueueState{
-		Consumers:  2,
-		Partitions: 2,
-		States: []metapb.Partiton{
-			{
-				Consumer:    0,
-				Version:     0,
-				State:       metapb.PSRunning,
-				LastFetchTS: time.Now().Unix(),
-			},
-			{
-				Consumer:    1,
-				Version:     1,
-				State:       metapb.PSRunning,
-				LastFetchTS: time.Now().Unix(),
-			},
-		},
-		Timeout: 60,
-	}
-	key := QueueStateKey(tid, g1)
-	err := store.Set(key, protoc.MustMarshal(state))
-	assert.NoError(t, err, "TestQueueConcurrencyFetchWithCommitOffset failed")
-
-	req := rpcpb.AcquireQueueFetchRequest()
-	req.ID = tid
-	req.Group = g1
-	req.Partition = 0
-	req.Consumer = 0
-	req.Version = 0
-	req.CompletedOffset = 10
-	resp := getTestFetchResp(t, store, req)
-	assert.False(t, resp.Removed, "TestQueueConcurrencyFetchWithCommitOffset failed")
-
-	req.Reset()
-	req.ID = tid
-	req.Group = g1
-	req.Partition = 1
-	req.Consumer = 1
-	req.Version = 1
-	req.CompletedOffset = 20
-	resp = getTestFetchResp(t, store, req)
-	assert.False(t, resp.Removed, "TestQueueConcurrencyFetchWithCommitOffset failed")
-
-	state = getTestQueueuState(t, store, tid, g1)
-	assert.Equal(t, uint32(2), state.Consumers, "TestQueueConcurrencyFetchWithCommitOffset failed")
-
-	offsetValues := []uint64{10, 20}
-	versionValues := []uint64{0, 1}
-	consumerValues := []uint32{0, 1}
-	stateValues := []metapb.PartitonState{metapb.PSRunning, metapb.PSRunning}
-	for i := 0; i < 2; i++ {
-		assert.Equal(t, versionValues[i], state.States[i].Version, "TestQueueConcurrencyFetchWithCommitOffset failed")
-		assert.Equal(t, consumerValues[i], state.States[i].Consumer, "TestQueueConcurrencyFetchWithCommitOffset failed")
-		assert.Equal(t, stateValues[i], state.States[i].State, "TestQueueConcurrencyFetchWithCommitOffset failed")
-		assert.Equal(t, offsetValues[i], state.States[i].Completed, "TestQueueConcurrencyFetchWithCommitOffset failed")
-		assert.Equal(t, uint64(0), state.States[i].LastFetchCount, "TestQueueConcurrencyFetchWithCommitOffset failed")
-		assert.True(t, state.States[i].LastFetchTS > 0, "TestQueueConcurrencyFetchWithCommitOffset failed")
-	}
-}
-
-func TestQueueFetchWithStaleCommitOffset(t *testing.T) {
-	store, deferFunc := NewTestStorage(t, true)
-	defer deferFunc()
-
-	tid := uint64(1)
-	g1 := []byte("g1")
-
-	state := &metapb.QueueState{
-		Consumers:  3,
-		Partitions: 3,
-		States: []metapb.Partiton{
-			{
-				Consumer:       0,
-				Version:        1,
-				State:          metapb.PSRunning,
-				LastFetchCount: 0,
-				LastFetchTS:    time.Now().Unix(),
-			},
-			{
-				Consumer:       1,
-				Version:        1,
-				State:          metapb.PSRebalancing,
-				LastFetchCount: 0,
-				LastFetchTS:    time.Now().Unix(),
-			},
-			{
-				Consumer:       2,
-				Version:        1,
-				State:          metapb.PSRebalancing,
-				LastFetchCount: 10,
-				LastFetchTS:    time.Now().Unix(),
-			},
-		},
-		Timeout: 60,
-	}
-	key := QueueStateKey(tid, g1)
-	err := store.Set(key, protoc.MustMarshal(state))
-	assert.NoError(t, err, "TestQueueConcurrencyFetchWithStaleCommitOffset failed")
-
-	req := rpcpb.AcquireQueueFetchRequest()
-	req.ID = tid
-	req.Group = g1
-	req.Partition = 0
-	req.Consumer = 0
-	req.Version = 0
-	req.CompletedOffset = 10
-	resp := getTestFetchResp(t, store, req)
-	assert.True(t, resp.Removed, "TestQueueConcurrencyFetchWithStaleCommitOffset failed")
-
-	req.Reset()
-	req.ID = tid
-	req.Group = g1
-	req.Partition = 1
-	req.Consumer = 1
-	req.Version = 0
-	req.CompletedOffset = 20
-	resp = getTestFetchResp(t, store, req)
-	assert.True(t, resp.Removed, "TestQueueConcurrencyFetchWithStaleCommitOffset failed")
-
-	req.Reset()
-	req.ID = tid
-	req.Group = g1
-	req.Partition = 2
-	req.Consumer = 2
-	req.Version = 0
-	req.CompletedOffset = 30
-	resp = getTestFetchResp(t, store, req)
-	assert.True(t, resp.Removed, "TestQueueConcurrencyFetchWithStaleCommitOffset failed")
-
-	state = getTestQueueuState(t, store, tid, g1)
-	assert.Equal(t, uint32(3), state.Consumers, "TestQueueConcurrencyFetchWithStaleCommitOffset failed")
-
-	offsetValues := []uint64{0, 0, 30}
-	versionValues := []uint64{1, 1, 1}
-	consumerValues := []uint32{0, 1, 2}
-	stateValues := []metapb.PartitonState{metapb.PSRunning, metapb.PSRebalancing, metapb.PSRunning}
-	for i := 0; i < 1; i++ {
-		assert.Equal(t, versionValues[i], state.States[i].Version, "TestQueueConcurrencyFetchWithStaleCommitOffset failed")
-		assert.Equal(t, consumerValues[i], state.States[i].Consumer, "TestQueueConcurrencyFetchWithStaleCommitOffset failed")
-		assert.Equal(t, stateValues[i], state.States[i].State, "TestQueueConcurrencyFetchWithStaleCommitOffset failed")
-		assert.Equal(t, offsetValues[i], state.States[i].Completed, "TestQueueConcurrencyFetchWithStaleCommitOffset failed")
-		assert.Equal(t, uint64(0), state.States[i].LastFetchCount, "TestQueueConcurrencyFetchWithStaleCommitOffset failed")
-		assert.True(t, state.States[i].LastFetchTS > 0, "TestQueueConcurrencyFetchWithStaleCommitOffset failed")
 	}
 }
 
@@ -1327,7 +1137,7 @@ func TestQueueCommit(t *testing.T) {
 	value, err = store.Get(key)
 	assert.NoError(t, err, "TestQueueCommit failed")
 	assert.NotEmpty(t, value, "TestQueueCommit failed")
-	assert.Equal(t, uint64(2), goetty.Byte2UInt64(value), "TestQueueCommit failed")
+	assert.Equal(t, uint64(10), goetty.Byte2UInt64(value), "TestQueueCommit failed")
 }
 
 func TestCleanQueue(t *testing.T) {

@@ -54,7 +54,7 @@ func (eng *engine) doStopRunnerEvent(state *metapb.WorkerRunner) {
 }
 
 type worker interface {
-	onEvent(p uint32, offset uint64, event *metapb.Event) (bool, error)
+	onEvent(p uint32, offset uint64, event *metapb.Event) (bool, bool, error)
 	stop()
 	close()
 	workflowID() uint64
@@ -65,6 +65,8 @@ type worker interface {
 }
 
 type workerRunner struct {
+	sync.RWMutex
+
 	key         string
 	tid         uint64
 	runnerIndex uint64
@@ -73,16 +75,21 @@ type workerRunner struct {
 	workers     sync.Map // map[string]worker
 	consumer    queue.AsyncConsumer
 
-	completedOffsets map[uint32]uint64
+	completedOffsetsPerHandle map[uint32]uint64 // uint32 -> uint64
+	allWaitCommitOffsets      map[uint32]uint64 // uint32 -> uint64
+
+	disableLoadShardState bool
+	disableStartConsumer  bool
 }
 
 func newWorkerRunner(tid uint64, runnerIndex uint64, key string, eng *engine) *workerRunner {
 	return &workerRunner{
-		tid:              tid,
-		runnerIndex:      runnerIndex,
-		key:              key,
-		eng:              eng,
-		completedOffsets: make(map[uint32]uint64),
+		tid:                       tid,
+		runnerIndex:               runnerIndex,
+		key:                       key,
+		eng:                       eng,
+		completedOffsetsPerHandle: make(map[uint32]uint64),
+		allWaitCommitOffsets:      make(map[uint32]uint64),
 	}
 }
 
@@ -246,13 +253,24 @@ func (wr *workerRunner) onEvent(p uint32, lastOffset uint64, items [][]byte) {
 	}
 
 	offset := lastOffset - uint64(len(items)) + 1
-
+	lastHandledOffset := uint64(0)
 	for _, item := range items {
 		event := metapb.Event{}
 		protoc.MustUnmarshal(&event, item)
 
 		for {
-			if wr.addEventToWorkers(p, offset, &event) {
+			added, needHandled := wr.addEventToWorkers(p, offset, &event)
+			if needHandled {
+				lastHandledOffset = offset
+			}
+
+			if added {
+				if needHandled {
+					wr.Lock()
+					wr.allWaitCommitOffsets[p] = offset
+					wr.Unlock()
+				}
+
 				break
 			}
 
@@ -264,14 +282,34 @@ func (wr *workerRunner) onEvent(p uint32, lastOffset uint64, items [][]byte) {
 
 		offset++
 	}
+
+	// no worker handle this events
+	if lastHandledOffset == 0 {
+		wr.RLock()
+		_, hasWait := wr.allWaitCommitOffsets[p]
+		wr.RUnlock()
+
+		// prev events was not committed
+		if hasWait {
+			return
+		}
+
+		wr.consumer.CommitPartition(p, lastOffset, wr.commitCB)
+		return
+	}
 }
 
-func (wr *workerRunner) addEventToWorkers(p uint32, offset uint64, event *metapb.Event) bool {
+func (wr *workerRunner) addEventToWorkers(p uint32, offset uint64, event *metapb.Event) (bool, bool) {
 	allAdded := true
+	handled := false
 	wr.workers.Range(func(k, v interface{}) bool {
 		w := v.(worker)
 		if !w.isStopped() {
-			added, _ := w.onEvent(p, offset, event)
+			added, needHandle, _ := w.onEvent(p, offset, event)
+			if !handled {
+				handled = needHandle
+			}
+
 			if !added {
 				logger.Infof("%+v consume events slow down, %s exceed max cached events %d, current is %d, wait %s",
 					wr.key,
@@ -286,7 +324,7 @@ func (wr *workerRunner) addEventToWorkers(p uint32, offset uint64, event *metapb
 		return true
 	})
 
-	return allAdded
+	return allAdded, handled
 }
 
 func (wr *workerRunner) doStop() {
@@ -305,22 +343,26 @@ func (wr *workerRunner) doStop() {
 }
 
 func (wr *workerRunner) run() {
-	logger.Infof("%s start load shard states", wr.key)
-	for {
-		err := wr.loadShardStates()
-		if err == nil {
-			break
+	if !wr.disableLoadShardState {
+		logger.Infof("%s start load shard states", wr.key)
+		for {
+			err := wr.loadShardStates()
+			if err == nil {
+				break
+			}
+			time.Sleep(time.Second * 5)
 		}
-		time.Sleep(time.Second * 5)
 	}
 
-	logger.Infof("%s start queue consumer", wr.key)
-	for {
-		err := wr.startQueueConsumer()
-		if err == nil {
-			break
+	if !wr.disableStartConsumer {
+		logger.Infof("%s start queue consumer", wr.key)
+		for {
+			err := wr.startQueueConsumer()
+			if err == nil {
+				break
+			}
+			time.Sleep(time.Second * 5)
 		}
-		time.Sleep(time.Second * 5)
 	}
 
 	hasEvent := true
@@ -334,8 +376,8 @@ func (wr *workerRunner) run() {
 			time.Sleep(time.Millisecond * 10)
 		}
 
-		for key := range wr.completedOffsets {
-			delete(wr.completedOffsets, key)
+		for key := range wr.completedOffsetsPerHandle {
+			delete(wr.completedOffsetsPerHandle, key)
 		}
 
 		hasEvent = false
@@ -350,8 +392,16 @@ func (wr *workerRunner) run() {
 			return true
 		})
 
-		if len(wr.completedOffsets) > 0 {
-			wr.consumer.Commit(wr.completedOffsets, wr.commitCB)
+		if len(wr.completedOffsetsPerHandle) > 0 {
+			wr.consumer.Commit(wr.completedOffsetsPerHandle, wr.commitCB)
+
+			wr.Lock()
+			for p, v := range wr.completedOffsetsPerHandle {
+				if wv, ok := wr.allWaitCommitOffsets[p]; ok && v >= wv {
+					delete(wr.allWaitCommitOffsets, p)
+				}
+			}
+			wr.Unlock()
 		}
 	}
 }
@@ -361,12 +411,12 @@ func (wr *workerRunner) completed(p uint32, offset uint64) {
 		return
 	}
 
-	if value, ok := wr.completedOffsets[p]; ok {
+	if value, ok := wr.completedOffsetsPerHandle[p]; ok {
 		if offset > value {
-			wr.completedOffsets[p] = offset
+			wr.completedOffsetsPerHandle[p] = offset
 		}
 	} else {
-		wr.completedOffsets[p] = offset
+		wr.completedOffsetsPerHandle[p] = offset
 	}
 }
 

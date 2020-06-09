@@ -47,19 +47,11 @@ func (h *beeStorage) queueJoinGroup(shard bhmetapb.Shard, req *raftcmdpb.Request
 		return 0, 0, resp
 	}
 
-	// re join
-	if joinReq.Rejoin && state.Consumers > 0 {
-		joinResp.Index = joinReq.Consumer
-		for p := range state.States {
-			if state.States[p].Consumer == joinReq.Consumer {
-				state.States[p].State = metapb.PSRunning
-				joinResp.Partitions = append(joinResp.Partitions, uint32(p))
-				joinResp.Versions = append(joinResp.Versions, state.States[p].Version)
-			}
+	buf := attrs[raftstore.AttrBuf].(*goetty.ByteBuf)
+	if _, ok := loadLastCompletedOffset(store, req.Key, joinReq.Group, buf); !ok {
+		for i := uint32(0); i < state.Partitions; i++ {
+			mustPutCompletedOffset(store, raftstore.EncodeDataKey(req.Group, PartitionKey(joinReq.ID, i)), joinReq.Group, buf, 0)
 		}
-
-		resp.Value = protoc.MustMarshal(joinResp)
-		return 0, 0, resp
 	}
 
 	now := time.Now().Unix()
@@ -124,7 +116,7 @@ func (h *beeStorage) queueFetch(shard bhmetapb.Shard, req *raftcmdpb.Request, at
 		return 0, 0, resp
 	}
 
-	changed := maybeUpdateCompletedOffset(state, now, queueFetch)
+	changed := false
 	if maybeRemoveTimeoutConsumers(state, now) {
 		log.Infof("group %s clear all consumers, because some consumer timeout",
 			string(queueFetch.Group))
@@ -137,13 +129,11 @@ func (h *beeStorage) queueFetch(shard bhmetapb.Shard, req *raftcmdpb.Request, at
 	if p.Consumer != queueFetch.Consumer ||
 		p.Version != queueFetch.Version {
 		fetchResp.Removed = true
-	} else if p.Version == queueFetch.Version &&
-		p.State == metapb.PSRunning {
-
+	} else if p.Version == queueFetch.Version {
 		if queueFetch.Count >= 0 {
-			completed := p.Completed
-			if completed < queueFetch.CompletedOffset {
-				completed = queueFetch.CompletedOffset
+			completed := queueFetch.CompletedOffset
+			if completed == 0 {
+				completed, _ = loadLastCompletedOffset(store, req.Key, queueFetch.Group, buf)
 			}
 
 			// do fetch new items
@@ -195,8 +185,6 @@ func (h *beeStorage) queueFetch(shard bhmetapb.Shard, req *raftcmdpb.Request, at
 					fetchResp.Items = append(fetchResp.Items, items[idx].Data())
 				}
 			}
-
-			state.States[queueFetch.Partition].LastFetchCount = c
 		}
 
 		state.States[queueFetch.Partition].LastFetchTS = now
@@ -206,12 +194,7 @@ func (h *beeStorage) queueFetch(shard bhmetapb.Shard, req *raftcmdpb.Request, at
 	resp.Value = protoc.MustMarshal(fetchResp)
 
 	if changed {
-		completed := make([]byte, 16, 16)
-		goetty.Uint64ToBytesTo(state.States[queueFetch.Partition].Completed, completed)
-		goetty.Int64ToBytesTo(now, completed[8:])
-
 		addToWriteBatch(stateKey, protoc.MustMarshal(state), attrs)
-		addToWriteBatch(committedOffsetKey(req.Key, queueFetch.Group), completed, attrs)
 	}
 
 	return 0, 0, resp
@@ -256,6 +239,7 @@ func (h *beeStorage) queueScan(shard bhmetapb.Shard, req *raftcmdpb.Request, att
 
 	completed := queueScan.CompletedOffset
 	lastCompleted, ok := loadLastCompletedOffset(store, req.Key, queueScan.Consumer, buf)
+
 	if !ok {
 		max := loadMaxOffset(store, req.Key, buf)
 		mustPutCompletedOffset(store, req.Key, queueScan.Consumer, buf, max)
@@ -324,8 +308,14 @@ func (h *beeStorage) queueCommit(shard bhmetapb.Shard, req *raftcmdpb.Request, a
 	queueCommit := getQueueCommitRequest(attrs)
 	protoc.MustUnmarshal(queueCommit, req.Cmd)
 
+	store := h.getStore(shard.ID)
 	buf := attrs[raftstore.AttrBuf].(*goetty.ByteBuf)
-	mustPutCompletedOffset(h.getStore(shard.ID), req.Key, queueCommit.Consumer,
+
+	if v, ok := loadLastCompletedOffset(store, req.Key, queueCommit.Consumer, buf); ok && v >= queueCommit.CompletedOffset {
+		return 0, 0, resp
+	}
+
+	mustPutCompletedOffset(store, req.Key, queueCommit.Consumer,
 		buf, queueCommit.CompletedOffset)
 	return 0, 0, resp
 }
@@ -346,7 +336,6 @@ func maybeRemoveTimeoutConsumers(state *metapb.QueueState, now int64) bool {
 func clearConsumers(state *metapb.QueueState) {
 	state.Consumers = 0
 	for idx := range state.States {
-		state.States[idx].State = metapb.PSRebalancing
 		state.States[idx].Version++
 		state.States[idx].Consumer = 0
 	}
@@ -368,74 +357,9 @@ func rebalanceConsumers(state *metapb.QueueState) {
 			if state.States[i].Consumer != consumer {
 				state.States[i].Version++
 				state.States[i].Consumer = consumer
-				state.States[i].State = metapb.PSRebalancing
 			}
 		}
 	}
-}
-
-func maybeUpdateCompletedOffset(state *metapb.QueueState, now int64, req *rpcpb.QueueFetchRequest) bool {
-	p := state.States[req.Partition]
-
-	// stale consumer
-	if p.Version > req.Version {
-		if p.State == metapb.PSRunning {
-			return false
-		}
-
-		// no items fetched, only the newest consumer can change state to running
-		if p.LastFetchCount == 0 {
-			return false
-		}
-
-		// rebalancing, commit last completed
-		if req.CompletedOffset > p.Completed && !req.NoCommit {
-			state.States[req.Partition].Completed = req.CompletedOffset
-		}
-		state.States[req.Partition].LastFetchCount = 0
-		state.States[req.Partition].LastFetchTS = now
-		state.States[req.Partition].State = metapb.PSRunning
-		return true
-	}
-
-	// normal consumer
-	if p.State == metapb.PSRunning {
-		if req.CompletedOffset <= p.Completed || req.NoCommit {
-			return false
-		}
-
-		state.States[req.Partition].LastFetchCount = 0
-		state.States[req.Partition].LastFetchTS = now
-		state.States[req.Partition].Completed = req.CompletedOffset
-		return true
-	}
-
-	if req.CompletedOffset > p.Completed && !req.NoCommit {
-		log.Warningf("%s the newest consumer in rebalancing, but completed offset %d > prev completed %d",
-			string(req.Group),
-			req.CompletedOffset,
-			p.Completed)
-		state.States[req.Partition].Completed = req.CompletedOffset
-	}
-
-	// in rebalancing, has no last fetch items
-	if p.LastFetchCount == 0 {
-		state.States[req.Partition].LastFetchCount = 0
-		state.States[req.Partition].LastFetchTS = now
-		state.States[req.Partition].State = metapb.PSRunning
-		return true
-	}
-
-	// has last fetch items, but not completed
-	if (now - p.LastFetchTS) < state.Timeout {
-		return false
-	}
-
-	// processing timeout
-	state.States[req.Partition].LastFetchCount = 0
-	state.States[req.Partition].LastFetchTS = now
-	state.States[req.Partition].State = metapb.PSRunning
-	return true
 }
 
 func loadMaxOffset(store bhstorage.DataStorage, key []byte, buf *goetty.ByteBuf) uint64 {
@@ -466,7 +390,6 @@ func loadLastCompletedOffset(store bhstorage.DataStorage, key []byte, consumer [
 
 func mustPutCompletedOffset(store bhstorage.DataStorage, key []byte, consumer []byte, buf *goetty.ByteBuf, value uint64) {
 	completedKey := committedOffsetKey(key, consumer)
-
 	buf.MarkWrite()
 	buf.WriteUint64(value)
 	buf.WriteInt64(time.Now().Unix())

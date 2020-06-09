@@ -22,6 +22,8 @@ type AsyncConsumer interface {
 	Start(cb func(uint32, uint64, [][]byte))
 	// Commit commit completed offset
 	Commit(map[uint32]uint64, func(error))
+	// CommitPartition commit completed offset
+	CommitPartition(uint32, uint64, func(error))
 	// Stop stop consumer
 	Stop()
 }
@@ -145,6 +147,21 @@ func (c *asyncConsumer) Commit(completed map[uint32]uint64, ucb func(error)) {
 		req.CompletedOffset = offset
 		c.store.AsyncExecCommandWithGroup(req, c.group, cb, nil)
 	}
+}
+
+func (c *asyncConsumer) CommitPartition(p uint32, offset uint64, ucb func(error)) {
+	cb := func(arg interface{}, data []byte, err error) {
+		if ucb != nil {
+			ucb(err)
+		}
+	}
+
+	req := rpcpb.AcquireQueueCommitRequest()
+	req.ID = c.tid
+	req.Consumer = c.consumer
+	req.Partition = p
+	req.CompletedOffset = offset
+	c.store.AsyncExecCommandWithGroup(req, c.group, cb, nil)
 }
 
 func (c *asyncConsumer) Stop() {

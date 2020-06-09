@@ -14,6 +14,41 @@ import (
 	"github.com/fagongzi/util/protoc"
 )
 
+func (h *beeStorage) updateTenantInitState(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs map[string]interface{}) (uint64, int64, *raftcmdpb.Response) {
+	resp := pb.AcquireResponse()
+	cmd := &rpcpb.TenantInitStateUpdateRequest{}
+	protoc.MustUnmarshal(cmd, req.Cmd)
+
+	resp.Value = rpcpb.EmptyRespBytes
+
+	value, err := h.getValue(shard.ID, req.Key)
+	if err != nil {
+		log.Fatalf("update tenant init state %+v failed with %+v", cmd, err)
+	}
+	if len(value) == 0 {
+		log.Fatalf("update tenant init state %+v failed with missing tenant metadata", cmd)
+	}
+
+	metadata := &metapb.Tenant{}
+	protoc.MustUnmarshal(metadata, value)
+
+	switch cmd.Group {
+	case metapb.TenantInputGroup:
+		metadata.InputsState[cmd.Index] = true
+	case metapb.TenantOutputGroup:
+		metadata.OutputsState[cmd.Index] = true
+	case metapb.TenantRunnerGroup:
+		metadata.RunnersState[cmd.Index] = true
+	}
+
+	err = h.getStore(shard.ID).Set(req.Key, protoc.MustMarshal(metadata))
+	if err != nil {
+		log.Fatalf("update tenant init state %+v failed with %+v", cmd, err)
+	}
+
+	return 0, 0, resp
+}
+
 func (h *beeStorage) startingWorkflowInstance(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs map[string]interface{}) (uint64, int64, *raftcmdpb.Response) {
 	resp := pb.AcquireResponse()
 	cmd := getStartingInstanceRequest(attrs)

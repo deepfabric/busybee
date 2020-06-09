@@ -19,7 +19,7 @@ import (
 )
 
 var (
-	eventsCacheSize    = uint64(10240)
+	eventsCacheSize    = uint64(4096)
 	handleEventBatch   = uint64(1024)
 	maxTriggerCount    = 256
 	ttlTriggerInterval = time.Second * 5
@@ -227,9 +227,9 @@ func (w *stateWorker) checkTTLTimeout(arg interface{}) {
 	})
 }
 
-func (w *stateWorker) onEvent(p uint32, offset uint64, event *metapb.Event) (bool, error) {
+func (w *stateWorker) onEvent(p uint32, offset uint64, event *metapb.Event) (bool, bool, error) {
 	if w.isStopped() {
-		return true, nil
+		return true, false, nil
 	}
 
 	switch event.Type {
@@ -238,31 +238,34 @@ func (w *stateWorker) onEvent(p uint32, offset uint64, event *metapb.Event) (boo
 			evt := *event.User
 			evt.WorkflowID = w.state.WorkflowID
 			evt.InstanceID = w.state.InstanceID
-			return w.queue.Offer(item{
+			added, err := w.queue.Offer(item{
 				action:    userEventAction,
 				value:     evt,
 				partition: p,
 				offset:    offset,
 			})
+			return added, true, err
 		}
 	case metapb.UpdateCrowdType:
 		if event.UpdateCrowd.WorkflowID == w.state.WorkflowID &&
 			event.UpdateCrowd.Index == w.state.Index {
-			return w.queue.Offer(item{
+			added, err := w.queue.Offer(item{
 				action: updateCrowdAction,
 				value:  event.UpdateCrowd.Crowd,
 			})
+			return added, true, err
 		}
 	case metapb.UpdateWorkflowType:
 		if event.UpdateWorkflow.Workflow.ID == w.state.WorkflowID {
-			return w.queue.Offer(item{
+			added, err := w.queue.Offer(item{
 				action: updateWorkflowAction,
 				value:  event.UpdateWorkflow.Workflow,
 			})
+			return added, true, err
 		}
 	}
 
-	return true, nil
+	return true, false, nil
 }
 
 func (w *stateWorker) init() {

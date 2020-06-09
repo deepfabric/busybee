@@ -225,13 +225,9 @@ func (eng *engine) tenantInitWithReplicas(metadata metapb.Tenant, replicas uint3
 		metadata.Input.ConsumerTimeout = 60
 	}
 
-	err := eng.store.Set(storage.TenantMetadataKey(metadata.ID), protoc.MustMarshal(&metadata))
-	if err != nil {
-		return err
-	}
-
 	var shards []hbmetapb.Shard
 	for i := uint64(0); i < metadata.Runners; i++ {
+		metadata.RunnersState = append(metadata.RunnersState, false)
 		shards = append(shards, hbmetapb.Shard{
 			Group: uint64(metapb.TenantRunnerGroup),
 			Start: storage.TenantRunnerKey(metadata.ID, i),
@@ -248,6 +244,11 @@ func (eng *engine) tenantInitWithReplicas(metadata metapb.Tenant, replicas uint3
 					},
 					Group: metapb.TenantRunnerGroup,
 				},
+				UpdateTenantInitState: &metapb.TenantInitStateUpdateAction{
+					ID:    metadata.ID,
+					Index: int32(i),
+					Group: metapb.TenantRunnerGroup,
+				},
 			}),
 			DisableSplit:  true,
 			LeastReplicas: replicas,
@@ -255,6 +256,7 @@ func (eng *engine) tenantInitWithReplicas(metadata metapb.Tenant, replicas uint3
 	}
 
 	for i := uint32(0); i < metadata.Input.Partitions; i++ {
+		metadata.InputsState = append(metadata.InputsState, false)
 		shards = append(shards, hbmetapb.Shard{
 			Group: uint64(metapb.TenantInputGroup),
 			Start: storage.PartitionKey(metadata.ID, i),
@@ -273,12 +275,18 @@ func (eng *engine) tenantInitWithReplicas(metadata metapb.Tenant, replicas uint3
 					},
 					Group: metapb.TenantInputGroup,
 				},
+				UpdateTenantInitState: &metapb.TenantInitStateUpdateAction{
+					ID:    metadata.ID,
+					Index: int32(i),
+					Group: metapb.TenantInputGroup,
+				},
 			}),
 			DisableSplit:  true,
 			LeastReplicas: replicas,
 		})
 	}
 
+	metadata.OutputsState = append(metadata.OutputsState, false)
 	shards = append(shards, hbmetapb.Shard{
 		Group: uint64(metapb.TenantOutputGroup),
 		Start: storage.PartitionKey(metadata.ID, 0),
@@ -297,10 +305,21 @@ func (eng *engine) tenantInitWithReplicas(metadata metapb.Tenant, replicas uint3
 				},
 				Group: metapb.TenantOutputGroup,
 			},
+			UpdateTenantInitState: &metapb.TenantInitStateUpdateAction{
+				ID:    metadata.ID,
+				Index: 0,
+				Group: metapb.TenantOutputGroup,
+			},
 		}),
 		DisableSplit:  true,
 		LeastReplicas: replicas,
 	})
+
+	err := eng.store.Set(storage.TenantMetadataKey(metadata.ID), protoc.MustMarshal(&metadata))
+	if err != nil {
+		return err
+	}
+
 	return eng.store.RaftStore().AddShards(shards...)
 }
 
@@ -312,6 +331,27 @@ func (eng *engine) doCheckTenant(tid uint64) error {
 	}
 	if len(value) == 0 {
 		return fmt.Errorf("%d not created", tid)
+	}
+
+	metatdata := &metapb.Tenant{}
+	protoc.MustUnmarshal(metatdata, value)
+
+	for _, value := range metatdata.InputsState {
+		if !value {
+			return fmt.Errorf("%d init not completed", tid)
+		}
+	}
+
+	for _, value := range metatdata.OutputsState {
+		if !value {
+			return fmt.Errorf("%d init not completed", tid)
+		}
+	}
+
+	for _, value := range metatdata.RunnersState {
+		if !value {
+			return fmt.Errorf("%d init not completed", tid)
+		}
 	}
 
 	return nil

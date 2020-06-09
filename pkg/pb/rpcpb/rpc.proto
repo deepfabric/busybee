@@ -46,15 +46,16 @@ enum Type {
     QueueCommit           = 304;
     QueueDelete           = 305;
     
-    TenantInit    = 400;
-    UpdateMapping = 401;
-    GetMapping    = 402;
-    UpdateProfile = 403;
-    GetProfile    = 404;
-    AddEvent      = 405;
-    FetchNotify   = 406;
-    ScanMapping   = 407;
-    GetIDSet      = 408;
+    TenantInit            = 400;
+    UpdateMapping         = 401;
+    GetMapping            = 402;
+    UpdateProfile         = 403;
+    GetProfile            = 404;
+    AddEvent              = 405;
+    FetchNotify           = 406;
+    ScanMapping           = 407;
+    GetIDSet              = 408;
+    TenantInitStateUpdate = 409;
 
     AllocID       = 501;
     ResetID       = 502;
@@ -304,8 +305,6 @@ message QueueJoinGroupRequest {
     uint64 id       = 1 [(gogoproto.customname) = "ID"];
     bytes  key      = 2; 
     bytes  group    = 3;
-    bool   rejoin   = 4;
-    uint32 consumer = 5;
 }
 
 // QueueJoinGroupResponse queue join group response
@@ -326,7 +325,6 @@ message QueueFetchRequest {
     uint64 completedOffset = 7;
     uint64 count           = 8;
     uint64 maxBytes        = 9;
-    bool   noCommit        = 10;
 }
 
 // QueueScanRequest queue scan request
@@ -369,6 +367,13 @@ message QueueFetchResponse {
 // TenantInitRequest init tenant
 message TenantInitRequest {
     metapb.Tenant metadata = 1 [(gogoproto.nullable) = false];
+}
+
+// TenantInitStateUpdateRequest 
+message TenantInitStateUpdateRequest {
+    uint64       id    = 1 [(gogoproto.customname) = "ID"];
+    int32        index = 2;
+    metapb.Group group = 3;
 }
 
 // ScanMappingRequest scan tenant all mappinged id values

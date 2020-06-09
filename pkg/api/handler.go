@@ -83,6 +83,8 @@ func (s *server) onReq(sid interface{}, req *rpcpb.Request) error {
 		return s.doQueueJoin(ctx)
 	case rpcpb.FetchNotify:
 		return s.doQueueFetch(ctx)
+	case rpcpb.QueueCommit:
+		return s.doQueueCommit(ctx)
 	case rpcpb.AllocID:
 		return s.doAllocID(ctx)
 	case rpcpb.ResetID:
@@ -331,6 +333,11 @@ func (s *server) doQueueFetch(ctx ctx) error {
 	return nil
 }
 
+func (s *server) doQueueCommit(ctx ctx) error {
+	s.engine.Storage().AsyncExecCommandWithGroup(&ctx.req.QueueCommit, metapb.TenantOutputGroup, s.onResp, ctx)
+	return nil
+}
+
 func (s *server) doAllocID(ctx ctx) error {
 	s.engine.Storage().AsyncExecCommand(&ctx.req.AllocID, s.onResp, ctx)
 	return nil
@@ -367,7 +374,7 @@ func (s *server) onResp(arg interface{}, value []byte, err error) {
 			rpcpb.BMRemove, rpcpb.BMClear, rpcpb.StartingInstance,
 			rpcpb.UpdateCrowd, rpcpb.UpdateWorkflow, rpcpb.StopInstance,
 			rpcpb.UpdateMapping, rpcpb.UpdateProfile, rpcpb.AddEvent,
-			rpcpb.ResetID:
+			rpcpb.ResetID, rpcpb.QueueCommit:
 			// empty response
 		case rpcpb.Get, rpcpb.GetIDSet, rpcpb.GetMapping:
 			protoc.MustUnmarshal(&resp.BytesResp, value)

@@ -32,15 +32,15 @@ func (h *beeStorage) addShardCallback(shard bhmetapb.Shard) error {
 	action := &metapb.CallbackAction{}
 	protoc.MustUnmarshal(action, shard.Data)
 
-	if action.SetKV != nil {
-		if shard.Group == uint64(metapb.TenantRunnerGroup) &&
-			h.store.MaybeLeader(shard.ID) {
-			h.shardC <- shardCycle{
-				shard:  shard,
-				action: becomeLeader,
-			}
+	if shard.Group == uint64(metapb.TenantRunnerGroup) &&
+		h.store.MaybeLeader(shard.ID) {
+		h.shardC <- shardCycle{
+			shard:  shard,
+			action: becomeLeader,
 		}
+	}
 
+	if action.SetKV != nil {
 		for {
 			req := rpcpb.AcquireSetRequest()
 			req.Key = action.SetKV.KV.Key
@@ -57,7 +57,29 @@ func (h *beeStorage) addShardCallback(shard bhmetapb.Shard) error {
 			break
 		}
 
-		log.Errorf("shard %d set kv completed",
+		log.Infof("shard %d set kv completed",
+			shard.ID)
+	}
+
+	if action.UpdateTenantInitState != nil {
+		for {
+			req := rpcpb.AcquireTenantInitStateUpdateRequest()
+			req.ID = action.UpdateTenantInitState.ID
+			req.Index = action.UpdateTenantInitState.Index
+			req.Group = action.UpdateTenantInitState.Group
+			_, err := h.ExecCommand(req)
+			if err != nil {
+				log.Errorf("shard %d update tenant init state failed with %+v, retry after 5s",
+					shard.ID,
+					err)
+				time.Sleep(time.Second * 5)
+				continue
+			}
+
+			break
+		}
+
+		log.Infof("shard %d update tenant init state completed",
 			shard.ID)
 	}
 
