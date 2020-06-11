@@ -10,6 +10,7 @@ import (
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/queue"
 	"github.com/deepfabric/busybee/pkg/storage"
+	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/util/protoc"
 )
 
@@ -53,8 +54,95 @@ func (eng *engine) doStopRunnerEvent(state *metapb.WorkerRunner) {
 	logger.Infof("handle event for stop completed %s", key)
 }
 
+type offsets struct {
+	sync.RWMutex
+
+	values []uint64
+	waits  []int
+	max    int
+}
+
+func (o *offsets) add(value uint64, wait int) bool {
+	o.Lock()
+	defer o.Unlock()
+
+	n := len(o.values)
+	if n >= o.max {
+		return false
+	}
+
+	if n == 0 || // no offset,  append directly
+		wait > 0 || // wait to handle,  append directly
+		o.waits[n-1] > 0 { // last need handle, append directly
+		o.values = append(o.values, value)
+		o.waits = append(o.waits, wait)
+		return true
+	}
+
+	// last is not need to handle, change offset
+	o.values[n-1] = value
+	return true
+}
+
+func (o *offsets) completed(value uint64) {
+	o.Lock()
+	defer o.Unlock()
+
+	for idx, v := range o.values {
+		if v == value {
+			o.waits[idx]--
+
+			if o.waits[idx] < 0 {
+				o.waits[idx] = 0
+			}
+		}
+	}
+}
+
+func (o *offsets) first() (uint64, int) {
+	o.RLock()
+	defer o.RUnlock()
+
+	if len(o.values) == 0 {
+		return 0, 0
+	}
+
+	return o.values[0], o.waits[0]
+}
+
+func (o *offsets) pop() (uint64, bool) {
+	o.Lock()
+	defer o.Unlock()
+
+	if len(o.values) == 0 {
+		return 0, false
+	}
+
+	if o.waits[0] > 0 {
+		return 0, false
+	}
+
+	var value uint64
+	for {
+		if o.waits[0] == 0 {
+			value = o.values[0]
+		}
+
+		o.values = o.values[1:]
+		o.waits = o.waits[1:]
+
+		if len(o.values) == 0 ||
+			o.waits[0] > 0 {
+			break
+		}
+	}
+
+	return value, true
+}
+
 type worker interface {
-	onEvent(p uint32, offset uint64, event *metapb.Event) (bool, bool, error)
+	beloneTo(event *metapb.Event) bool
+	onEvent(p uint32, offset uint64, event *metapb.Event) (bool, error)
 	stop()
 	close()
 	workflowID() uint64
@@ -65,8 +153,6 @@ type worker interface {
 }
 
 type workerRunner struct {
-	sync.RWMutex
-
 	key         string
 	tid         uint64
 	runnerIndex uint64
@@ -75,21 +161,21 @@ type workerRunner struct {
 	workers     sync.Map // map[string]worker
 	consumer    queue.AsyncConsumer
 
-	completedOffsetsPerHandle map[uint32]uint64 // uint32 -> uint64
-	allWaitCommitOffsets      map[uint32]uint64 // uint32 -> uint64
+	offsets map[uint32]*offsets
 
 	disableLoadShardState bool
 	disableStartConsumer  bool
+	disableInitOffsets    bool
+	disableLock           bool
 }
 
 func newWorkerRunner(tid uint64, runnerIndex uint64, key string, eng *engine) *workerRunner {
 	return &workerRunner{
-		tid:                       tid,
-		runnerIndex:               runnerIndex,
-		key:                       key,
-		eng:                       eng,
-		completedOffsetsPerHandle: make(map[uint32]uint64),
-		allWaitCommitOffsets:      make(map[uint32]uint64),
+		tid:         tid,
+		runnerIndex: runnerIndex,
+		key:         key,
+		eng:         eng,
+		offsets:     make(map[uint32]*offsets),
 	}
 }
 
@@ -253,78 +339,67 @@ func (wr *workerRunner) onEvent(p uint32, lastOffset uint64, items [][]byte) {
 	}
 
 	offset := lastOffset - uint64(len(items)) + 1
-	lastHandledOffset := uint64(0)
 	for _, item := range items {
 		event := metapb.Event{}
 		protoc.MustUnmarshal(&event, item)
 
-		for {
-			added, needHandled := wr.addEventToWorkers(p, offset, &event)
-			if needHandled {
-				lastHandledOffset = offset
+		workers := 0
+		wr.workers.Range(func(k, v interface{}) bool {
+			w := v.(worker)
+			if !w.isStopped() {
+				if w.beloneTo(&event) {
+					workers++
+				}
 			}
 
-			if added {
-				if needHandled {
-					wr.Lock()
-					wr.allWaitCommitOffsets[p] = offset
-					wr.Unlock()
-				}
+			return true
+		})
 
+		for {
+			if wr.offsets[p].add(offset, workers) {
 				break
 			}
 
-			time.Sleep(wait)
+			time.Sleep(time.Second)
+
 			if wr.isStopped() {
 				return
 			}
 		}
 
+		wr.workers.Range(func(k, v interface{}) bool {
+			w := v.(worker)
+			if !w.isStopped() {
+				for {
+					added, _ := w.onEvent(p, offset, &event)
+					if added {
+						break
+					}
+
+					current := w.cachedEventSize()
+					if current < eventsCacheSize {
+						continue
+					}
+
+					logger.Infof("%+v consume events slow down, %s exceed max cached events %d, current is %d, wait %s",
+						wr.key,
+						k,
+						eventsCacheSize,
+						current,
+						wait)
+
+					time.Sleep(wait)
+					if wr.isStopped() {
+						break
+					}
+				}
+			}
+
+			return true
+		})
+
 		offset++
 	}
-
-	// no worker handle this events
-	if lastHandledOffset == 0 {
-		wr.RLock()
-		_, hasWait := wr.allWaitCommitOffsets[p]
-		wr.RUnlock()
-
-		// prev events was not committed
-		if hasWait {
-			return
-		}
-
-		wr.consumer.CommitPartition(p, lastOffset, wr.commitCB)
-		return
-	}
-}
-
-func (wr *workerRunner) addEventToWorkers(p uint32, offset uint64, event *metapb.Event) (bool, bool) {
-	allAdded := true
-	handled := false
-	wr.workers.Range(func(k, v interface{}) bool {
-		w := v.(worker)
-		if !w.isStopped() {
-			added, needHandle, _ := w.onEvent(p, offset, event)
-			if !handled {
-				handled = needHandle
-			}
-
-			if !added {
-				logger.Infof("%+v consume events slow down, %s exceed max cached events %d, current is %d, wait %s",
-					wr.key,
-					k,
-					eventsCacheSize,
-					w.cachedEventSize(),
-					wait)
-				allAdded = false
-				return false
-			}
-		}
-		return true
-	})
-
-	return allAdded, handled
 }
 
 func (wr *workerRunner) doStop() {
@@ -342,7 +417,65 @@ func (wr *workerRunner) doStop() {
 	})
 }
 
+func (wr *workerRunner) initOffsets() {
+	if wr.isStopped() {
+		return
+	}
+
+	metadata := wr.eng.mustDoLoadTenantMetadata(wr.tid)
+	wr.initOffsetsWithN(metadata.Input.Partitions)
+}
+
+func (wr *workerRunner) initOffsetsWithN(n uint32) {
+	for i := uint32(0); i < n; i++ {
+		wr.offsets[i] = &offsets{max: int(eventsCacheSize)}
+	}
+}
+
+func (wr *workerRunner) lock() {
+	key := []byte(wr.key)
+	expect := goetty.Uint64ToBytes(wr.eng.Storage().RaftStore().Meta().ID)
+
+	for {
+		if wr.isStopped() {
+			return
+		}
+
+		ok, err := wr.eng.Storage().Lock(key, expect, 60, time.Second*10, false)
+		if err != nil {
+			logger.Errorf("%s get lock failed with %+v", wr.key, err)
+			continue
+		}
+
+		if !ok {
+			time.Sleep(time.Second * 10)
+			continue
+		}
+
+		break
+	}
+}
+
+func (wr *workerRunner) unlock() {
+	key := []byte(wr.key)
+	expect := goetty.Uint64ToBytes(wr.eng.Storage().RaftStore().Meta().ID)
+
+	err := wr.eng.Storage().Unlock(key, expect)
+	if err != nil {
+		logger.Errorf("%s unlock failed with %+v", wr.key, err)
+	}
+}
+
 func (wr *workerRunner) run() {
+	if !wr.disableLock {
+		wr.lock()
+		defer wr.unlock()
+	}
+
+	if !wr.disableInitOffsets {
+		wr.initOffsets()
+	}
+
 	if !wr.disableLoadShardState {
 		logger.Infof("%s start load shard states", wr.key)
 		for {
@@ -376,10 +509,6 @@ func (wr *workerRunner) run() {
 			time.Sleep(time.Millisecond * 10)
 		}
 
-		for key := range wr.completedOffsetsPerHandle {
-			delete(wr.completedOffsetsPerHandle, key)
-		}
-
 		hasEvent = false
 		wr.workers.Range(func(k, v interface{}) bool {
 			w := v.(worker)
@@ -392,32 +521,20 @@ func (wr *workerRunner) run() {
 			return true
 		})
 
-		if len(wr.completedOffsetsPerHandle) > 0 {
-			wr.consumer.Commit(wr.completedOffsetsPerHandle, wr.commitCB)
-
-			wr.Lock()
-			for p, v := range wr.completedOffsetsPerHandle {
-				if wv, ok := wr.allWaitCommitOffsets[p]; ok && v >= wv {
-					delete(wr.allWaitCommitOffsets, p)
-				}
+		for p, offsets := range wr.offsets {
+			if v, ok := offsets.pop(); ok {
+				logger.Debugf("%s p/%d committed to %d",
+					wr.key,
+					p,
+					v)
+				wr.consumer.CommitPartition(p, v, wr.commitCB)
 			}
-			wr.Unlock()
 		}
 	}
 }
 
 func (wr *workerRunner) completed(p uint32, offset uint64) {
-	if offset <= 0 {
-		return
-	}
-
-	if value, ok := wr.completedOffsetsPerHandle[p]; ok {
-		if offset > value {
-			wr.completedOffsetsPerHandle[p] = offset
-		}
-	} else {
-		wr.completedOffsetsPerHandle[p] = offset
-	}
+	wr.offsets[p].completed(offset)
 }
 
 func (wr *workerRunner) commitCB(err error) {

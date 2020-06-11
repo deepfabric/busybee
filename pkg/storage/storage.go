@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"sync"
 	"time"
 
 	"github.com/deepfabric/beehive"
@@ -33,6 +34,10 @@ type Storage interface {
 	Close()
 	// WatchInstance watch instance event
 	WatchEvent() chan Event
+	// Lock distruibuted lock
+	Lock([]byte, []byte, int, time.Duration, bool) (bool, error)
+	// Unlock unlock
+	Unlock([]byte, []byte) error
 	// Set set key value
 	Set([]byte, []byte) error
 	// Set set key value with a TTL in seconds
@@ -81,6 +86,8 @@ type beeStorage struct {
 	elector          prophet.Elector
 	reportCancelFunc context.CancelFunc
 	scanTaskID       uint64
+
+	locks sync.Map // key -> lock
 }
 
 // NewStorage returns a beehive request handler
@@ -173,6 +180,11 @@ func (h *beeStorage) Close() {
 		h.elector.Stop(reportGroup)
 		h.reportCancelFunc()
 	}
+
+	h.locks.Range(func(key, value interface{}) bool {
+		h.locks.Delete(key)
+		return true
+	})
 
 	h.runner.Stop()
 	h.app.Stop()

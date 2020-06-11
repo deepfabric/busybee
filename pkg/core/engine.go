@@ -324,31 +324,28 @@ func (eng *engine) tenantInitWithReplicas(metadata metapb.Tenant, replicas uint3
 }
 
 func (eng *engine) doCheckTenant(tid uint64) error {
-	value, err := eng.store.Get(storage.TenantMetadataKey(tid))
+	metadata, err := eng.loadTenantMetadata(tid)
 	if err != nil {
-		metric.IncStorageFailed()
 		return err
 	}
-	if len(value) == 0 {
+
+	if metadata == nil {
 		return fmt.Errorf("%d not created", tid)
 	}
 
-	metatdata := &metapb.Tenant{}
-	protoc.MustUnmarshal(metatdata, value)
-
-	for _, value := range metatdata.InputsState {
+	for _, value := range metadata.InputsState {
 		if !value {
 			return fmt.Errorf("%d init not completed", tid)
 		}
 	}
 
-	for _, value := range metatdata.OutputsState {
+	for _, value := range metadata.OutputsState {
 		if !value {
 			return fmt.Errorf("%d init not completed", tid)
 		}
 	}
 
-	for _, value := range metatdata.RunnersState {
+	for _, value := range metadata.RunnersState {
 		if !value {
 			return fmt.Errorf("%d init not completed", tid)
 		}
@@ -726,6 +723,21 @@ func (eng *engine) doUpdateWorkflow(value metapb.Workflow) error {
 	return err
 }
 
+func (eng *engine) loadTenantMetadata(tid uint64) (*metapb.Tenant, error) {
+	value, err := eng.store.Get(storage.TenantMetadataKey(tid))
+	if err != nil {
+		metric.IncStorageFailed()
+		return nil, err
+	}
+	if len(value) == 0 {
+		return nil, nil
+	}
+
+	metatdata := &metapb.Tenant{}
+	protoc.MustUnmarshal(metatdata, value)
+	return metatdata, nil
+}
+
 func (eng *engine) loadInstance(id uint64) (*metapb.WorkflowInstance, error) {
 	value, err := eng.store.Get(storage.WorkflowCurrentInstanceKey(id))
 	if err != nil {
@@ -832,19 +844,17 @@ func (eng *engine) getInstanceWorkersWithGroup(instance *metapb.WorkflowInstance
 
 func (eng *engine) mustDoLoadTenantMetadata(tid uint64) metapb.Tenant {
 	for {
-		value, err := eng.store.Get(storage.TenantMetadataKey(tid))
+		metadata, err := eng.loadTenantMetadata(tid)
 		if err != nil {
-			metric.IncStorageFailed()
 			time.Sleep(time.Second * 5)
 			continue
 		}
-		if len(value) == 0 {
+
+		if metadata == nil {
 			logger.Fatalf("Missing tenant metadata")
 		}
 
-		metadata := metapb.Tenant{}
-		protoc.MustUnmarshal(&metadata, value)
-		return metadata
+		return *metadata
 	}
 }
 
@@ -1123,7 +1133,7 @@ func (eng *engine) doStartInstanceEvent(instance *metapb.WorkflowInstance) {
 			instance.Snapshot.ID,
 			index)
 		eng.addCreateWorkAction(createWorkerAction{false, state, completed})
-		logger.Infof("starting workflow-%d after screate %d shard",
+		logger.Infof("starting workflow-%d after create %d shard",
 			instance.Snapshot.ID,
 			index)
 	}

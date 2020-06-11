@@ -88,7 +88,7 @@ type stateWorker struct {
 	tempNotifies []metapb.Notify
 
 	tran    *transaction
-	offsets map[uint32]uint64
+	offsets map[uint32][]uint64
 }
 
 func newStateWorker(key string, state metapb.WorkflowInstanceWorkerState, eng Engine) (*stateWorker, error) {
@@ -115,7 +115,7 @@ func newStateWorker(key string, state metapb.WorkflowInstanceWorkerState, eng En
 		queueGetStateKey: storage.QueueKVKey(state.TenantID, queueStateKey),
 		tempBM:           acquireBM(),
 		tran:             newTransaction(),
-		offsets:          make(map[uint32]uint64),
+		offsets:          make(map[uint32][]uint64),
 	}
 
 	err := w.resetByState()
@@ -227,9 +227,29 @@ func (w *stateWorker) checkTTLTimeout(arg interface{}) {
 	})
 }
 
-func (w *stateWorker) onEvent(p uint32, offset uint64, event *metapb.Event) (bool, bool, error) {
+func (w *stateWorker) beloneTo(event *metapb.Event) bool {
+	switch event.Type {
+	case metapb.UserType:
+		if w.matches(event.User.UserID) {
+			return true
+		}
+	case metapb.UpdateCrowdType:
+		if event.UpdateCrowd.WorkflowID == w.state.WorkflowID &&
+			event.UpdateCrowd.Index == w.state.Index {
+			return true
+		}
+	case metapb.UpdateWorkflowType:
+		if event.UpdateWorkflow.Workflow.ID == w.state.WorkflowID {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (w *stateWorker) onEvent(p uint32, offset uint64, event *metapb.Event) (bool, error) {
 	if w.isStopped() {
-		return true, false, nil
+		return true, nil
 	}
 
 	switch event.Type {
@@ -244,28 +264,32 @@ func (w *stateWorker) onEvent(p uint32, offset uint64, event *metapb.Event) (boo
 				partition: p,
 				offset:    offset,
 			})
-			return added, true, err
+			return added, err
 		}
 	case metapb.UpdateCrowdType:
 		if event.UpdateCrowd.WorkflowID == w.state.WorkflowID &&
 			event.UpdateCrowd.Index == w.state.Index {
 			added, err := w.queue.Offer(item{
-				action: updateCrowdAction,
-				value:  event.UpdateCrowd.Crowd,
+				action:    updateCrowdAction,
+				value:     event.UpdateCrowd.Crowd,
+				partition: p,
+				offset:    offset,
 			})
-			return added, true, err
+			return added, err
 		}
 	case metapb.UpdateWorkflowType:
 		if event.UpdateWorkflow.Workflow.ID == w.state.WorkflowID {
 			added, err := w.queue.Offer(item{
-				action: updateWorkflowAction,
-				value:  event.UpdateWorkflow.Workflow,
+				action:    updateWorkflowAction,
+				value:     event.UpdateWorkflow.Workflow,
+				partition: p,
+				offset:    offset,
 			})
-			return added, true, err
+			return added, err
 		}
 	}
 
-	return true, false, nil
+	return true, nil
 }
 
 func (w *stateWorker) init() {
@@ -299,13 +323,12 @@ func (w *stateWorker) setOffset(p uint32, offset uint64) {
 		return
 	}
 
-	if value, ok := w.offsets[p]; ok {
-		if offset > value {
-			w.offsets[p] = offset
-		}
-	} else {
-		w.offsets[p] = offset
+	var values []uint64
+	if v, ok := w.offsets[p]; ok {
+		values = v
 	}
+
+	w.offsets[p] = append(values, offset)
 }
 
 func (w *stateWorker) handleEvent(completedCB func(uint32, uint64)) bool {
@@ -334,12 +357,11 @@ func (w *stateWorker) handleEvent(completedCB func(uint32, uint64)) bool {
 			}
 
 			value := v.(item)
-			w.setOffset(value.partition, value.offset)
-
 			switch value.action {
 			case initAction:
 				w.checkLastTranscation()
-				logger.Infof("worker %s init with %d crowd, [%d, %d]",
+				logger.Infof("%s %s init with %d crowd, [%d, %d]",
+					w.rkey,
 					w.key,
 					w.totalCrowds.GetCardinality(),
 					w.totalCrowds.Minimum(),
@@ -351,16 +373,17 @@ func (w *stateWorker) handleEvent(completedCB func(uint32, uint64)) bool {
 				w.doCheckStepTTLTimeout(value.value.(int))
 				w.completeTransaction(completedCB)
 			case userEventAction:
+				w.setOffset(value.partition, value.offset)
 				w.tran.doStepUserEvent(value.value.(metapb.UserEvent))
 			case updateCrowdAction:
 				w.flushUserEvent(completedCB)
-
 				w.doUpdateCrowd(value.value.([]byte))
+				completedCB(value.partition, value.offset)
 				w.tran.start(w)
 			case updateWorkflowAction:
 				w.flushUserEvent(completedCB)
-
 				w.doUpdateWorkflow(value.value.(metapb.Workflow))
+				completedCB(value.partition, value.offset)
 				w.tran.start(w)
 			}
 		}
@@ -401,9 +424,16 @@ func (w *stateWorker) completeTransaction(completedCB func(uint32, uint64)) {
 
 	w.tran.start(w)
 
-	for key, value := range w.offsets {
-		completedCB(key, value)
-		delete(w.offsets, key)
+	for p, offsets := range w.offsets {
+		for _, offset := range offsets {
+			completedCB(p, offset)
+			logger.Debugf("%s %s completed p/%d offset at %d",
+				w.rkey,
+				w.key,
+				p,
+				offset)
+		}
+		delete(w.offsets, p)
 	}
 }
 
@@ -469,6 +499,12 @@ func (w *stateWorker) execNotify(tran *transaction) error {
 		w.tempNotifies = append(w.tempNotifies, nt)
 		totalMoved += changed.who.users.GetCardinality()
 
+		logger.Debugf("%s %s moved %d to step %s",
+			w.rkey,
+			w.key,
+			changed.who.users.GetCardinality(),
+			changed.to)
+
 		if logger.DebugEnabled() {
 			iter := changed.who.users.Iterator()
 			for {
@@ -501,11 +537,10 @@ func (w *stateWorker) execNotify(tran *transaction) error {
 		return err
 	}
 
-	logger.Infof("%s %s moved %d, %d events left",
+	logger.Infof("%s %s moved %d",
 		w.rkey,
 		w.key,
-		totalMoved,
-		w.cachedEventSize())
+		totalMoved)
 	metric.IncUserMoved(totalMoved, w.tenant)
 	return nil
 }
