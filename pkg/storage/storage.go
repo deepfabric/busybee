@@ -430,9 +430,7 @@ func (h *beeStorage) cleanQueues(tid uint64, group metapb.Group, n uint32, maxAl
 			partition,
 			group)
 
-		now := time.Now().Unix()
 		low := uint64(math.MaxUint64)
-		lowTS := int64(0)
 		found := false
 		start := consumerStartKey(key)
 		for {
@@ -450,8 +448,6 @@ func (h *beeStorage) cleanQueues(tid uint64, group metapb.Group, n uint32, maxAl
 
 			for idx, value := range values {
 				v := goetty.Byte2UInt64(value)
-				ts := goetty.Byte2Int64(value[8:])
-
 				log.Infof("%d/%s/%d %s committed offset %d",
 					tid,
 					group.String(),
@@ -466,7 +462,6 @@ func (h *beeStorage) cleanQueues(tid uint64, group metapb.Group, n uint32, maxAl
 					group)
 				if v < low {
 					low = v
-					lowTS = ts
 					found = true
 				}
 
@@ -476,7 +471,7 @@ func (h *beeStorage) cleanQueues(tid uint64, group metapb.Group, n uint32, maxAl
 			start = append(start, 0)
 		}
 
-		if found && low > removed && now-lowTS >= maxAlive {
+		if found && low > removed {
 			req := rpcpb.AcquireQueueDeleteRequest()
 			req.Key = key
 			req.From = removed
@@ -488,13 +483,12 @@ func (h *beeStorage) cleanQueues(tid uint64, group metapb.Group, n uint32, maxAl
 				return
 			}
 
-			log.Infof("%d/%s/%d removed offset changed to (%d, %d], alive %d seconds",
+			log.Infof("%d/%s/%d removed offset changed to (%d, %d]",
 				tid,
 				group.String(),
 				i,
 				low,
-				max,
-				now-lowTS)
+				max)
 			metric.SetEventQueueSize(max, low,
 				tenant,
 				partition,

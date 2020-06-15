@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/deepfabric/beehive/pb"
 	"github.com/deepfabric/beehive/pb/raftcmdpb"
 	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/util/task"
@@ -47,7 +48,7 @@ func (bc *backend) writeLoop() {
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
-				logger.Infof("backend %s write loop failed with %+v, restart later",
+				logger.Errorf("backend %s write loop failed with %+v, restart later",
 					bc.addr,
 					err)
 				bc.writeLoop()
@@ -81,6 +82,10 @@ func (bc *backend) writeLoop() {
 				for i := int64(0); i < n; i++ {
 					bc.p.errorDone(items[i].(*raftcmdpb.Request), err)
 				}
+			}
+
+			for i := int64(0); i < n; i++ {
+				pb.ReleaseRequest(items[i].(*raftcmdpb.Request))
 			}
 		}
 	}()
