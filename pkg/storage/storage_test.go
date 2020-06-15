@@ -1169,16 +1169,13 @@ func TestCleanQueue(t *testing.T) {
 
 	completed := make([]byte, 16, 16)
 	goetty.Uint64ToBytesTo(1, completed)
-	goetty.Int64ToBytesTo(time.Now().Unix()-2, completed[8:])
 	err = store.Set(committedOffsetKey(key, g1), completed)
 	assert.NoError(t, err, "TestCleanQueue failed")
 
 	s.cleanQueues(tid, metapb.DefaultGroup, 1, 3)
 	v, err = s.Get(removedOffsetKey(key))
 	assert.NoError(t, err, "TestCleanQueue failed")
-	if len(v) > 0 {
-		assert.Equal(t, uint64(0), goetty.Byte2UInt64(v), "TestCleanQueue failed")
-	}
+	assert.Equal(t, uint64(1), goetty.Byte2UInt64(v), "TestCleanQueue failed")
 
 	s.cleanQueues(tid, metapb.DefaultGroup, 1, 1)
 	v, err = s.Get(removedOffsetKey(key))
@@ -1186,12 +1183,10 @@ func TestCleanQueue(t *testing.T) {
 	assert.Equal(t, uint64(1), goetty.Byte2UInt64(v), "TestCleanQueue failed")
 
 	goetty.Uint64ToBytesTo(2, completed)
-	goetty.Int64ToBytesTo(time.Now().Unix()-2, completed[8:])
 	err = store.Set(committedOffsetKey(key, g2), completed)
 	assert.NoError(t, err, "TestCleanQueue failed")
 
 	goetty.Uint64ToBytesTo(3, completed)
-	goetty.Int64ToBytesTo(time.Now().Unix()-2, completed[8:])
 	err = store.Set(committedOffsetKey(key, g1), completed)
 	assert.NoError(t, err, "TestCleanQueue failed")
 

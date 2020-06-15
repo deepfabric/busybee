@@ -1865,8 +1865,12 @@ func TestStepCountAndNotiesMatched(t *testing.T) {
 		}
 
 		for _, value := range values {
+			data, err := store.Get(value)
+			assert.NoError(t, err, "TestStepCountAndNotiesMatched failed")
+			assert.NotEmptyf(t, data, "TestStepCountAndNotiesMatched failed %+v", value)
+
 			nt.Reset()
-			protoc.MustUnmarshal(nt, value)
+			protoc.MustUnmarshal(nt, data)
 
 			if nt.ToStep == "step_direct_matched" {
 				if nt.UserID > 0 {
