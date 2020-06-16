@@ -20,6 +20,7 @@ const (
 	workflowHistoryPrefix      byte = 8
 	workflowCrowdPrefix        byte = 9
 	tempPrefix                 byte = 10
+	outputPrefix               byte = 11
 
 	queueMaxOffsetField     byte = 0
 	queueRemovedOffsetField byte = 1
@@ -37,6 +38,15 @@ func TempKey(value []byte) []byte {
 	key[0] = tempPrefix
 	goetty.Int64ToBytesTo(time.Now().Unix(), key[1:])
 	copy(key[9:], value)
+	return key
+}
+
+// OutputNotifyKey returns output notify key
+func OutputNotifyKey(value []byte) []byte {
+	n := 1 + len(value)
+	key := make([]byte, n, n)
+	key[0] = outputPrefix
+	copy(key[1:], value)
 	return key
 }
 

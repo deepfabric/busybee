@@ -32,7 +32,7 @@ func (n *queueNotifier) Notify(id uint64, notifies []metapb.Notify, cond *rpcpb.
 	var items [][]byte
 	var keys [][]byte
 	for idx := range notifies {
-		key := uuid.NewV4().Bytes()
+		key := storage.OutputNotifyKey(uuid.NewV4().Bytes())
 		keys = append(keys, key)
 		items = append(items, protoc.MustMarshal(&notifies[idx]))
 	}
@@ -42,6 +42,8 @@ func (n *queueNotifier) Notify(id uint64, notifies []metapb.Notify, cond *rpcpb.
 	ctx.completed = uint64(0)
 	ctx.c = make(chan struct{})
 	ctx.store = n.store
+	ctx.keys = keys
+	ctx.items = items
 	for idx := range notifies {
 		req := rpcpb.AcquireSetRequest()
 		req.Key = keys[idx]
