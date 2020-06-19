@@ -135,6 +135,7 @@ func (w *stateWorker) resetTTLTimeout() {
 	for key, value := range w.alreadyTriggerTTLTimeout {
 		delete(w.alreadyTriggerTTLTimeout, key)
 		releaseBM(value.alreadyBM)
+		value.alreadyBM = nil
 	}
 }
 
@@ -310,12 +311,13 @@ func (w *stateWorker) close() {
 		w.eng.StopCronJob(id)
 	}
 
-	for _, bm := range w.stepCrowds {
+	for idx, bm := range w.stepCrowds {
 		releaseBM(bm)
+		w.stepCrowds[idx] = nil
 	}
-	releaseBM(w.totalCrowds)
 
 	releaseBM(w.tempBM)
+	w.tempBM = nil
 }
 
 func (w *stateWorker) setOffset(p uint32, offset uint64) {
@@ -632,8 +634,9 @@ func (w *stateWorker) doUpdateWorkflow(workflow metapb.Workflow) error {
 		}
 	}
 
-	for _, bm := range w.stepCrowds {
+	for idx, bm := range w.stepCrowds {
 		releaseBM(bm)
+		w.stepCrowds[idx] = nil
 	}
 
 	w.stepCrowds = newCrowds

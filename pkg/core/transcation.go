@@ -25,12 +25,16 @@ var (
 )
 
 func acquireBM() *roaring.Bitmap {
-	return pool.Get().(*roaring.Bitmap)
+	// TODO: reuse testing
+	// value := pool.Get().(*roaring.Bitmap)
+	// value.Clear()
+	// return value
+	return util.AcquireBitmap()
 }
 
 func releaseBM(value *roaring.Bitmap) {
-	value.Clear()
-	pool.Put(value)
+	// value.Clear()
+	// pool.Put(value)
 }
 
 type transaction struct {
@@ -72,6 +76,7 @@ func (tran *transaction) start(w *stateWorker) {
 func (tran *transaction) close() {
 	tran.buf.Release()
 	close(tran.completedC)
+	tran.reset()
 }
 
 func (tran *transaction) doStepTimerEvent(item item) {
@@ -286,11 +291,9 @@ func (tran *transaction) addChanged(changed changedCtx) {
 }
 
 func (tran *transaction) reset() {
-	if len(tran.changes) > 0 {
-		for idx := range tran.stepCrowds {
-			releaseBM(tran.stepCrowds[idx])
-			tran.stepCrowds[idx] = nil
-		}
+	for idx := range tran.stepCrowds {
+		releaseBM(tran.stepCrowds[idx])
+		tran.stepCrowds[idx] = nil
 	}
 
 	for idx := range tran.changes {

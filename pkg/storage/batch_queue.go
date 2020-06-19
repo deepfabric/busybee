@@ -45,7 +45,7 @@ func (qb *queueBatch) addReq(req *raftcmdpb.Request, resp *raftcmdpb.Response, b
 			qb.buf.MarkWrite()
 			qb.buf.Write(prefix)
 			qb.buf.Write(key)
-			value, err := b.bs.getStore(b.shard).Get(qb.buf.WrittenDataAfterMark().Data())
+			value, err := b.bs.getStoreByGroup(b.group).Get(qb.buf.WrittenDataAfterMark().Data())
 			if err != nil {
 				log.Fatalf("load queue meta failed with %+v", err)
 			}
@@ -134,7 +134,7 @@ func (qb *queueBatch) matchCondition(req *rpcpb.QueueAddRequest, b *batch, id ui
 		return true
 	}
 
-	value, err := b.bs.getStore(b.shard).Get(queueKVKey(prefix, id, cond.Key))
+	value, err := b.bs.getStoreByGroup(b.group).Get(queueKVKey(prefix, id, cond.Key))
 	if err != nil {
 		log.Fatalf("load max queue offset failed with %+v", err)
 	}
@@ -176,7 +176,7 @@ func newPartitionBatch(b *batch, qb *queueBatch, group metapb.Group, id uint64, 
 
 func (qb *queuePartitionBatch) add(b *batch, item []byte) {
 	if !qb.loaded {
-		value, err := b.bs.getStore(b.shard).Get(qb.maxOffsetKey)
+		value, err := b.bs.getStoreByGroup(b.group).Get(qb.maxOffsetKey)
 		if err != nil {
 			log.Fatalf("load max queue offset failed with %+v", err)
 		}

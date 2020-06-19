@@ -29,7 +29,7 @@ func (h *beeStorage) queueJoinGroup(shard bhmetapb.Shard, req *raftcmdpb.Request
 	joinReq := getQueueJoinGroupRequest(attrs)
 	protoc.MustUnmarshal(joinReq, req.Cmd)
 
-	store := h.getStore(shard.ID)
+	store := h.getStoreByGroup(shard.Group)
 	defer writeWriteBatch(store, attrs)
 
 	stateKey := queueStateKey(req.Key[:len(req.Key)-4], joinReq.Group)
@@ -49,8 +49,9 @@ func (h *beeStorage) queueJoinGroup(shard bhmetapb.Shard, req *raftcmdpb.Request
 
 	buf := attrs[raftstore.AttrBuf].(*goetty.ByteBuf)
 	if _, ok := loadLastCompletedOffset(store, req.Key, joinReq.Group, buf); !ok {
+		offset, _ := loadLastRemovedOffset(store, req.Key)
 		for i := uint32(0); i < state.Partitions; i++ {
-			mustPutCompletedOffset(store, raftstore.EncodeDataKey(req.Group, PartitionKey(joinReq.ID, i)), joinReq.Group, buf, 0)
+			mustPutCompletedOffset(store, raftstore.EncodeDataKey(req.Group, PartitionKey(joinReq.ID, i)), joinReq.Group, buf, offset)
 		}
 	}
 
@@ -91,7 +92,7 @@ func (h *beeStorage) queueFetch(shard bhmetapb.Shard, req *raftcmdpb.Request, at
 	queueFetch := getQueueFetchRequest(attrs)
 	protoc.MustUnmarshal(queueFetch, req.Cmd)
 
-	store := h.getStore(shard.ID)
+	store := h.getStoreByGroup(shard.Group)
 	defer writeWriteBatch(store, attrs)
 
 	now := time.Now().Unix()
@@ -136,6 +137,10 @@ func (h *beeStorage) queueFetch(shard bhmetapb.Shard, req *raftcmdpb.Request, at
 				completed, _ = loadLastCompletedOffset(store, req.Key, queueFetch.Group, buf)
 			}
 
+			if completed == 0 {
+				completed, _ = loadLastRemovedOffset(store, req.Key)
+			}
+
 			// do fetch new items
 			startKey := QueueItemKey(req.Key, completed+1)
 			endKey := QueueItemKey(req.Key, completed+1+queueFetch.Count)
@@ -149,7 +154,7 @@ func (h *beeStorage) queueFetch(shard bhmetapb.Shard, req *raftcmdpb.Request, at
 			c := uint64(0)
 			var items []goetty.Slice
 
-			err := h.getStore(shard.ID).Scan(startKey, endKey, func(key, value []byte) (bool, error) {
+			err := h.getStoreByGroup(shard.Group).Scan(startKey, endKey, func(key, value []byte) (bool, error) {
 				if !allowWriteToBuf(buf, len(value)) {
 					log.Infof("queue fetch on group %s skipped, fetch %d, buf cap %d, write at %d, value %d",
 						string(queueFetch.Group),
@@ -205,7 +210,7 @@ func (h *beeStorage) queueDelete(shard bhmetapb.Shard, req *raftcmdpb.Request, a
 	deleteReq := getQueueDeleteRequest(attrs)
 	protoc.MustUnmarshal(deleteReq, req.Cmd)
 
-	store := h.getStore(shard.ID)
+	store := h.getStoreByGroup(shard.Group)
 	buf := attrs[raftstore.AttrBuf].(*goetty.ByteBuf)
 
 	from := queueItemKey(req.Key, deleteReq.From, buf)
@@ -235,7 +240,7 @@ func (h *beeStorage) queueScan(shard bhmetapb.Shard, req *raftcmdpb.Request, att
 	fetchResp := getQueueFetchResponse(attrs)
 	buf := attrs[raftstore.AttrBuf].(*goetty.ByteBuf)
 
-	store := h.getStore(shard.ID)
+	store := h.getStoreByGroup(shard.Group)
 
 	completed := queueScan.CompletedOffset
 	lastCompleted, ok := loadLastCompletedOffset(store, req.Key, queueScan.Consumer, buf)
@@ -308,7 +313,7 @@ func (h *beeStorage) queueCommit(shard bhmetapb.Shard, req *raftcmdpb.Request, a
 	queueCommit := getQueueCommitRequest(attrs)
 	protoc.MustUnmarshal(queueCommit, req.Cmd)
 
-	store := h.getStore(shard.ID)
+	store := h.getStoreByGroup(shard.Group)
 	buf := attrs[raftstore.AttrBuf].(*goetty.ByteBuf)
 
 	if v, ok := loadLastCompletedOffset(store, req.Key, queueCommit.Consumer, buf); ok && v >= queueCommit.CompletedOffset {
@@ -379,6 +384,19 @@ func loadLastCompletedOffset(store bhstorage.DataStorage, key []byte, consumer [
 	value, err := store.Get(committedOffsetKey(key, consumer))
 	if err != nil {
 		log.Fatalf("load consumer last completed offset failed with %+v", err)
+	}
+
+	if len(value) == 0 {
+		return 0, false
+	}
+
+	return goetty.Byte2UInt64(value), true
+}
+
+func loadLastRemovedOffset(store bhstorage.DataStorage, key []byte) (uint64, bool) {
+	value, err := store.Get(removedOffsetKey(key))
+	if err != nil {
+		log.Fatalf("load last removed offset failed with %+v", err)
 	}
 
 	if len(value) == 0 {

@@ -92,14 +92,14 @@ type beeStorage struct {
 
 // NewStorage returns a beehive request handler
 func NewStorage(dataPath string,
-	metadataStorages []bhstorage.MetadataStorage,
+	metadataStorage bhstorage.MetadataStorage,
 	dataStorages []bhstorage.DataStorage) (Storage, error) {
-	return NewStorageWithOptions(dataPath, metadataStorages, dataStorages)
+	return NewStorageWithOptions(dataPath, metadataStorage, dataStorages)
 }
 
 // NewStorageWithOptions returns a beehive request handler
 func NewStorageWithOptions(dataPath string,
-	metadataStorages []bhstorage.MetadataStorage,
+	metadataStorage bhstorage.MetadataStorage,
 	dataStorages []bhstorage.DataStorage, opts ...raftstore.Option) (Storage, error) {
 
 	h := &beeStorage{
@@ -131,7 +131,7 @@ func NewStorageWithOptions(dataPath string,
 	})))
 
 	store, err := beehive.CreateRaftStoreFromFile(dataPath,
-		metadataStorages,
+		metadataStorage,
 		dataStorages,
 		opts...)
 	if err != nil {
@@ -549,6 +549,6 @@ func (h *beeStorage) scanWorkflow() {
 	metric.SetWorkflowCount(startingCount, startedCount, stoppingCount, stoppedCount)
 }
 
-func (h *beeStorage) getStore(shard uint64) bhstorage.DataStorage {
-	return h.store.DataStorage(shard)
+func (h *beeStorage) getStoreByGroup(group uint64) bhstorage.DataStorage {
+	return h.store.DataStorageByGroup(group)
 }

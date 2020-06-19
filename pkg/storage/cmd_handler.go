@@ -304,8 +304,8 @@ func (h *beeStorage) ReadBatch() raftstore.CommandReadBatch {
 	return newBatchReader(h)
 }
 
-func (h *beeStorage) getValue(shard uint64, key []byte) ([]byte, error) {
-	value, err := h.getStore(shard).Get(key)
+func (h *beeStorage) getValueByGroup(group uint64, key []byte) ([]byte, error) {
+	value, err := h.getStoreByGroup(group).Get(key)
 	if err != nil {
 		return nil, err
 	}

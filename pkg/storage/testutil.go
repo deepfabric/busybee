@@ -60,8 +60,8 @@ func NewTestStorage(t *testing.T, start bool) (Storage, func()) {
 	assert.NoError(t, err, "NewTestStorage failed")
 	flag.Set("beehive-cfg", filepath.Join(tmp, "cfg.toml"))
 
-	store, err := NewStorageWithOptions(tmp, []storage.MetadataStorage{s},
-		[]storage.DataStorage{s},
+	store, err := NewStorageWithOptions(tmp, s,
+		[]storage.DataStorage{s, s, s, s},
 		raftstore.WithEnsureNewShardInterval(time.Millisecond*200))
 	assert.NoError(t, err, "NewTestStorage failed")
 	if start {

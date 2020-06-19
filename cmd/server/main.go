@@ -16,6 +16,7 @@ import (
 	"github.com/deepfabric/busybee/pkg/api"
 	"github.com/deepfabric/busybee/pkg/core"
 	"github.com/deepfabric/busybee/pkg/notify"
+	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/storage"
 	"github.com/deepfabric/busybee/pkg/util"
 	"github.com/deepfabric/prophet"
@@ -29,7 +30,6 @@ var (
 	ckUser     = flag.String("ck-user", "", "ck user")
 	ckPassword = flag.String("ck-pass", "", "ck pass")
 	data       = flag.String("data", "", "data path")
-	stores     = flag.Uint64("stores", 1, "Number of store count.")
 	wait       = flag.Int("wait", 0, "wait")
 	version    = flag.Bool("version", false, "Show version info")
 )
@@ -60,20 +60,8 @@ func main() {
 		}()
 	}
 
-	var metaStores []beehiveStorage.MetadataStorage
-	var dataStores []beehiveStorage.DataStorage
-
-	for i := uint64(0); i < *stores; i++ {
-		store, err := nemo.NewStorage(filepath.Join(*data, fmt.Sprintf("nemo-%d", i)))
-		if err != nil {
-			log.Fatalf("create nemo failed with %+v", err)
-		}
-
-		metaStores = append(metaStores, store)
-		dataStores = append(dataStores, store)
-	}
-
-	store, err := storage.NewStorage(*data, metaStores, dataStores)
+	metaStore, dataStores := initBeehiveStorages()
+	store, err := storage.NewStorage(*data, metaStore, dataStores)
 	if err != nil {
 		log.Fatalf("create storage failed with %+v", err)
 	}
@@ -129,4 +117,23 @@ func main() {
 		log.Infof("exit: bye :-).")
 		os.Exit(0)
 	}
+}
+
+func initBeehiveStorages() (beehiveStorage.MetadataStorage, []beehiveStorage.DataStorage) {
+	metaStore, err := nemo.NewStorage(filepath.Join(*data, "nemo-meta"))
+	if err != nil {
+		log.Fatalf("create nemo failed with %+v", err)
+	}
+
+	var dataStores []beehiveStorage.DataStorage
+	for i := uint64(0); i <= uint64(metapb.TenantRunnerGroup); i++ {
+		store, err := nemo.NewStorage(filepath.Join(*data, fmt.Sprintf("nemo-data-%d", i)))
+		if err != nil {
+			log.Fatalf("create nemo failed with %+v", err)
+		}
+
+		dataStores = append(dataStores, store)
+	}
+
+	return metaStore, dataStores
 }

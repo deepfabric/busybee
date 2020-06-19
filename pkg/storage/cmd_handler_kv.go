@@ -20,7 +20,7 @@ func (h *beeStorage) setIf(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs m
 	customReq := getSetIfRequest(attrs)
 	protoc.MustUnmarshal(customReq, req.Cmd)
 
-	value, err := h.getValue(shard.ID, req.Key)
+	value, err := h.getValueByGroup(shard.Group, req.Key)
 	if err != nil {
 		log.Fatalf("set id %+v failed with %+v", req.Key, err)
 	}
@@ -30,7 +30,7 @@ func (h *beeStorage) setIf(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs m
 		return 0, 0, resp
 	}
 
-	err = h.getStore(shard.ID).SetWithTTL(req.Key, customReq.Value,
+	err = h.getStoreByGroup(shard.Group).SetWithTTL(req.Key, customReq.Value,
 		int32(customReq.TTL))
 	if err != nil {
 		log.Fatalf("set id %+v failed with %+v", req.Key, err)
@@ -49,7 +49,7 @@ func (h *beeStorage) deleteIf(shard bhmetapb.Shard, req *raftcmdpb.Request, attr
 	customReq := getDeleteIfRequest(attrs)
 	protoc.MustUnmarshal(customReq, req.Cmd)
 
-	value, err := h.getValue(shard.ID, req.Key)
+	value, err := h.getValueByGroup(shard.Group, req.Key)
 	if err != nil {
 		log.Fatalf("delete if %+v failed with %+v", req.Key, err)
 	}
@@ -59,7 +59,7 @@ func (h *beeStorage) deleteIf(shard bhmetapb.Shard, req *raftcmdpb.Request, attr
 		return 0, 0, resp
 	}
 
-	err = h.getStore(shard.ID).Delete(req.Key)
+	err = h.getStoreByGroup(shard.Group).Delete(req.Key)
 	if err != nil {
 		log.Fatalf("delete id %+v failed with %+v", req.Key, err)
 	}
@@ -77,7 +77,7 @@ func (h *beeStorage) allocID(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs
 	customReq := getAllocIDRequest(attrs)
 	protoc.MustUnmarshal(customReq, req.Cmd)
 
-	value, err := h.getValue(shard.ID, req.Key)
+	value, err := h.getValueByGroup(shard.Group, req.Key)
 	if err != nil {
 		log.Fatalf("alloc id %+v failed with %+v", req.Key, err)
 	}
@@ -93,7 +93,7 @@ func (h *beeStorage) allocID(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs
 	start := id + 1
 	end := id + uint32(customReq.Batch)
 
-	err = h.getStore(shard.ID).Set(req.Key, format.Uint32ToBytes(end))
+	err = h.getStoreByGroup(shard.Group).Set(req.Key, format.Uint32ToBytes(end))
 	if err != nil {
 		log.Fatalf("alloc id %+v failed with %+v", req.Key, err)
 	}
@@ -113,7 +113,7 @@ func (h *beeStorage) resetID(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs
 	protoc.MustUnmarshal(customReq, req.Cmd)
 
 	value := 0 + customReq.StartWith
-	err := h.getStore(shard.ID).Set(req.Key, format.Uint32ToBytes(uint32(value)))
+	err := h.getStoreByGroup(shard.Group).Set(req.Key, format.Uint32ToBytes(uint32(value)))
 	if err != nil {
 		log.Fatalf("alloc id %+v failed with %+v", req.Key, err)
 	}
@@ -149,7 +149,7 @@ func (h *beeStorage) scan(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs ma
 	var keys []goetty.Slice
 	var values []goetty.Slice
 	customResp := getBytesSliceResponse(attrs)
-	err := h.getStore(shard.ID).Scan(req.Key, end.Data(), func(key, value []byte) (bool, error) {
+	err := h.getStoreByGroup(shard.Group).Scan(req.Key, end.Data(), func(key, value []byte) (bool, error) {
 		if !allowWriteToBuf(buf, len(value)) {
 			log.Warningf("scan skipped, buf cap %d, write at %d, value %d",
 				buf.Capacity(),
@@ -191,7 +191,7 @@ func (h *beeStorage) bmcontains(shard bhmetapb.Shard, req *raftcmdpb.Request, at
 	customReq := getBMContainsRequest(attrs)
 	protoc.MustUnmarshal(customReq, req.Cmd)
 
-	value, err := h.getValue(shard.ID, req.Key)
+	value, err := h.getValueByGroup(shard.Group, req.Key)
 	if err != nil {
 		log.Fatalf("get %+v failed with %+v", req.Key, err)
 	}
@@ -216,7 +216,7 @@ func (h *beeStorage) bmcount(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs
 	customReq := getBMCountRequest(attrs)
 	protoc.MustUnmarshal(customReq, req.Cmd)
 
-	value, err := h.getValue(shard.ID, req.Key)
+	value, err := h.getValueByGroup(shard.Group, req.Key)
 	if err != nil {
 		log.Fatalf("get %+v failed with %+v", req.Key, err)
 	}
@@ -237,7 +237,7 @@ func (h *beeStorage) bmrange(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs
 	customReq := getBMRangeRequest(attrs)
 	protoc.MustUnmarshal(customReq, req.Cmd)
 
-	value, err := h.getValue(shard.ID, req.Key)
+	value, err := h.getValueByGroup(shard.Group, req.Key)
 	if err != nil {
 		log.Fatalf("get %+v failed with %+v", req.Key, err)
 	}
@@ -276,7 +276,7 @@ func (h *beeStorage) updateMapping(shard bhmetapb.Shard, req *raftcmdpb.Request,
 	protoc.MustUnmarshal(customReq, req.Cmd)
 
 	set := customReq.Set
-	data, err := h.getValue(shard.ID, req.Key)
+	data, err := h.getValueByGroup(shard.Group, req.Key)
 	if err != nil {
 		log.Fatalf("update mapping failed with %+v", err)
 	}
@@ -302,7 +302,7 @@ func (h *beeStorage) updateMapping(shard bhmetapb.Shard, req *raftcmdpb.Request,
 		}
 	}
 
-	err = h.getStore(shard.ID).Set(req.Key, protoc.MustMarshal(&set))
+	err = h.getStoreByGroup(shard.Group).Set(req.Key, protoc.MustMarshal(&set))
 	if err != nil {
 		log.Fatalf("set mapping id failed with %+v", err)
 	}

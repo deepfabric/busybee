@@ -202,8 +202,8 @@ func (wr *workerRunner) addWorker(key string, w worker) {
 		return
 	}
 
-	wr.workers.Store(key, w)
 	w.init()
+	wr.workers.Store(key, w)
 }
 
 func (wr *workerRunner) removeWorker(key string) {
@@ -399,6 +399,10 @@ func (wr *workerRunner) onEvent(p uint32, lastOffset uint64, items [][]byte) {
 		})
 
 		offset++
+
+		if wr.isStopped() {
+			return
+		}
 	}
 }
 
@@ -513,8 +517,8 @@ func (wr *workerRunner) run() {
 		wr.workers.Range(func(k, v interface{}) bool {
 			w := v.(worker)
 			if w.isStopped() {
-				w.close()
 				wr.workers.Delete(k)
+				w.close()
 			} else if w.handleEvent(wr.completed) {
 				hasEvent = true
 			}

@@ -27,6 +27,7 @@ type batchType interface {
 
 type batch struct {
 	shard        uint64
+	group        uint64
 	writtenBytes uint64
 	changedBytes int64
 	bs           *beeStorage
@@ -63,6 +64,7 @@ func (b *batch) Add(shard uint64, req *raftcmdpb.Request, attrs map[string]inter
 	}
 
 	b.shard = shard
+	b.group = req.Group
 	resp := pb.AcquireResponse()
 
 	if tp, ok := b.fn[rpcpb.Type(req.CustemType)]; ok {
@@ -74,11 +76,11 @@ func (b *batch) Add(shard uint64, req *raftcmdpb.Request, attrs map[string]inter
 }
 
 func (b *batch) get(key []byte) ([]byte, error) {
-	return b.bs.getStore(b.shard).Get(key)
+	return b.bs.getStoreByGroup(b.group).Get(key)
 }
 
 func (b *batch) Execute() (uint64, int64, error) {
-	s := b.bs.getStore(b.shard)
+	s := b.bs.getStoreByGroup(b.group)
 	for _, tp := range b.types {
 		err := tp.exec(s, b)
 		if err != nil {

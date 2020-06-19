@@ -161,7 +161,7 @@ func (h *beeStorage) doLoadEvent(shard bhmetapb.Shard, leader bool) {
 	from := raftstore.EncodeDataKey(shard.Group, []byte{workflowCurrentPrefix})
 	end := raftstore.EncodeDataKey(shard.Group, []byte{workflowCurrentPrefix + 1})
 
-	err := h.getStore(shard.ID).Scan(from, end, func(key, value []byte) (bool, error) {
+	err := h.getStoreByGroup(shard.Group).Scan(from, end, func(key, value []byte) (bool, error) {
 		decodedKey := raftstore.DecodeDataKey(key)
 
 		if bytes.Compare(decodedKey, shard.Start) >= 0 {

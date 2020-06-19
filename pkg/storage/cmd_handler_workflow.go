@@ -21,7 +21,7 @@ func (h *beeStorage) updateTenantInitState(shard bhmetapb.Shard, req *raftcmdpb.
 
 	resp.Value = rpcpb.EmptyRespBytes
 
-	value, err := h.getValue(shard.ID, req.Key)
+	value, err := h.getValueByGroup(shard.Group, req.Key)
 	if err != nil {
 		log.Fatalf("update tenant init state %+v failed with %+v", cmd, err)
 	}
@@ -41,7 +41,7 @@ func (h *beeStorage) updateTenantInitState(shard bhmetapb.Shard, req *raftcmdpb.
 		metadata.RunnersState[cmd.Index] = true
 	}
 
-	err = h.getStore(shard.ID).Set(req.Key, protoc.MustMarshal(metadata))
+	err = h.getStoreByGroup(shard.Group).Set(req.Key, protoc.MustMarshal(metadata))
 	if err != nil {
 		log.Fatalf("update tenant init state %+v failed with %+v", cmd, err)
 	}
@@ -56,7 +56,7 @@ func (h *beeStorage) startingWorkflowInstance(shard bhmetapb.Shard, req *raftcmd
 
 	resp.Value = rpcpb.EmptyRespBytes
 
-	value, err := h.getValue(shard.ID, req.Key)
+	value, err := h.getValueByGroup(shard.Group, req.Key)
 	if err != nil {
 		log.Fatalf("save workflow instance %+v failed with %+v", cmd, err)
 	}
@@ -71,7 +71,7 @@ func (h *beeStorage) startingWorkflowInstance(shard bhmetapb.Shard, req *raftcmd
 
 	cmd.Instance.State = metapb.Starting
 	value = protoc.MustMarshal(&cmd.Instance)
-	err = h.getStore(shard.ID).Set(req.Key, value)
+	err = h.getStoreByGroup(shard.Group).Set(req.Key, value)
 	if err != nil {
 		log.Fatalf("save workflow instance %+v failed with %+v", cmd, err)
 	}
@@ -98,7 +98,7 @@ func (h *beeStorage) updateWorkflowDefinition(shard bhmetapb.Shard, req *raftcmd
 
 	resp.Value = rpcpb.EmptyRespBytes
 
-	value, err := h.getValue(shard.ID, req.Key)
+	value, err := h.getValueByGroup(shard.Group, req.Key)
 	if err != nil {
 		log.Fatalf("save workflow instance %+v failed with %+v", cmd, err)
 	}
@@ -115,7 +115,7 @@ func (h *beeStorage) updateWorkflowDefinition(shard bhmetapb.Shard, req *raftcmd
 
 	old.Snapshot = cmd.Workflow
 	old.Version++
-	err = h.getStore(shard.ID).Set(req.Key, protoc.MustMarshal(old))
+	err = h.getStoreByGroup(shard.Group).Set(req.Key, protoc.MustMarshal(old))
 	if err != nil {
 		log.Fatalf("set workflow instance %d started failed with %+v",
 			cmd.Workflow.ID, err)
@@ -131,7 +131,7 @@ func (h *beeStorage) workflowInstanceStarted(shard bhmetapb.Shard, req *raftcmdp
 
 	resp.Value = rpcpb.EmptyRespBytes
 
-	value, err := h.getValue(shard.ID, req.Key)
+	value, err := h.getValueByGroup(shard.Group, req.Key)
 	if err != nil {
 		log.Fatalf("get workflow instance %d failed with %+v",
 			cmd.WorkflowID, err)
@@ -150,7 +150,7 @@ func (h *beeStorage) workflowInstanceStarted(shard bhmetapb.Shard, req *raftcmdp
 	old.StartedAt = time.Now().Unix()
 	old.State = metapb.Running
 	value = protoc.MustMarshal(old)
-	err = h.getStore(shard.ID).Set(req.Key, value)
+	err = h.getStoreByGroup(shard.Group).Set(req.Key, value)
 	if err != nil {
 		log.Fatalf("set workflow instance %d started failed with %+v",
 			cmd.WorkflowID, err)
@@ -176,7 +176,7 @@ func (h *beeStorage) stopWorkflowInstance(shard bhmetapb.Shard, req *raftcmdpb.R
 
 	resp.Value = rpcpb.EmptyRespBytes
 
-	value, err := h.getValue(shard.ID, req.Key)
+	value, err := h.getValueByGroup(shard.Group, req.Key)
 	if err != nil {
 		log.Fatalf("get workflow instance %d failed with %+v",
 			cmd.WorkflowID, err)
@@ -193,7 +193,7 @@ func (h *beeStorage) stopWorkflowInstance(shard bhmetapb.Shard, req *raftcmdpb.R
 
 	old.State = metapb.Stopping
 	value = protoc.MustMarshal(old)
-	err = h.getStore(shard.ID).Set(req.Key, value)
+	err = h.getStoreByGroup(shard.Group).Set(req.Key, value)
 	if err != nil {
 		log.Fatalf("set workflow instance %d stopped failed with %+v",
 			cmd.WorkflowID, err)
@@ -219,7 +219,7 @@ func (h *beeStorage) workflowInstanceStopped(shard bhmetapb.Shard, req *raftcmdp
 
 	resp.Value = rpcpb.EmptyRespBytes
 
-	value, err := h.getValue(shard.ID, req.Key)
+	value, err := h.getValueByGroup(shard.Group, req.Key)
 	if err != nil {
 		log.Fatalf("stopped workflow instance %d failed with %+v",
 			cmd.WorkflowID, err)
@@ -236,7 +236,7 @@ func (h *beeStorage) workflowInstanceStopped(shard bhmetapb.Shard, req *raftcmdp
 
 	old.State = metapb.Stopped
 	old.StoppedAt = time.Now().Unix()
-	err = h.getStore(shard.ID).Set(req.Key, protoc.MustMarshal(old))
+	err = h.getStoreByGroup(shard.Group).Set(req.Key, protoc.MustMarshal(old))
 	if err != nil {
 		log.Fatalf("set workflow instance %d stopped failed with %+v",
 			cmd.WorkflowID, err)
@@ -261,7 +261,7 @@ func (h *beeStorage) createInstanceWorker(shard bhmetapb.Shard, req *raftcmdpb.R
 	resp.Value = rpcpb.TrueRespBytes
 
 	key := runnerKey(cmd.State.TenantID, cmd.State.Runner)
-	runner := h.loadWorkerRunner(shard.ID, key)
+	runner := h.loadWorkerRunnerByGroup(shard.Group, key)
 	if runner.State == metapb.WRStopped {
 		resp.Value = rpcpb.FalseRespBytes
 		return 0, 0, resp
@@ -285,7 +285,7 @@ func (h *beeStorage) createInstanceWorker(shard bhmetapb.Shard, req *raftcmdpb.R
 	wb := bhutil.NewWriteBatch()
 	wb.Set(req.Key, value)
 	wb.Set(key, protoc.MustMarshal(runner))
-	err := h.getStore(shard.ID).Write(wb, false)
+	err := h.getStoreByGroup(shard.Group).Write(wb, false)
 	if err != nil {
 		log.Fatalf("save workflow instance %+v failed with %+v", cmd, err)
 	}
@@ -309,7 +309,7 @@ func (h *beeStorage) updateInstanceWorkerState(shard bhmetapb.Shard, req *raftcm
 
 	resp.Value = rpcpb.EmptyRespBytes
 
-	value, err := h.getValue(shard.ID, req.Key)
+	value, err := h.getValueByGroup(shard.Group, req.Key)
 	if err != nil {
 		log.Fatalf("update workflow instance state %+v failed with %+v", cmd, err)
 	}
@@ -317,7 +317,7 @@ func (h *beeStorage) updateInstanceWorkerState(shard bhmetapb.Shard, req *raftcm
 		return 0, 0, resp
 	}
 
-	err = h.getStore(shard.ID).Set(req.Key, protoc.MustMarshal(&cmd.State))
+	err = h.getStoreByGroup(shard.Group).Set(req.Key, protoc.MustMarshal(&cmd.State))
 	if err != nil {
 		log.Fatalf("update workflow instance state %+v failed with %+v", cmd, err)
 	}
@@ -333,7 +333,7 @@ func (h *beeStorage) removeInstanceWorker(shard bhmetapb.Shard, req *raftcmdpb.R
 	resp.Value = rpcpb.EmptyRespBytes
 
 	key := runnerKey(cmd.TenantID, cmd.Runner)
-	runner := h.loadWorkerRunner(shard.ID, key)
+	runner := h.loadWorkerRunnerByGroup(shard.Group, key)
 	if runner.State == metapb.WRStopped {
 		log.Fatalf("BUG: remove a instance shard from a stopped worker runner")
 	}
@@ -357,7 +357,7 @@ func (h *beeStorage) removeInstanceWorker(shard bhmetapb.Shard, req *raftcmdpb.R
 	wb := bhutil.NewWriteBatch()
 	wb.Delete(req.Key)
 	wb.Set(key, protoc.MustMarshal(runner))
-	err := h.getStore(shard.ID).Write(wb, false)
+	err := h.getStoreByGroup(shard.Group).Write(wb, false)
 	if err != nil {
 		log.Fatalf("remove workflow instance state %+v failed with %+v", cmd, err)
 	}
@@ -377,8 +377,8 @@ func (h *beeStorage) removeInstanceWorker(shard bhmetapb.Shard, req *raftcmdpb.R
 	return 0, 0, resp
 }
 
-func (h *beeStorage) loadWorkerRunner(shard uint64, key []byte) *metapb.WorkerRunner {
-	data, err := h.getValue(shard, key)
+func (h *beeStorage) loadWorkerRunnerByGroup(group uint64, key []byte) *metapb.WorkerRunner {
+	data, err := h.getValueByGroup(group, key)
 	if err != nil {
 		log.Fatalf("load worker runner %+v failed with %+v",
 			key,

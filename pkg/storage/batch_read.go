@@ -10,6 +10,7 @@ import (
 
 type batchReader struct {
 	shard uint64
+	group uint64
 	bs    *beeStorage
 	resp  *rpcpb.BytesResponse
 	keys  [][]byte
@@ -35,12 +36,13 @@ func (b *batchReader) Add(shard uint64, req *raftcmdpb.Request, attrs map[string
 	}
 
 	b.shard = shard
+	b.group = req.Group
 	b.keys = append(b.keys, req.Key)
 	return true, nil
 }
 
 func (b *batchReader) Execute() ([]*raftcmdpb.Response, error) {
-	s := b.bs.getStore(b.shard)
+	s := b.bs.getStoreByGroup(b.group)
 
 	values, err := s.MGet(b.keys...)
 	if err != nil {
