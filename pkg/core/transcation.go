@@ -42,7 +42,7 @@ type transaction struct {
 	stepCrowds []*roaring.Bitmap
 	changes    []changedCtx
 
-	userEvents []metapb.UserEvent
+	userEvents []*metapb.UserEvent
 	event      *metapb.UserEvent
 	index      int
 	buf        *goetty.ByteBuf
@@ -118,7 +118,7 @@ func (tran *transaction) doStepTimerEvent(item item) {
 	}
 }
 
-func (tran *transaction) doStepUserEvent(event metapb.UserEvent) {
+func (tran *transaction) doStepUserEvent(event *metapb.UserEvent) {
 	tran.userEvents = append(tran.userEvents, event)
 }
 
@@ -126,7 +126,7 @@ func (tran *transaction) doStepFlushUserEvents() {
 	tran.doPreLoad()
 
 	for idx := range tran.userEvents {
-		tran.doUserEvent(&tran.userEvents[idx])
+		tran.doUserEvent(tran.userEvents[idx])
 	}
 
 	tran.userEvents = tran.userEvents[:0]
@@ -311,8 +311,6 @@ func (tran *transaction) resetExprCtx() {
 	tran.event.UserID = 0
 	tran.event.Data = nil
 	tran.event.TenantID = tran.w.state.TenantID
-	tran.event.WorkflowID = tran.w.state.WorkflowID
-	tran.event.InstanceID = tran.w.state.InstanceID
 
 	tran.buf.Clear()
 }

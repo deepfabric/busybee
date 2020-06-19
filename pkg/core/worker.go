@@ -256,12 +256,9 @@ func (w *stateWorker) onEvent(p uint32, offset uint64, event *metapb.Event) (boo
 	switch event.Type {
 	case metapb.UserType:
 		if w.matches(event.User.UserID) {
-			evt := *event.User
-			evt.WorkflowID = w.state.WorkflowID
-			evt.InstanceID = w.state.InstanceID
 			added, err := w.queue.Offer(item{
 				action:    userEventAction,
-				value:     evt,
+				value:     event.User,
 				partition: p,
 				offset:    offset,
 			})
@@ -376,7 +373,7 @@ func (w *stateWorker) handleEvent(completedCB func(uint32, uint64)) bool {
 				w.completeTransaction(completedCB)
 			case userEventAction:
 				w.setOffset(value.partition, value.offset)
-				w.tran.doStepUserEvent(value.value.(metapb.UserEvent))
+				w.tran.doStepUserEvent(value.value.(*metapb.UserEvent))
 			case updateCrowdAction:
 				w.flushUserEvent(completedCB)
 				w.doUpdateCrowd(value.value.([]byte))
@@ -715,11 +712,9 @@ func (w *stateWorker) doCheckStepTTLTimeout(idx int) {
 
 		value := itr.Next()
 		alreadyBM.Add(value)
-		w.tran.doStepUserEvent(metapb.UserEvent{
-			TenantID:   w.state.TenantID,
-			WorkflowID: w.state.WorkflowID,
-			InstanceID: w.state.InstanceID,
-			UserID:     value,
+		w.tran.doStepUserEvent(&metapb.UserEvent{
+			TenantID: w.state.TenantID,
+			UserID:   value,
 		})
 
 		count++

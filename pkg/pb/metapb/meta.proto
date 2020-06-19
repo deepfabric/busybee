@@ -120,9 +120,7 @@ message UpdateWorkflowEvent {
 message UserEvent {
     uint32 userID     = 1;
     uint64 tenantID   = 2;
-    uint64 workflowID = 3;
-    uint64 instanceID = 4;
-    repeated KV data  = 5 [(gogoproto.nullable) = false];
+    repeated KV data  = 3 [(gogoproto.nullable) = false];
 }
 
 // KV custom KV data

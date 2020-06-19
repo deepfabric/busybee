@@ -14,8 +14,6 @@ import (
 
 var (
 	uid = []byte("uid")
-	tid = []byte("tid")
-	wid = []byte("wid")
 )
 
 // dyna.xxx%+vxxx.year
@@ -100,10 +98,6 @@ func (v *dynamicKVVar) getFromEvent(ctx Ctx, onlyKey bool) ([]byte, error) {
 	var value []byte
 	if bytes.Compare(uid, v.attr) == 0 {
 		value = format.UInt64ToString(uint64(ctx.Event().UserID))
-	} else if bytes.Compare(tid, v.attr) == 0 {
-		value = format.UInt64ToString(uint64(ctx.Event().TenantID))
-	} else if bytes.Compare(wid, v.attr) == 0 {
-		value = format.UInt64ToString(uint64(ctx.Event().WorkflowID))
 	} else {
 		for _, kv := range ctx.Event().Data {
 			if bytes.Compare(kv.Key, v.attr) == 0 {
