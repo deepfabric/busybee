@@ -24,6 +24,8 @@ import (
 const (
 	defaultRPCTimeout        = time.Second * 30
 	reportGroup       uint64 = 13141314131413141314
+
+	maxAllowTimeDifference = 3600 // 1 hour
 )
 
 // Storage storage
@@ -155,6 +157,8 @@ func NewStorageWithOptions(dataPath string,
 }
 
 func (h *beeStorage) Start() error {
+	h.runner.RunCancelableTask(h.cleanOutputNotifyContents)
+
 	if !h.store.Prophet().StorageNode() {
 		return nil
 	}
@@ -389,6 +393,86 @@ func (h *beeStorage) scanTenants() {
 				start = metadata.ID + 1
 			}
 		}
+	}
+}
+
+func (h *beeStorage) cleanOutputNotifyContents(ctx context.Context) {
+	log.Infof("clean notify content job started")
+	timer := time.NewTicker(time.Second * 60)
+	defer timer.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Infof("clean notify content job stopped")
+			return
+		case <-timer.C:
+			start := uint64(0)
+			end := TenantMetadataKey(math.MaxUint64)
+			metadata := &metapb.Tenant{}
+
+			for {
+				_, values, err := h.Scan(TenantMetadataKey(start), end, 16)
+				if err != nil {
+					metric.IncStorageFailed()
+					log.Errorf("scan queues failed with %+v",
+						err)
+					return
+				}
+
+				if len(values) == 0 {
+					break
+				}
+
+				for idx, value := range values {
+					metadata.Reset()
+					protoc.MustUnmarshal(metadata, value)
+
+					h.doCleanOutputNotifyContents(metadata, metapb.TenantOutputGroup)
+
+					if idx == len(values)-1 {
+						start = metadata.ID + 1
+					}
+				}
+			}
+		}
+	}
+}
+
+func (h *beeStorage) doCleanOutputNotifyContents(metadata *metapb.Tenant, group metapb.Group) {
+	cleanTo := int64(math.MaxInt64)
+	found := false
+	for i := uint32(0); i < metadata.Output.Partitions; i++ {
+		key := removedOffsetKey(PartitionKey(metadata.ID, i))
+		value, err := h.GetWithGroup(key, group)
+		if err != nil {
+			log.Errorf("clean tenant %d notify contents failed with %+v, retry later",
+				metadata.ID,
+				err)
+			return
+		}
+
+		if len(value) > 0 {
+			ts := goetty.Byte2Int64(value[8:])
+			if ts < cleanTo {
+				cleanTo = ts
+				found = true
+			}
+		}
+	}
+
+	if !found {
+		return
+	}
+
+	cleanTo = cleanTo - maxAllowTimeDifference
+	from := raftstore.EncodeDataKey(uint64(metapb.DefaultGroup), outputNotifyKey(metadata.ID, 0))
+	to := raftstore.EncodeDataKey(uint64(metapb.DefaultGroup), outputNotifyKey(metadata.ID, cleanTo+1))
+	err := h.store.DataStorageByGroup(uint64(metapb.DefaultGroup)).RangeDelete(from, to)
+	if err != nil {
+		log.Fatalf("clean tenant %d notify contents failed with %+v",
+			metadata.ID,
+			err)
 	}
 }
 

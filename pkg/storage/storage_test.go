@@ -1196,6 +1196,52 @@ func TestCleanQueue(t *testing.T) {
 	assert.Equal(t, uint64(2), goetty.Byte2UInt64(v), "TestCleanQueue failed")
 }
 
+func TestCleanNotify(t *testing.T) {
+	store, deferFunc := NewTestStorage(t, true)
+	defer deferFunc()
+
+	s := store.(*beeStorage)
+	ts := time.Now().Unix()
+	tid := uint64(1)
+	key1 := PartitionKey(tid, 0)
+	key2 := PartitionKey(tid, 1)
+	c1 := OutputNotifyKey(tid, ts-maxAllowTimeDifference, []byte("c1"))
+	c2 := OutputNotifyKey(tid, ts-maxAllowTimeDifference+1, []byte("c2"))
+	c3 := OutputNotifyKey(tid, ts, []byte("c3"))
+
+	assert.NoError(t, s.Set(c1, []byte("v1")), "TestCleanNotify failed")
+	assert.NoError(t, s.Set(c2, []byte("v2")), "TestCleanNotify failed")
+	assert.NoError(t, s.Set(c3, []byte("v3")), "TestCleanNotify failed")
+
+	buf := goetty.NewByteBuf(32)
+	buf.MarkWrite()
+	buf.WriteUInt64(1)
+	buf.WriteInt64(ts)
+	assert.NoError(t, s.Set(removedOffsetKey(key1),
+		buf.WrittenDataAfterMark().Data()), "TestCleanNotify failed")
+
+	buf.MarkWrite()
+	buf.WriteUInt64(1)
+	buf.WriteInt64(ts + maxAllowTimeDifference)
+	assert.NoError(t, s.Set(removedOffsetKey(key2),
+		buf.WrittenDataAfterMark().Data()), "TestCleanNotify failed")
+
+	s.doCleanOutputNotifyContents(&metapb.Tenant{ID: tid, Output: metapb.TenantQueue{Partitions: 2}}, metapb.DefaultGroup)
+
+	value, err := s.Get(c1)
+	assert.NoError(t, err, "TestCleanNotify failed")
+	assert.Empty(t, value, "TestCleanNotify failed")
+
+	value, err = s.Get(c2)
+	assert.NoError(t, err, "TestCleanNotify failed")
+	assert.NotEmpty(t, value, "TestCleanNotify failed")
+
+	value, err = s.Get(c3)
+	assert.NoError(t, err, "TestCleanNotify failed")
+	assert.NotEmpty(t, value, "TestCleanNotify failed")
+
+}
+
 func getTestQueueuState(t *testing.T, store Storage, tid uint64, g []byte) *metapb.QueueState {
 	key := QueueStateKey(tid, g)
 	data, err := store.Get(key)

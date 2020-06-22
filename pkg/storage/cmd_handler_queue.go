@@ -223,6 +223,7 @@ func (h *beeStorage) queueDelete(shard bhmetapb.Shard, req *raftcmdpb.Request, a
 
 	buf.MarkWrite()
 	buf.WriteUInt64(deleteReq.To)
+	buf.WriteInt64(time.Now().Unix())
 	err = store.Set(removedOffsetKey(req.Key), buf.WrittenDataAfterMark().Data())
 	if err != nil {
 		log.Fatalf("delete queue items failed with %+v", err)

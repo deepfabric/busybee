@@ -42,11 +42,22 @@ func TempKey(value []byte) []byte {
 }
 
 // OutputNotifyKey returns output notify key
-func OutputNotifyKey(value []byte) []byte {
-	n := 1 + len(value)
+func OutputNotifyKey(tid uint64, ts int64, value []byte) []byte {
+	n := 1 + 16 + len(value)
 	key := make([]byte, n, n)
 	key[0] = outputPrefix
-	copy(key[1:], value)
+	goetty.Uint64ToBytesTo(tid, key[1:])
+	goetty.Int64ToBytesTo(ts, key[9:])
+	copy(key[17:], value)
+	return key
+}
+
+func outputNotifyKey(tid uint64, ts int64) []byte {
+	n := 17
+	key := make([]byte, n, n)
+	key[0] = outputPrefix
+	goetty.Uint64ToBytesTo(tid, key[1:])
+	goetty.Int64ToBytesTo(ts, key[9:])
 	return key
 }
 

@@ -2,6 +2,7 @@ package notify
 
 import (
 	"sync/atomic"
+	"time"
 
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
@@ -29,10 +30,11 @@ func NewQueueBasedNotifierWithGroup(store storage.Storage, group metapb.Group) N
 }
 
 func (n *queueNotifier) Notify(id uint64, notifies []metapb.Notify, cond *rpcpb.Condition, kvs ...[]byte) error {
+	ts := time.Now().Unix()
 	var items [][]byte
 	var keys [][]byte
 	for idx := range notifies {
-		key := storage.OutputNotifyKey(uuid.NewV4().Bytes())
+		key := storage.OutputNotifyKey(id, ts, uuid.NewV4().Bytes())
 		keys = append(keys, key)
 		items = append(items, protoc.MustMarshal(&notifies[idx]))
 	}
