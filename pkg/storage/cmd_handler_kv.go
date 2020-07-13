@@ -2,6 +2,8 @@ package storage
 
 import (
 	"bytes"
+	"encoding/hex"
+	"time"
 
 	"github.com/deepfabric/beehive/pb"
 	bhmetapb "github.com/deepfabric/beehive/pb/metapb"
@@ -310,4 +312,102 @@ func (h *beeStorage) updateMapping(shard bhmetapb.Shard, req *raftcmdpb.Request,
 	written += uint64(len(req.Key)) + uint64(set.Size())
 	resp.Value = protoc.MustMarshal(&set)
 	return written, int64(written), resp
+}
+
+func allowLock(value, expect []byte, expectExpireAt int64) bool {
+	if len(value) == 0 {
+		return true
+	}
+
+	now := time.Now().Unix()
+	expireAt := goetty.Byte2Int64(value)
+
+	return (now >= expireAt && expectExpireAt > expireAt) ||
+		bytes.Equal(expect, value[8:])
+}
+
+func (h *beeStorage) lock(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs map[string]interface{}) (uint64, int64, *raftcmdpb.Response) {
+	resp := pb.AcquireResponse()
+	customReq := getLockRequest(attrs)
+	protoc.MustUnmarshal(customReq, req.Cmd)
+
+	value, err := h.getValueByGroup(shard.Group, req.Key)
+	if err != nil {
+		log.Fatalf("lock %+v failed with %+v", req.Key, err)
+	}
+
+	if !allowLock(value, customReq.Value, customReq.ExpireAt) {
+		log.Infof("%s lock %s failed, current lock %s, expire at %s",
+			string(customReq.Key[18:]),
+			hex.EncodeToString(customReq.Value),
+			hex.EncodeToString(value[8:]),
+			time.Unix(goetty.Byte2Int64(value), 0))
+		resp.Value = rpcpb.FalseRespBytes
+		return 0, 0, resp
+	}
+
+	buf := attrs[raftstore.AttrBuf].(*goetty.ByteBuf)
+	buf.MarkWrite()
+	buf.WriteInt64(customReq.ExpireAt)
+	buf.Write(customReq.Value)
+
+	err = h.getStoreByGroup(shard.Group).Set(req.Key, buf.WrittenDataAfterMark().Data())
+	if err != nil {
+		log.Fatalf("lock %+v failed with %+v", req.Key, err)
+	}
+
+	if len(value) == 0 || !bytes.Equal(value[8:], customReq.Value) {
+		if len(value) == 0 {
+			log.Infof("%s lock update to %s expire at %s, old nil",
+				string(customReq.Key[18:]),
+				hex.EncodeToString(customReq.Value),
+				time.Unix(customReq.ExpireAt, 0))
+		} else {
+			log.Infof("%s lock update to %s expire at %s, old %s",
+				string(customReq.Key[18:]),
+				hex.EncodeToString(customReq.Value),
+				time.Unix(customReq.ExpireAt, 0),
+				hex.EncodeToString(value[8:]))
+		}
+	}
+
+	resp.Value = rpcpb.TrueRespBytes
+	written := uint64(0)
+	if len(value) > 0 {
+		written += uint64(len(req.Key) + len(customReq.Value) + 8)
+	}
+	return written, int64(written), resp
+}
+
+func (h *beeStorage) unlock(shard bhmetapb.Shard, req *raftcmdpb.Request, attrs map[string]interface{}) (uint64, int64, *raftcmdpb.Response) {
+	resp := pb.AcquireResponse()
+	customReq := getUnlockRequest(attrs)
+	protoc.MustUnmarshal(customReq, req.Cmd)
+
+	value, err := h.getValueByGroup(shard.Group, req.Key)
+	if err != nil {
+		log.Fatalf("unlock %+v failed with %+v", req.Key, err)
+	}
+
+	ok := true
+	if len(value) > 0 {
+		ok = bytes.Equal(customReq.Value, value[8:])
+	}
+
+	if !ok {
+		resp.Value = rpcpb.FalseRespBytes
+		return 0, 0, resp
+	}
+
+	err = h.getStoreByGroup(shard.Group).Delete(req.Key)
+	if err != nil {
+		log.Fatalf("lock %+v failed with %+v", req.Key, err)
+	}
+
+	resp.Value = rpcpb.TrueRespBytes
+	written := uint64(0)
+	if len(value) > 0 {
+		written += uint64(len(req.Key) + len(customReq.Value) + 8)
+	}
+	return written, -int64(written), resp
 }

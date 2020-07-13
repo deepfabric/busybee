@@ -22,6 +22,8 @@ var (
 	attrRequestScan                = "req.kv.scan"
 	attrRequestDelete              = "req.kv.delete"
 	attrRequestDeleteIf            = "req.kv.deleteif"
+	attrRequestLock                = "req.kv.lock"
+	attrRequestUnlock              = "req.kv.unlock"
 	attrRequestUpdateProfile       = "req.profile.update"
 	attrRequestUpdateMapping       = "req.mapping.update"
 	attrRequestBMCreate            = "req.bm.create"
@@ -640,6 +642,34 @@ func getUint64Response(attrs map[string]interface{}) *rpcpb.Uint64Response {
 	} else {
 		value = &rpcpb.Uint64Response{}
 		attrs[attrResponseUint64] = value
+	}
+
+	value.Reset()
+	return value
+}
+
+func getLockRequest(attrs map[string]interface{}) *rpcpb.LockRequest {
+	var value *rpcpb.LockRequest
+
+	if v, ok := attrs[attrRequestLock]; ok {
+		value = v.(*rpcpb.LockRequest)
+	} else {
+		value = &rpcpb.LockRequest{}
+		attrs[attrRequestLock] = value
+	}
+
+	value.Reset()
+	return value
+}
+
+func getUnlockRequest(attrs map[string]interface{}) *rpcpb.UnlockRequest {
+	var value *rpcpb.UnlockRequest
+
+	if v, ok := attrs[attrRequestUnlock]; ok {
+		value = v.(*rpcpb.UnlockRequest)
+	} else {
+		value = &rpcpb.UnlockRequest{}
+		attrs[attrRequestUnlock] = value
 	}
 
 	value.Reset()

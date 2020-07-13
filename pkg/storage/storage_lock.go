@@ -1,22 +1,27 @@
 package storage
 
 import (
+	"encoding/hex"
 	"time"
 
 	"github.com/deepfabric/beehive/util"
+	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
+	"github.com/fagongzi/log"
 	"github.com/fagongzi/util/protoc"
 )
 
 type distributedLock struct {
-	key       []byte
-	expect    []byte
-	ttl       int
-	keepalive time.Duration
+	key            []byte
+	expect         []byte
+	ttl            int
+	keepalive      time.Duration
+	keepfailedFunc func()
+	group          metapb.Group
 }
 
-func (h *beeStorage) Lock(key []byte, expect []byte, ttl int, keepalive time.Duration, wait bool) (bool, error) {
-	lock := &distributedLock{key, expect, ttl, keepalive}
+func (h *beeStorage) Lock(key []byte, expect []byte, ttl int, keepalive time.Duration, wait bool, keepfailedFunc func(), group metapb.Group) (bool, error) {
+	lock := &distributedLock{key, expect, ttl, keepalive, keepfailedFunc, group}
 	_, loaded := h.locks.LoadOrStore(string(key), lock)
 
 	for {
@@ -57,25 +62,40 @@ func (h *beeStorage) doKeepalive(arg interface{}) {
 }
 
 func (h *beeStorage) doKeepaliveResp(arg interface{}, value []byte, err error) {
-	if err != nil {
-		h.doKeepalive(arg)
-		return
-	}
-
-	resp := rpcpb.AcquireBoolResponse()
-	protoc.MustUnmarshal(resp, value)
-	if !resp.Value {
-		return
-	}
-
 	key := arg.(string)
-	if lock, ok := h.locks.Load(key); ok {
-		util.DefaultTimeoutWheel().Schedule(lock.(*distributedLock).keepalive, h.doKeepalive, arg)
+
+	v, ok := h.locks.Load(key)
+	if !ok {
+		return
 	}
+
+	lock := v.(*distributedLock)
+	if err == nil {
+		resp := rpcpb.AcquireBoolResponse()
+		protoc.MustUnmarshal(resp, value)
+		if !resp.Value {
+			log.Errorf("%s lock %s keepalive failed with another has locked",
+				key[18:],
+				hex.EncodeToString(lock.expect))
+			if lock.keepfailedFunc != nil {
+				lock.keepfailedFunc()
+			}
+			return
+		}
+	}
+
+	if err != nil {
+		log.Errorf("%s lock %s keepalive failed with %+v",
+			key[18:],
+			hex.EncodeToString(lock.expect),
+			err)
+	}
+
+	util.DefaultTimeoutWheel().Schedule(lock.keepalive, h.doKeepalive, arg)
 }
 
 func (h *beeStorage) doLock(lock *distributedLock) (bool, error) {
-	value, err := h.ExecCommand(lockRequest(lock))
+	value, err := h.ExecCommandWithGroup(lockRequest(lock), lock.group)
 	if err != nil {
 		return false, err
 	}
@@ -87,27 +107,22 @@ func (h *beeStorage) doLock(lock *distributedLock) (bool, error) {
 
 func (h *beeStorage) doUnlock(lock *distributedLock) error {
 	h.locks.Delete(string(lock.key))
+	log.Errorf("%s lock %s unlocked",
+		lock.key[18:],
+		hex.EncodeToString(lock.expect))
 
-	req := rpcpb.AcquireDeleteIfRequest()
+	req := rpcpb.AcquireUnlockRequest()
 	req.Key = lock.key
-	req.Conditions = append(req.Conditions, rpcpb.ConditionGroup{
-		Conditions: []rpcpb.Condition{{Cmp: rpcpb.Equal, Value: lock.expect}},
-	})
+	req.Value = lock.expect
 
-	_, err := h.ExecCommand(req)
+	_, err := h.ExecCommandWithGroup(req, lock.group)
 	return err
 }
 
-func lockRequest(lock *distributedLock) *rpcpb.SetIfRequest {
-	req := rpcpb.AcquireSetIfRequest()
+func lockRequest(lock *distributedLock) *rpcpb.LockRequest {
+	req := rpcpb.AcquireLockRequest()
 	req.Key = lock.key
-	req.TTL = int64(lock.ttl)
+	req.ExpireAt = time.Now().Unix() + int64(lock.ttl)
 	req.Value = lock.expect
-	req.Conditions = append(req.Conditions, rpcpb.ConditionGroup{
-		Conditions: []rpcpb.Condition{{Cmp: rpcpb.NotExists}},
-	})
-	req.Conditions = append(req.Conditions, rpcpb.ConditionGroup{
-		Conditions: []rpcpb.Condition{{Cmp: rpcpb.Equal, Value: lock.expect}},
-	})
 	return req
 }

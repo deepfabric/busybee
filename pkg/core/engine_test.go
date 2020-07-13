@@ -1341,7 +1341,7 @@ func TestLastTransactionNotCompleted(t *testing.T) {
 	_, err = store.ExecCommandWithGroup(&rpcpb.SetRequest{
 		Key: storage.QueueKVKey(tid, key),
 		Value: protoc.MustMarshal(&metapb.WorkflowInstanceWorkerState{
-			Version:    10,
+			Version:    1,
 			TenantID:   tid,
 			WorkflowID: wid,
 			InstanceID: instanceID,
@@ -2010,6 +2010,8 @@ func TestNotifyWithErrorRetry(t *testing.T) {
 }
 
 func TestStepWithPreLoad(t *testing.T) {
+	n := uint32(10000)
+
 	store, deferFunc := storage.NewTestStorage(t, false)
 	defer deferFunc()
 
@@ -2039,7 +2041,7 @@ func TestStepWithPreLoad(t *testing.T) {
 	assert.NoError(t, err, "TestStepWithPreLoad failed")
 
 	bm := roaring.BitmapOf()
-	for i := uint32(1); i <= 10000; i++ {
+	for i := uint32(1); i <= n; i++ {
 		bm.Add(i)
 	}
 	_, err = ng.StartInstance(metapb.Workflow{
@@ -2089,12 +2091,20 @@ func TestStepWithPreLoad(t *testing.T) {
 
 	var events [][]byte
 	var p uint32
-	for i := uint32(1); i <= 10000; i++ {
+	for i := uint32(1); i <= n; i++ {
 		events = append(events, protoc.MustMarshal(&metapb.Event{
 			Type: metapb.UserType,
 			User: &metapb.UserEvent{
 				TenantID: tid,
 				UserID:   i,
+			},
+		}))
+
+		events = append(events, protoc.MustMarshal(&metapb.Event{
+			Type: metapb.UserType,
+			User: &metapb.UserEvent{
+				TenantID: tid,
+				UserID:   i + n,
 			},
 		}))
 
@@ -2124,7 +2134,11 @@ func TestStepWithPreLoad(t *testing.T) {
 	}
 	assert.Equal(t, 0, m["step_start"], "TestStepWithPreLoad failed")
 	assert.Equal(t, 1, m["step_end_1"], "TestStepWithPreLoad failed")
-	assert.Equal(t, 9999, m["step_end_2"], "TestStepWithPreLoad failed")
+	assert.Equal(t, int(n-1), m["step_end_2"], "TestStepWithPreLoad failed")
+
+	v, err := store.GetWithGroup(storage.TenantRunnerOffsetKey(tid, 0), metapb.TenantRunnerGroup)
+	assert.NoError(t, err, "TestStepWithPreLoad failed")
+	assert.NotEmpty(t, v, "TestStepWithPreLoad failed")
 }
 
 func waitTestWorkflow(ng Engine, wid uint64, state metapb.WorkflowInstanceState) error {

@@ -253,7 +253,7 @@ func (h *beeStorage) queueScan(shard bhmetapb.Shard, req *raftcmdpb.Request, att
 		return resp
 	}
 
-	if lastCompleted > completed {
+	if completed == 0 {
 		completed = lastCompleted
 	}
 

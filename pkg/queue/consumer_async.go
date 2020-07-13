@@ -36,16 +36,22 @@ type asyncConsumer struct {
 	group    metapb.Group
 	store    storage.Storage
 	consumer []byte
+	offsets  []uint64
 	state    metapb.TenantQueue
 	running  bool
 }
 
 // NewAsyncConsumer create a async consumer
 func NewAsyncConsumer(tid uint64, store storage.Storage, consumer []byte) (AsyncConsumer, error) {
-	return newAsyncConsumerWithGroup(tid, store, consumer, metapb.TenantInputGroup)
+	return NewAsyncConsumerWithOffsets(tid, store, consumer, nil)
 }
 
-func newAsyncConsumerWithGroup(tid uint64, store storage.Storage, consumer []byte, group metapb.Group) (AsyncConsumer, error) {
+// NewAsyncConsumerWithOffsets create a async consumer with offsets
+func NewAsyncConsumerWithOffsets(tid uint64, store storage.Storage, consumer []byte, offsets []uint64) (AsyncConsumer, error) {
+	return newAsyncConsumerWithGroup(tid, store, consumer, metapb.TenantInputGroup, offsets)
+}
+
+func newAsyncConsumerWithGroup(tid uint64, store storage.Storage, consumer []byte, group metapb.Group, offsets []uint64) (AsyncConsumer, error) {
 	value, err := store.Get(storage.TenantMetadataKey(tid))
 	if err != nil {
 		metric.IncStorageFailed()
@@ -59,6 +65,10 @@ func newAsyncConsumerWithGroup(tid uint64, store storage.Storage, consumer []byt
 	metadata := &metapb.Tenant{}
 	protoc.MustUnmarshal(metadata, value)
 
+	if offsets == nil {
+		offsets = make([]uint64, metadata.Input.Partitions, metadata.Input.Partitions)
+	}
+
 	return &asyncConsumer{
 		tid:      tid,
 		tenant:   fmt.Sprintf("%d", tid),
@@ -66,6 +76,7 @@ func newAsyncConsumerWithGroup(tid uint64, store storage.Storage, consumer []byt
 		store:    store,
 		consumer: consumer,
 		state:    metadata.Input,
+		offsets:  offsets,
 	}, nil
 }
 
@@ -80,16 +91,16 @@ func (c *asyncConsumer) Start(cb func(uint32, uint64, [][]byte)) {
 
 	c.running = true
 	for i := uint32(0); i < c.state.Partitions; i++ {
-		go func(p uint32) {
+		go func(p uint32, startWith uint64) {
 			tag := fmt.Sprintf("%d/%s/p(%d)/c(%s)",
 				c.tid,
 				c.group.String(),
 				p,
 				string(c.consumer))
 
+			from := startWith
 			key := storage.PartitionKey(c.tid, p)
 			resp := &rpcpb.QueueFetchResponse{}
-			from := uint64(0)
 
 			for {
 				if c.stopped() {
@@ -124,7 +135,7 @@ func (c *asyncConsumer) Start(cb func(uint32, uint64, [][]byte)) {
 				from = resp.LastOffset
 				metric.IncEventHandled(len(resp.Items), c.tenant, c.group)
 			}
-		}(i)
+		}(i, c.offsets[i])
 	}
 }
 

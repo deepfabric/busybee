@@ -1,6 +1,9 @@
 package storage
 
 import (
+	"bytes"
+	"encoding/hex"
+	"math"
 	"time"
 
 	"github.com/deepfabric/beehive/pb"
@@ -10,6 +13,7 @@ import (
 	bhutil "github.com/deepfabric/beehive/util"
 	"github.com/deepfabric/busybee/pkg/pb/metapb"
 	"github.com/deepfabric/busybee/pkg/pb/rpcpb"
+	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/log"
 	"github.com/fagongzi/util/protoc"
 )
@@ -307,8 +311,32 @@ func (h *beeStorage) updateInstanceWorkerState(shard bhmetapb.Shard, req *raftcm
 	cmd := getUpdateInstanceStateShardRequest(attrs)
 	protoc.MustUnmarshal(cmd, req.Cmd)
 
-	resp.Value = rpcpb.EmptyRespBytes
+	log.Debugf("WR[%d-%d]/%d:%d-%d:%d storage ready to update version to %d",
+		cmd.State.TenantID,
+		cmd.State.Runner,
+		cmd.State.TenantID,
+		cmd.State.WorkflowID,
+		cmd.State.InstanceID,
+		cmd.State.Index,
+		cmd.State.Version)
 
+	lockValue, err := h.getValueByGroup(shard.Group, raftstore.EncodeDataKey(shard.Group, cmd.LockKey))
+	if !allowLock(lockValue, cmd.LockExpectValue, math.MaxInt64) {
+		resp.Value = rpcpb.FalseRespBytes
+		log.Infof("WR[%d-%d]/%d:%d-%d:%d storage ready to update version to %d, with false, current %s, expect %s",
+			cmd.State.TenantID,
+			cmd.State.Runner,
+			cmd.State.TenantID,
+			cmd.State.WorkflowID,
+			cmd.State.InstanceID,
+			cmd.State.Index,
+			cmd.State.Version,
+			hex.EncodeToString(lockValue),
+			hex.EncodeToString(cmd.LockExpectValue))
+		return 0, 0, resp
+	}
+
+	resp.Value = rpcpb.TrueRespBytes
 	value, err := h.getValueByGroup(shard.Group, req.Key)
 	if err != nil {
 		log.Fatalf("update workflow instance state %+v failed with %+v", cmd, err)
@@ -317,10 +345,45 @@ func (h *beeStorage) updateInstanceWorkerState(shard bhmetapb.Shard, req *raftcm
 		return 0, 0, resp
 	}
 
-	err = h.getStoreByGroup(shard.Group).Set(req.Key, protoc.MustMarshal(&cmd.State))
+	currentValue := protoc.MustMarshal(&cmd.State)
+
+	old := &metapb.WorkflowInstanceWorkerState{}
+	protoc.MustUnmarshal(old, value)
+
+	if old.Version > cmd.State.Version ||
+		(old.Version == cmd.State.Version && !bytes.Equal(value, currentValue)) ||
+		(old.Version != cmd.State.Version && old.Version+1 != cmd.State.Version) {
+
+		resp.Value = rpcpb.FalseRespBytes
+		log.Warningf("BUG: WR[%d-%d]/%d:%d-%d:%d, current %d, last version %d, expect lock %s, current lock %s expire at %s",
+			cmd.State.TenantID,
+			cmd.State.Runner,
+			cmd.State.TenantID,
+			cmd.State.WorkflowID,
+			cmd.State.InstanceID,
+			cmd.State.Index,
+			cmd.State.Version,
+			old.Version,
+			hex.EncodeToString(cmd.LockExpectValue),
+			hex.EncodeToString(lockValue[8:]),
+			time.Unix(goetty.Byte2Int64(lockValue), 0))
+		return 0, 0, resp
+	}
+
+	err = h.getStoreByGroup(shard.Group).Set(req.Key, currentValue)
 	if err != nil {
 		log.Fatalf("update workflow instance state %+v failed with %+v", cmd, err)
 	}
+
+	log.Debugf("WR[%d-%d]/%d:%d-%d:%d storage ready to update version to %d, with OK, %s",
+		cmd.State.TenantID,
+		cmd.State.Runner,
+		cmd.State.TenantID,
+		cmd.State.WorkflowID,
+		cmd.State.InstanceID,
+		cmd.State.Index,
+		cmd.State.Version,
+		hex.EncodeToString(cmd.LockExpectValue))
 
 	return 0, 0, resp
 }

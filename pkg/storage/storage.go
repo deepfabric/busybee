@@ -37,7 +37,7 @@ type Storage interface {
 	// WatchInstance watch instance event
 	WatchEvent() chan Event
 	// Lock distruibuted lock
-	Lock([]byte, []byte, int, time.Duration, bool) (bool, error)
+	Lock([]byte, []byte, int, time.Duration, bool, func(), metapb.Group) (bool, error)
 	// Unlock unlock
 	Unlock([]byte, []byte) error
 	// Set set key value

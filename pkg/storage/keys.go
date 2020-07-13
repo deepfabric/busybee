@@ -16,11 +16,14 @@ const (
 	tenantRunnerPrefix         byte = 4
 	tenantRunnerMetadataPrefix byte = 5
 	tenantRunnerWorkerPrefix   byte = 6
-	workflowCurrentPrefix      byte = 7
-	workflowHistoryPrefix      byte = 8
-	workflowCrowdPrefix        byte = 9
-	tempPrefix                 byte = 10
-	outputPrefix               byte = 11
+	tenantRunnerLockKeyField   byte = 7
+	tenantRunnerOffsetField    byte = 8
+	workflowCurrentPrefix      byte = 9
+	workflowHistoryPrefix      byte = 10
+	workflowCrowdPrefix        byte = 11
+	tempPrefix                 byte = 12
+	outputPrefix               byte = 13
+	bsiKeyPrefix               byte = 14
 
 	queueMaxOffsetField     byte = 0
 	queueRemovedOffsetField byte = 1
@@ -38,6 +41,18 @@ func TempKey(value []byte) []byte {
 	key[0] = tempPrefix
 	goetty.Int64ToBytesTo(time.Now().Unix(), key[1:])
 	copy(key[9:], value)
+	return key
+}
+
+// BSIKey returns the bsi key
+func BSIKey(tid uint64, instanceID uint64, wid uint32, step []byte) []byte {
+	n := 21 + len(step)
+	key := make([]byte, n, n)
+	key[0] = bsiKeyPrefix
+	goetty.Uint64ToBytesTo(tid, key[1:])
+	goetty.Uint64ToBytesTo(instanceID, key[9:])
+	goetty.Uint32ToBytesTo(wid, key[17:])
+	copy(key[21:], step)
 	return key
 }
 
@@ -129,6 +144,28 @@ func TenantRunnerKey(tid uint64, runner uint64) []byte {
 	key[0] = tenantRunnerPrefix
 	goetty.Uint64ToBytesTo(tid, key[1:])
 	goetty.Uint64ToBytesTo(runner, key[9:])
+	return key
+}
+
+// TenantRunnerOffsetKey tenant runner offset key
+func TenantRunnerOffsetKey(tid uint64, runner uint64) []byte {
+	key := make([]byte, 18, 18)
+	key[0] = tenantRunnerPrefix
+	goetty.Uint64ToBytesTo(tid, key[1:])
+	goetty.Uint64ToBytesTo(runner, key[9:])
+	key[17] = tenantRunnerOffsetField
+	return key
+}
+
+// TenantRunnerLockKey tenant runner lock key
+func TenantRunnerLockKey(tid uint64, runner uint64, lockKey []byte) []byte {
+	n := 18 + len(lockKey)
+	key := make([]byte, n, n)
+	key[0] = tenantRunnerPrefix
+	goetty.Uint64ToBytesTo(tid, key[1:])
+	goetty.Uint64ToBytesTo(runner, key[9:])
+	key[17] = tenantRunnerLockKeyField
+	copy(key[18:], lockKey)
 	return key
 }
 

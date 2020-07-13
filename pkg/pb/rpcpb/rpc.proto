@@ -59,6 +59,9 @@ enum Type {
 
     AllocID       = 501;
     ResetID       = 502;
+
+    Lock          = 601;
+    Unlock        = 602;
 }
 
 // Request the busybee request
@@ -101,6 +104,8 @@ message Request {
     QueueScanRequest             queueScan       = 36 [(gogoproto.nullable) = false];
     QueueCommitRequest           queueCommit     = 37 [(gogoproto.nullable) = false];
     QueueDeleteRequest           queueDelete     = 38 [(gogoproto.nullable) = false];
+    LockRequest                  lock            = 39 [(gogoproto.nullable) = false];
+    UnlockRequest                unlock          = 40 [(gogoproto.nullable) = false];
 }
 
 // Response the busybee response
@@ -249,7 +254,10 @@ message CreateInstanceStateShardRequest {
 
 // UpdateInstanceStateShardRequest update a instance state
 message UpdateInstanceStateShardRequest {
-    metapb.WorkflowInstanceWorkerState state = 1 [(gogoproto.nullable) = false];
+    metapb.WorkflowInstanceWorkerState state           = 1 [(gogoproto.nullable) = false];
+    bytes                              lockKey         = 2;
+    bytes                              lockExpectValue = 3;
+    int64                              ts              = 4;
 }
 
 // RemoveInstanceStateShardRequest remove a instance state
@@ -441,6 +449,19 @@ message ScanRequest {
     bytes        end   = 2;
     uint64       limit = 3;
     metapb.Group group = 4;
+}
+
+// LockRequest lock
+message LockRequest {
+    bytes  key         = 1;
+    bytes  value       = 2;
+    int64  expireAt    = 3;
+}
+
+// UnlockRequest unlock
+message UnlockRequest {
+    bytes  key         = 1;
+    bytes  value       = 2;
 }
 
 // ErrorResponse error response 

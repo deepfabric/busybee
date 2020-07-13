@@ -52,6 +52,8 @@ var (
 	tenantInitStateUpdatePool    sync.Pool
 	updateMappingPool            sync.Pool
 	scanMappingPool              sync.Pool
+	lockPool                     sync.Pool
+	unlockPool                   sync.Pool
 
 	uint64Pool      sync.Pool
 	bytesPool       sync.Pool
@@ -679,4 +681,34 @@ func AcquireRemoveInstanceStateShardRequest() *RemoveInstanceStateShardRequest {
 func ReleaseRemoveInstanceStateShardRequest(value *RemoveInstanceStateShardRequest) {
 	value.Reset()
 	removeInstanceStateShardPool.Put(value)
+}
+
+// AcquireLockRequest returns value from pool
+func AcquireLockRequest() *LockRequest {
+	value := lockPool.Get()
+	if value == nil {
+		return &LockRequest{}
+	}
+	return value.(*LockRequest)
+}
+
+// ReleaseLockRequest returns the value to pool
+func ReleaseLockRequest(value *LockRequest) {
+	value.Reset()
+	lockPool.Put(value)
+}
+
+// AcquireUnlockRequest returns value from pool
+func AcquireUnlockRequest() *UnlockRequest {
+	value := unlockPool.Get()
+	if value == nil {
+		return &UnlockRequest{}
+	}
+	return value.(*UnlockRequest)
+}
+
+// ReleaseUnlockRequest returns the value to pool
+func ReleaseUnlockRequest(value *UnlockRequest) {
+	value.Reset()
+	unlockPool.Put(value)
 }

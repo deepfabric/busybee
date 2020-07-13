@@ -19,6 +19,8 @@ func (h *beeStorage) init() {
 	h.AddWriteFunc("update-mapping", uint64(rpcpb.UpdateMapping), h.updateMapping)
 	h.AddWriteFunc("setif", uint64(rpcpb.SetIf), h.setIf)
 	h.AddWriteFunc("deleteif", uint64(rpcpb.DeleteIf), h.deleteIf)
+	h.AddWriteFunc("lock", uint64(rpcpb.Lock), h.lock)
+	h.AddWriteFunc("unlock", uint64(rpcpb.Unlock), h.unlock)
 	h.AddWriteFunc("allocid", uint64(rpcpb.AllocID), h.allocID)
 	h.AddWriteFunc("resetid", uint64(rpcpb.ResetID), h.resetID)
 	h.AddWriteFunc("starting-instance", uint64(rpcpb.StartingInstance), h.startingWorkflowInstance)
@@ -273,6 +275,20 @@ func (h *beeStorage) BuildRequest(req *raftcmdpb.Request, cmd interface{}) error
 		req.Type = raftcmdpb.Write
 		req.Cmd = protoc.MustMarshal(msg)
 		rpcpb.ReleaseTenantInitStateUpdateRequest(msg)
+	case *rpcpb.LockRequest:
+		msg := cmd.(*rpcpb.LockRequest)
+		req.Key = msg.Key
+		req.CustemType = uint64(rpcpb.Lock)
+		req.Type = raftcmdpb.Write
+		req.Cmd = protoc.MustMarshal(msg)
+		rpcpb.ReleaseLockRequest(msg)
+	case *rpcpb.UnlockRequest:
+		msg := cmd.(*rpcpb.UnlockRequest)
+		req.Key = msg.Key
+		req.CustemType = uint64(rpcpb.Unlock)
+		req.Type = raftcmdpb.Write
+		req.Cmd = protoc.MustMarshal(msg)
+		rpcpb.ReleaseUnlockRequest(msg)
 	default:
 		log.Fatalf("not support request %+v(%+T)", cmd, cmd)
 	}

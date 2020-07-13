@@ -1031,8 +1031,9 @@ func (eng *engine) doBootstrapWorker(state metapb.WorkflowInstanceWorkerState) {
 		return
 	}
 
+	wr := value.(*workerRunner)
 	for {
-		w, err := newStateWorker(key, state, eng)
+		w, err := newStateWorker(key, state, wr)
 		if err != nil {
 			logger.Errorf("create worker %s failed with %+v, retry later",
 				key,
@@ -1041,7 +1042,7 @@ func (eng *engine) doBootstrapWorker(state metapb.WorkflowInstanceWorkerState) {
 			continue
 		}
 
-		value.(*workerRunner).addWorker(w.key, w)
+		wr.addWorker(w.key, w)
 		if state.StopAt != 0 {
 			after := time.Second * time.Duration(state.StopAt-now)
 			util.DefaultTimeoutWheel().Schedule(after, eng.stopWorker, w)
