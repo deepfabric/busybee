@@ -243,6 +243,10 @@ func (w *stateWorker) checkTTLTimeout(arg interface{}) {
 }
 
 func (w *stateWorker) beloneTo(event *metapb.Event) bool {
+	if w.totalCrowds.GetCardinality() == 0 {
+		logger.Fatalf("%s %s bug 0 total", w.rkey, w.key)
+	}
+
 	switch event.Type {
 	case metapb.UserType:
 		if w.matches(event.User.UserID) {
@@ -488,12 +492,15 @@ func (w *stateWorker) completeTransaction(completedCB func(string, uint32, uint6
 
 func (w *stateWorker) commitOffset(completedCB func(string, uint32, uint64)) {
 	for p, offset := range w.offsets {
-		completedCB(w.key, p, offset)
-		logger.Debugf("%s %s completed p/%d offset at %d",
-			w.rkey,
-			w.key,
-			p,
-			offset)
+		if w.updateSuccess {
+			completedCB(w.key, p, offset)
+			logger.Debugf("%s %s completed p/%d offset at %d",
+				w.rkey,
+				w.key,
+				p,
+				offset)
+		}
+
 		delete(w.offsets, p)
 	}
 }

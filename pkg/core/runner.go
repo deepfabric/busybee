@@ -234,7 +234,7 @@ func (wr *workerRunner) startQueueConsumer(offsets []uint64) error {
 		return nil
 	}
 
-	consumer, err := queue.NewAsyncConsumer(wr.tid, wr.eng.store, []byte(wr.key))
+	consumer, err := queue.NewAsyncConsumerWithOffsets(wr.tid, wr.eng.store, []byte(wr.key), offsets)
 	if err != nil {
 		metric.IncStorageFailed()
 		logger.Errorf("%s create consumer failed with %+v, retry after 5s",
@@ -294,7 +294,6 @@ func (wr *workerRunner) onEvent(p uint32, lastOffset uint64, items [][]byte) {
 			for _, event := range events {
 				if !w.beloneTo(event) {
 					ignoreOffset = offset
-
 				} else {
 					ignoreOffset = 0
 					for {
@@ -421,6 +420,8 @@ func (wr *workerRunner) run() {
 		defer wr.unlock()
 	}
 
+	defer wr.doStop()
+
 	wr.reset()
 
 	offsets := make([]uint64, wr.metadata.Input.Partitions, wr.metadata.Input.Partitions)
@@ -428,7 +429,6 @@ func (wr *workerRunner) run() {
 	handleSucceed := true
 	for {
 		if wr.isStopped() {
-			wr.doStop()
 			return
 		}
 
@@ -464,7 +464,6 @@ func (wr *workerRunner) run() {
 		})
 
 		if wr.isStopped() {
-			wr.doStop()
 			return
 		}
 

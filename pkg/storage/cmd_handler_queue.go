@@ -250,6 +250,8 @@ func (h *beeStorage) queueScan(shard bhmetapb.Shard, req *raftcmdpb.Request, att
 		max := loadMaxOffset(store, req.Key, buf)
 		mustPutCompletedOffset(store, req.Key, queueScan.Consumer, buf, max)
 		resp.Value = protoc.MustMarshal(fetchResp)
+		log.Infof("%s init with max offset %d",
+			string(queueScan.Consumer), max)
 		return resp
 	}
 
@@ -296,6 +298,19 @@ func (h *beeStorage) queueScan(shard bhmetapb.Shard, req *raftcmdpb.Request, att
 	}, false)
 	if err != nil {
 		log.Fatalf("fetch queue failed with %+v", err)
+	}
+
+	if c == 0 {
+		max := loadMaxOffset(store, req.Key, buf)
+		removed, _ := loadLastRemovedOffset(store, req.Key)
+		if completed+1 < removed {
+			log.Fatalf("BUG: %s fetch from %d to %d, max %d, removed %d",
+				string(queueScan.Consumer),
+				completed+1,
+				completed+1+queueScan.Count,
+				max,
+				removed)
+		}
 	}
 
 	if c > 0 {
